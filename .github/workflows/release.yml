@@ -24,13 +24,18 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: latest   # the bundled/older tools' package index predates API 37
 
-      # compileSdk/targetSdk = 37 (Android 17) is a preview platform — install it explicitly.
-      # If 37 isn't in the default channel yet, add `--channel=3` (canary) to the sdkmanager call.
+      # compileSdk/targetSdk = 37 (Android 17). The platform uses Android's minor-version scheme, so
+      # the sdkmanager package id is "platforms;android-37.0" (NOT "android-37" — that id doesn't
+      # exist and is why a plain install fails). build-tools 36.0.0 is what AGP 9.1 resolves to.
       - name: Install SDK platform + build-tools
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-37" "build-tools;36.0.0"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
+          sdkmanager --update >/dev/null 2>&1 || true
+          sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;36.0.0"
+          yes | sdkmanager --licenses >/dev/null 2>&1 || true
 
       # Decode the release keystore from a base64 secret. If the secret is unset, the build falls
       # back to debug signing (see Orchestra/app/build.gradle.kts) so the workflow still produces an
