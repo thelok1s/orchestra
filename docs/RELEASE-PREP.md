@@ -24,8 +24,9 @@ Legend: **P0** = blocker · **P1** = should-have · **P2** = nice-to-have · �
   (`ORCHESTRA_KEYSTORE_BASE64`/`_PASSWORD`/`ORCHESTRA_KEY_ALIAS`/`_PASSWORD`), and verify the LSPosed
   module loads when release-signed. (Minify stays OFF for now, so no R8 keep-rules needed yet; revisit
   if `isMinifyEnabled` is turned on — keep the devicesettings parcelables + `xposed_init`.)
-- [ ] 🧑 **Version + name.** Decide scheme — recommend **v0.4 (or 1.0.0-beta)** given 2 devices and the
-  volume panel/in-app screen are incomplete. Bump `versionName`/`versionCode`.
+- [x] **Version + name.** DECIDED: **1.0.0** initial release. `versionName = "1.0.0"`,
+  `versionCode = 10000` (MMmmpp scheme; must increase every release). Tag releases `v1.0.0`, `v1.0.1`…
+  (the `release.yml` workflow fires on `v*`).
 - [x] **LICENSE.** DONE — **GPL-3.0** at repo root (both the app repo and `orchestra-manifests`). Root
   `README.md` credits the third-party RE references (OpenSCQ30 et al., GPL-3.0); they live in
   `re_refs/` (gitignored, not shipped in the APK).

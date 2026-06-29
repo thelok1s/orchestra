@@ -13,8 +13,9 @@ android {
         applicationId = "io.github.thelok1s.orchestra"
         minSdk = 31
         targetSdk = 37
-        versionCode = 3
-        versionName = "0.3"
+        // versionCode encodes the semver as MMmmpp (1.0.0 -> 1_00_00). Must increase every release.
+        versionCode = 10000
+        versionName = "1.0.0"
     }
 
     signingConfigs {
