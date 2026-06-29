@@ -89,4 +89,5 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
     testImplementation("junit:junit:4.13.2")
+    implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
 }
