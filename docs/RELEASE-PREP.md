@@ -17,15 +17,18 @@ Legend: **P0** = blocker · **P1** = should-have · **P2** = nice-to-have · �
   + `ConnectReceiver` (`APPLY`/`APPLY_INDEX`) must validate sender or be signature-protected — the
   SystemUI hook (system uid) is the only legitimate caller. (Provider services are already
   `BLUETOOTH_PRIVILEGED`-gated — good.)
-- [ ] **Release signing.** Currently debug-signed only. Create a release keystore, add a `release`
-  signingConfig + build type (R8/minify on, keep the `com.android.settingslib.bluetooth.devicesettings`
-  parcelables + `xposed_init` class from being stripped/renamed — add keep rules), produce a signed
-  release APK. Verify the LSPosed module still loads when release-signed + minified.
+- [~] **Release signing.** DONE: env-driven `release` signingConfig in `Orchestra/app/build.gradle.kts`
+  (uses `ORCHESTRA_KEYSTORE*` env, falls back to debug locally) + `.github/workflows/release.yml`
+  (build `assembleRelease` + GitHub Release on `v*` tag, keystore from secrets). `assembleRelease`
+  verified building. REMAINING 🧑: generate a release keystore, add the 4 repo secrets
+  (`ORCHESTRA_KEYSTORE_BASE64`/`_PASSWORD`/`ORCHESTRA_KEY_ALIAS`/`_PASSWORD`), and verify the LSPosed
+  module loads when release-signed. (Minify stays OFF for now, so no R8 keep-rules needed yet; revisit
+  if `isMinifyEnabled` is turned on — keep the devicesettings parcelables + `xposed_init`.)
 - [ ] 🧑 **Version + name.** Decide scheme — recommend **v0.4 (or 1.0.0-beta)** given 2 devices and the
   volume panel/in-app screen are incomplete. Bump `versionName`/`versionCode`.
-- [ ] 🧑 **LICENSE.** Pick one (LSPosed-ecosystem modules are commonly **GPL-3.0**; MIT/Apache also fine).
-  Add `LICENSE` at repo root. Note: bundled RE references in `re_refs/` are third-party (OpenSCQ30 is
-  GPL-3.0) — don't ship them in the APK (they're not) and credit them.
+- [x] **LICENSE.** DONE — **GPL-3.0** at repo root (both the app repo and `orchestra-manifests`). Root
+  `README.md` credits the third-party RE references (OpenSCQ30 et al., GPL-3.0); they live in
+  `re_refs/` (gitignored, not shipped in the APK).
 
 ## P1 — release hygiene
 

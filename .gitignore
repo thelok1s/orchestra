@@ -17,9 +17,21 @@ prebuilts
 
 # misc
 *.iml
+.idea/
 .DS_Store
 *.log
 .env
-docs/superpowers
-docs/superpowers/*
+
+# release signing
+*.jks
+*.keystore
+keystore.properties
+
+# --- docs split ---
+# PUBLISHED (committed): docs/ARCHITECTURE.md (framework/API design) + docs/devices/ (device RE).
+# INTERNAL / dev-only (NOT published): everything else under docs/, plus the repo map.
+docs/refdata/
+docs/FRAMEWORK-PLAN.md
+docs/RELEASE-PREP.md
+docs/superpowers/
 INDEX.md

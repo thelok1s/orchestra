@@ -24,12 +24,27 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
+        // Release signing from environment (CI injects these from repo secrets; see
+        // .github/workflows/release.yml). Absent locally → release falls back to the debug key.
+        create("release") {
+            val ksPath = System.getenv("ORCHESTRA_KEYSTORE")
+            if (ksPath != null && file(ksPath).exists()) {
+                storeFile = file(ksPath)
+                storePassword = System.getenv("ORCHESTRA_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("ORCHESTRA_KEY_ALIAS")
+                keyPassword = System.getenv("ORCHESTRA_KEY_PASSWORD")
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            signingConfig = signingConfigs.getByName("debug")
+            // Use the real release key when CI provides ORCHESTRA_KEYSTORE; otherwise debug-sign so
+            // local `assembleRelease` and unsigned dev builds keep working.
+            signingConfig =
+                if (System.getenv("ORCHESTRA_KEYSTORE") != null) signingConfigs.getByName("release")
+                else signingConfigs.getByName("debug")
         }
     }
 
