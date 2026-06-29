@@ -23,12 +23,12 @@ public class AapCodecTest {
 
     @Test public void ancSetWrapsModeByteInNoiseControlFrame() {
         // header 04000400 + 0900 + 0D + mode + 000000
-        assertEquals("0400040009000d0200000000", HexUtil.hex(AapCodec.ancSet(2)));
-        assertEquals("0400040009000d0400000000", HexUtil.hex(AapCodec.ancSet(4)));
+        assertEquals("0400040009000d02000000", HexUtil.hex(AapCodec.ancSet(2)));
+        assertEquals("0400040009000d04000000", HexUtil.hex(AapCodec.ancSet(4)));
     }
 
     @Test public void parseAncModeReadsModeByteFromNotification() {
-        byte[] f = HexUtil.unhex("0400040009000d0300000000"); // Transparency
+        byte[] f = HexUtil.unhex("0400040009000d03000000"); // Transparency
         assertEquals(Integer.valueOf(3), AapCodec.parseAncMode(f, f.length));
     }
 

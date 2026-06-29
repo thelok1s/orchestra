@@ -42,7 +42,7 @@ final class AapCodec {
 
     /** Noise-control set frame for mode 1..4 (Off/ANC/Transparency/Adaptive). */
     static byte[] ancSet(int modeByte) {
-        return dataPacket(0x09, 0x00, new byte[]{0x0D, (byte) modeByte, 0, 0, 0, 0});
+        return dataPacket(0x09, 0x00, new byte[]{0x0D, (byte) modeByte, 0, 0, 0});
     }
 
     /**
