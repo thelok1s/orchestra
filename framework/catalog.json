@@ -1,0 +1,32 @@
+{
+  "schema": 2,
+  "_doc": "Device catalog. WebUI / in-app Devices tab fetches this (locally now, later from a GitHub release raw URL) to list supported devices and download their definitions. 'url' is relative to this catalog's location, or an absolute https URL. 'capabilities' is the full RE'd count; 'injectable' is how many render natively on the Pixel About page; 'verified' is how many have hardware-confirmed bytes.",
+  "catalog_version": "2026.06.07",
+  "source": "local",
+  "devices": [
+    {
+      "id": "soundcore-space-one-pro",
+      "name": "Soundcore Space One Pro",
+      "vendor": "Anker / Soundcore",
+      "re_model": "A3062",
+      "transport": "rfcomm",
+      "status": "partial",
+      "capabilities": 21,
+      "injectable": 11,
+      "verified": 10,
+      "url": "devices/soundcore-space-one-pro.json"
+    },
+    {
+      "id": "soundcore-liberty-4-pro",
+      "name": "Soundcore Liberty 4 Pro",
+      "vendor": "Anker / Soundcore",
+      "re_model": "A3957",
+      "transport": "rfcomm",
+      "status": "partial",
+      "capabilities": 18,
+      "injectable": 11,
+      "verified": 6,
+      "url": "devices/soundcore-liberty-4-pro.json"
+    }
+  ]
+}

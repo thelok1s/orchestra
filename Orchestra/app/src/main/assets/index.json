@@ -1,0 +1,64 @@
+{
+  "index_schema": 1,
+  "generated": "2026-06-25T12:56:51.930Z",
+  "repo": "orchestra-manifests",
+  "manufacturers": [
+    {
+      "slug": "anker-soundcore",
+      "name": "Anker / Soundcore",
+      "devices": [
+        {
+          "id": "soundcore-liberty-4-pro",
+          "name": "Soundcore Liberty 4 Pro",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)soundcore Liberty 4 Pro",
+            "service_uuids_any": [
+              "0cf12d31-fac3-4553-bd80-d6832e7b3954"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 18,
+            "injectable": 12,
+            "verified": 6
+          },
+          "url": "manifests/anker-soundcore/soundcore-liberty-4-pro.json",
+          "sha256": "403009f9946d601b712fe4b3d97b3d74b41811a9ae263ea643ee6bd33807e1ca"
+        },
+        {
+          "id": "soundcore-space-one-pro",
+          "name": "Soundcore Space One Pro",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)soundcore Space One Pro",
+            "service_uuids_any": [
+              "0cf12d31-fac3-4553-bd80-d6832e7b3062",
+              "66666666-6666-6666-6666-666666666666"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 21,
+            "injectable": 13,
+            "verified": 10
+          },
+          "url": "manifests/anker-soundcore/soundcore-space-one-pro.json",
+          "sha256": "07b163e86c3900825cab41a5408679de40b142b20183d624a1ce96bec03e15a9"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- System packages to preinstall on Pixel 2018-and-newer devices, per user type.
+     Documentation at frameworks/base/data/etc/preinstalled-packages-platform.xml
+-->
+<config>
+    <!--  Pixel Tips  -->
+    <install-in-user-type package="com.google.android.apps.tips">
+        <install-in user-type="FULL" />
+        <install-in user-type="PROFILE" />
+        <do-not-install-in user-type="android.os.usertype.profile.CLONE" />
+        <do-not-install-in user-type="android.os.usertype.profile.PRIVATE" />
+    </install-in-user-type>
+
+    <!-- Preinstallation config corresponding to the Pixel buds app-->
+    <install-in-user-type package="com.google.android.apps.wearables.maestro.companion">
+        <install-in user-type="FULL" />
+        <install-in user-type="PROFILE" />
+        <do-not-install-in user-type="android.os.usertype.profile.PRIVATE" />
+    </install-in-user-type>
+
+    <!-- TurboAdapter -->
+    <install-in-user-type package="com.google.android.turboadapter">
+        <install-in user-type="SYSTEM" />
+    </install-in-user-type>
+
+    <!-- Live Transcribe & Sound Notifications (RELEASE_PACKAGE_LIVE_TRANSCRIBE) -->
+    <install-in-user-type package="com.google.audio.hearing.visualization.accessibility.scribe">
+        <install-in user-type="FULL" />
+    </install-in-user-type>
+</config>

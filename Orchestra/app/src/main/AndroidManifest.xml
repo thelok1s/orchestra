@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- OrchestraApp: a single APK that is BOTH a normal launchable app (Compose UI) AND an
+     LSPosed module (xposed meta-data + assets/xposed_init). It hosts the device-settings
+     provider services + RFCOMM, and its hooks (loaded by LSPosed into SystemUI/Settings)
+     render the volume-panel ANC tile and write metadata key 25 from a privileged process —
+     replacing the KSU priv-app. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Held only while a KSU priv-app backing still exists; once KSU is dropped the metadata
+         write happens from the Settings-process hook instead. -->
+    <uses-permission android:name="android.permission.BLUETOOTH_PRIVILEGED" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:name=".App"
+        android:label="Orchestra"
+        android:icon="@mipmap/orchestra"
+        android:roundIcon="@mipmap/orchestra"
+        android:allowBackup="false"
+        android:supportsRtl="true"
+        android:enableOnBackInvokedCallback="true"
+        android:theme="@style/Theme.Orchestra">
+
+        <!-- LSPosed / Xposed module markers -->
+        <meta-data android:name="xposedmodule" android:value="true" />
+        <meta-data android:name="xposeddescription"
+            android:value="Native Soundcore controls on Pixel: volume-panel ANC tile + device-settings page, via the device-settings framework." />
+        <meta-data android:name="xposedminversion" android:value="82" />
+        <meta-data android:name="xposedscope" android:resource="@array/xposed_scope" />
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:label="Orchestra"
+            android:theme="@style/Theme.Orchestra">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Config provider: SettingsLib binds this (package/class/action from metadata key 25). -->
+        <service
+            android:name=".ConfigProviderService"
+            android:exported="true"
+            android:permission="android.permission.BLUETOOTH_PRIVILEGED">
+            <intent-filter>
+                <action android:name="io.github.thelok1s.orchestra.BIND_DEVICE_SETTINGS_CONFIG_PROVIDER" />
+            </intent-filter>
+        </service>
+
+        <!-- Setting provider: serves/handles the ANC control, backed by the RFCOMM engine. -->
+        <service
+            android:name=".SettingProviderService"
+            android:exported="true"
+            android:permission="android.permission.BLUETOOTH_PRIVILEGED">
+            <intent-filter>
+                <action android:name="io.github.thelok1s.orchestra.BIND_DEVICE_SETTINGS_PROVIDER" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </service>
+
+        <receiver android:name=".ConnectReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="io.github.thelok1s.orchestra.APPLY" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Applies an ANC mode by toggle index (fired by the volume-panel hook). -->
+        <receiver android:name=".VolumeApplyReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="io.github.thelok1s.orchestra.APPLY_INDEX" />
+            </intent-filter>
+        </receiver>
+
+        <!-- Debug: send an arbitrary RFCOMM cmd+payload to probe control sequences. -->
+        <receiver android:name=".DebugSendReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="io.github.thelok1s.orchestra.DEBUG_SEND" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

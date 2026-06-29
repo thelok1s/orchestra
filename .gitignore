@@ -1,0 +1,25 @@
+#  working dirs
+sysui_re/
+settings_re/
+archive/
+re_refs/
+captures/
+orchestra-manifests/
+
+# build artifacts
+Orchestra/.gradle/
+Orchestra/.kotlin/
+Orchestra/build/
+Orchestra/app/build/
+Orchestra/local.properties
+Orchestra/.idea/
+prebuilts
+
+# misc
+*.iml
+.DS_Store
+*.log
+.env
+docs/superpowers
+docs/superpowers/*
+INDEX.md

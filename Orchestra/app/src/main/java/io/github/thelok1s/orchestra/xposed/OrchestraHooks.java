@@ -1,0 +1,232 @@
+package io.github.thelok1s.orchestra.xposed;
+
+import android.app.AndroidAppHelper;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.content.Context;
+import android.content.Intent;
+
+import java.lang.reflect.Method;
+import java.nio.charset.StandardCharsets;
+import java.util.Set;
+import java.util.regex.Pattern;
+
+import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.XC_MethodHook;
+import de.robv.android.xposed.XposedBridge;
+import de.robv.android.xposed.XposedHelpers;
+import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
+
+/**
+ * Single LSPosed entry point, dispatched by target package:
+ *
+ *  • com.android.systemui — clears the Pixel-UUID gate + forces ANC availability so the native
+ *    volume-panel Noise Control tile renders (fed by our device-settings provider, setting id
+ *    1001), and routes the popup's per-cell taps to our proxy over RFCOMM (the native popup's
+ *    updateState callback doesn't reach our provider on the volume path).
+ *
+ *  • com.android.settings — writes BluetoothDevice metadata key 25 (DEVICE_SETTINGS_CONFIG_*)
+ *    from this privileged process, pointing the system at our config provider. This replaces the
+ *    KSU priv-app: Settings holds BLUETOOTH_PRIVILEGED, so setMetadata succeeds here without root.
+ */
+public class OrchestraHooks implements IXposedHookLoadPackage {
+
+    private static final String TAG = "Orchestra";
+
+    private static final String PIXEL_DEVICE_INTERACTOR =
+            "com.google.android.systemui.volume.panel.domain.interactor.PixelDeviceInteractor";
+    private static final String ANC_GOOGLE_CRITERIA =
+            "com.google.android.systemui.volume.panel.component.anc.domain.AncAvailabilityGoogleCriteria";
+    private static final String TOGGLE_CLICK_LAMBDA =
+            "com.android.systemui.volume.panel.component.devicesetting.ui.composable.DeviceSettingPopup$$ExternalSyntheticLambda7";
+
+    // --- metadata key 25 (mirror of io.github.thelok1s.orchestra.Metadata; kept self-contained so the
+    //     Settings-process hook has no dependency on the app's Context/DeviceStore) ---
+    private static final int KEY25 = 25;
+    private static final String VAL_PACKAGE = "io.github.thelok1s.orchestra";
+    private static final String VAL_CLASS = "io.github.thelok1s.orchestra.ConfigProviderService";
+    private static final String VAL_ACTION = "io.github.thelok1s.orchestra.BIND_DEVICE_SETTINGS_CONFIG_PROVIDER";
+    // Devices we tag (provider still gates per user-enabled config). TODO: source from assets.
+    private static final Pattern SUPPORTED = Pattern.compile("(?i)soundcore");
+
+    @Override
+    public void handleLoadPackage(LoadPackageParam lp) {
+        switch (lp.packageName) {
+            case "com.android.systemui":
+                XposedBridge.log("[MX] loaded into SystemUI");
+                hookPixelDevice(lp.classLoader);
+                forceAncAvailable(lp.classLoader);
+                hookToggleApply(lp.classLoader);
+                break;
+            case "com.android.settings":
+                XposedBridge.log("[MX] loaded into Settings (metadata writer)");
+                hookSettingsMetadataWriter(lp.classLoader);
+                break;
+            case "io.github.thelok1s.orchestra":
+                // Module-active sentinel for our own UI.
+                try {
+                    XposedHelpers.findAndHookMethod("io.github.thelok1s.orchestra.XposedSelf", lp.classLoader,
+                            "active", new XC_MethodHook() {
+                                @Override protected void afterHookedMethod(MethodHookParam p) { p.setResult(Boolean.TRUE); }
+                            });
+                    final int api = XposedBridge.getXposedVersion();
+                    XposedHelpers.findAndHookMethod("io.github.thelok1s.orchestra.XposedSelf", lp.classLoader,
+                            "apiLevel", new XC_MethodHook() {
+                                @Override protected void afterHookedMethod(MethodHookParam p) { p.setResult(api); }
+                            });
+                    XposedBridge.log("[MX] self-active sentinel set (api " + api + ")");
+                } catch (Throwable t) { XposedBridge.log("[MX] self sentinel failed: " + t); }
+                break;
+            default:
+                break;
+        }
+    }
+
+    // ---------------- SystemUI: volume-panel ANC ----------------
+
+    private void hookPixelDevice(ClassLoader cl) {
+        try {
+            Class<?> c = XposedHelpers.findClass(PIXEL_DEVICE_INTERACTOR, cl);
+            for (Method m : c.getDeclaredMethods()) {
+                if (m.getName().toLowerCase().contains("ispixeldevice")
+                        && (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class)) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override protected void afterHookedMethod(MethodHookParam p) { p.setResult(Boolean.TRUE); }
+                    });
+                }
+            }
+            XposedBridge.log("[MX] pixelDevice forced true");
+        } catch (Throwable t) { XposedBridge.log("[MX] pixelDevice hook failed: " + t); }
+    }
+
+    private void forceAncAvailable(ClassLoader cl) {
+        try {
+            Class<?> flowKt = XposedHelpers.findClass("kotlinx.coroutines.flow.FlowKt", cl);
+            final Method flowOf1 = singleFlowOf(flowKt);
+            Class<?> crit = XposedHelpers.findClass(ANC_GOOGLE_CRITERIA, cl);
+            for (Method m : crit.getDeclaredMethods()) {
+                if (m.getName().equals("isAvailable") && m.getParameterCount() == 0) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override protected void afterHookedMethod(MethodHookParam p) throws Throwable {
+                            if (flowOf1 != null) p.setResult(flowOf1.invoke(null, Boolean.TRUE));
+                        }
+                    });
+                }
+            }
+            XposedBridge.log("[MX] AncGoogleCriteria.isAvailable forced true");
+        } catch (Throwable t) { XposedBridge.log("[MX] forceAncAvailable failed: " + t); }
+    }
+
+    private void hookToggleApply(ClassLoader cl) {
+        try {
+            Class<?> c = XposedHelpers.findClass(TOGGLE_CLICK_LAMBDA, cl);
+            for (Method m : c.getDeclaredMethods()) {
+                if (m.getName().equals("invoke")) {
+                    XposedBridge.hookMethod(m, new XC_MethodHook() {
+                        @Override protected void beforeHookedMethod(MethodHookParam p) {
+                            try {
+                                Object model = XposedHelpers.getObjectField(p.thisObject, "f$0");
+                                int index = XposedHelpers.getIntField(p.thisObject, "f$1");
+                                Object cached = XposedHelpers.getObjectField(model, "cachedDevice");
+                                BluetoothDevice dev = (BluetoothDevice) XposedHelpers.getObjectField(cached, "mDevice");
+                                String mac = dev.getAddress();
+                                Context ctx = AndroidAppHelper.currentApplication();
+                                Intent i = new Intent("io.github.thelok1s.orchestra.APPLY_INDEX")
+                                        .setClassName("io.github.thelok1s.orchestra", "io.github.thelok1s.orchestra.VolumeApplyReceiver")
+                                        .putExtra("mac", mac).putExtra("index", index);
+                                ctx.sendBroadcast(i);
+                                XposedBridge.log("[MX] toggle tap -> APPLY_INDEX " + mac + " idx=" + index);
+                            } catch (Throwable t) {
+                                XposedBridge.log("[MX] toggle apply failed: " + t);
+                            }
+                        }
+                    });
+                }
+            }
+            XposedBridge.log("[MX] hooked popup toggle click (Lambda7)");
+        } catch (Throwable t) { XposedBridge.log("[MX] hookToggleApply failed: " + t); }
+    }
+
+    private static Method singleFlowOf(Class<?> flowKt) {
+        for (Method m : flowKt.getDeclaredMethods())
+            if (m.getName().equals("flowOf") && m.getParameterCount() == 1
+                    && m.getParameterTypes()[0] == Object.class) { m.setAccessible(true); return m; }
+        return null;
+    }
+
+    // ---------------- Settings: privileged metadata writer ----------------
+
+    /**
+     * Settings holds BLUETOOTH_PRIVILEGED, so getMetadata/setMetadata succeed here. We assert the
+     * config tags whenever a Settings screen resumes (cheap + idempotent; the user always passes
+     * through Settings before opening a device's "About device" page).
+     */
+    private void hookSettingsMetadataWriter(ClassLoader cl) {
+        try {
+            XposedHelpers.findAndHookMethod("android.app.Activity", cl, "onResume",
+                    new XC_MethodHook() {
+                        @Override protected void afterHookedMethod(MethodHookParam p) {
+                            assertTagsForBondedDevices();
+                        }
+                    });
+            XposedBridge.log("[MX] Settings metadata writer armed (Activity.onResume)");
+        } catch (Throwable t) { XposedBridge.log("[MX] settings hook failed: " + t); }
+    }
+
+    private void assertTagsForBondedDevices() {
+        try {
+            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+            if (adapter == null || !adapter.isEnabled()) return;
+            Set<BluetoothDevice> bonded = adapter.getBondedDevices();
+            if (bonded == null) return;
+            for (BluetoothDevice d : bonded) {
+                String name = safeName(d);
+                if (name == null || !SUPPORTED.matcher(name).find()) continue;
+                assertConfigTags(d);
+            }
+        } catch (Throwable t) {
+            XposedBridge.log("[MX] assertTags failed: " + t);
+        }
+    }
+
+    private static String safeName(BluetoothDevice d) {
+        try { return d.getName(); } catch (Throwable t) { return null; }
+    }
+
+    private void assertConfigTags(BluetoothDevice device) {
+        try {
+            String existing = readKey25(device);
+            if (existing == null) existing = "";
+            String updated = upsert(existing, "DEVICE_SETTINGS_CONFIG_PACKAGE_NAME", VAL_PACKAGE);
+            updated = upsert(updated, "DEVICE_SETTINGS_CONFIG_CLASS", VAL_CLASS);
+            updated = upsert(updated, "DEVICE_SETTINGS_CONFIG_ACTION", VAL_ACTION);
+            // The volume-panel ANC tile is device-settings driven and we force its availability via
+            // the SystemUI hook, so the HEARABLE_CONTROL_SLICE_WITH_WIDTH slice is NOT needed; strip
+            // any stale tag a previous build wrote (its provider app is being retired).
+            updated = updated.replaceAll(
+                    "<HEARABLE_CONTROL_SLICE_WITH_WIDTH>.*?</HEARABLE_CONTROL_SLICE_WITH_WIDTH>", "");
+            if (updated.equals(existing)) return; // already correct
+            Method set = BluetoothDevice.class.getMethod("setMetadata", int.class, byte[].class);
+            Object res = set.invoke(device, KEY25, updated.getBytes(StandardCharsets.UTF_8));
+            boolean ok = !(res instanceof Boolean) || (Boolean) res;
+            XposedBridge.log("[MX] key25 write " + (ok ? "ok" : "FAILED") + " for " + device.getAddress());
+        } catch (Throwable t) {
+            Throwable c = t.getCause() != null ? t.getCause() : t;
+            XposedBridge.log("[MX] setMetadata failed: " + c);
+        }
+    }
+
+    private static String readKey25(BluetoothDevice device) {
+        try {
+            Method get = BluetoothDevice.class.getMethod("getMetadata", int.class);
+            Object res = get.invoke(device, KEY25);
+            if (res instanceof byte[]) return new String((byte[]) res, StandardCharsets.UTF_8);
+        } catch (Throwable ignore) {}
+        return null;
+    }
+
+    private static String upsert(String src, String tag, String value) {
+        String stripped = src.replaceAll("<" + Pattern.quote(tag) + ">.*?</" + Pattern.quote(tag) + ">", "");
+        return stripped + "<" + tag + ">" + value + "</" + tag + ">";
+    }
+}

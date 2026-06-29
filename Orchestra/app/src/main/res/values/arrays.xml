@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Packages LSPosed will offer/auto-select as scope for this module. -->
+    <string-array name="xposed_scope">
+        <item>com.android.systemui</item>
+        <item>com.android.settings</item>
+        <item>io.github.thelok1s.orchestra</item>
+    </string-array>
+</resources>

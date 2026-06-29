@@ -1,0 +1,314 @@
+{
+  "schema_version": 3,
+  "revision": 1,
+  "revision_date": "2026-06-24",
+  "id": "soundcore-liberty-4-pro",
+  "name": "Soundcore Liberty 4 Pro",
+  "manufacturer": "Anker / Soundcore",
+  "model_code": "3954",
+  "re_model": "A3957",
+
+  "match": {
+    "name_regex": "(?i)soundcore Liberty 4 Pro",
+    "service_uuids_any": [
+      "0cf12d31-fac3-4553-bd80-d6832e7b3954"
+    ]
+  },
+
+  "channels": {
+    "rfcomm-main": {
+      "transport": "rfcomm",
+      "uuid": "0cf12d31-fac3-4553-bd80-d6832e7b3954",
+      "secure": false,
+      "protocol": {
+        "framing": "soundcore_v1",
+        "_doc": "Identical framing to the Space One Pro. host->device: 08 ee 00 00 00 <cmd:2> <len:2 LE total> <payload..> <crc>. device->host: 09 ff 00 00 01 <cmd:2> <len:2 LE> <payload..> <crc>. crc = sum(prev)&0xff. Command bytes equal OpenSCQ30 Command([hi,lo]).",
+        "cmd_prefix": "08ee000000",
+        "resp_prefix": "09ff000001",
+        "checksum": "sum8"
+      }
+    }
+  },
+  "default_channel": "rfcomm-main",
+
+  "platforms": {
+    "pixelos": {
+      "detect": { "manufacturer": "Google", "system_prop": { "ro.product.brand": "google" } },
+      "requires": ["root", "lsposed", "pkg:com.android.systemui", "pkg:com.android.settings"],
+      "inject": {
+        "settings_pkg": "com.android.settings",
+        "systemui_pkg": "com.android.systemui",
+        "about_fragment": "com.android.settings.bluetooth.BluetoothDetailsConfigurableFragment",
+        "surfaces": ["device_details", "volume_panel"],
+        "reserved_ids": { "anc": 1001 }
+      }
+    }
+  },
+
+  "_capabilities_source": "Capability list mirrors OpenSCQ30's closest TWS cousins Liberty 5 (A3957)/Liberty 4 NC (A3947), then VERIFIED live 2026-06-14 by driving the Soundcore app + btsnoop (RFCOMM, payload in tshark data.data, Liberty ACL handle 0x000d). Confirmed: wearing_detection 0181, sound_leak_compensation 109a (NOT 1086), low_battery_prompt 1082, multipoint 0b84, ldac SET 01ff (NOT 017f; reboots device). sound_mode 0681 uses an adaptive 5-byte payload `<B0><B1>00<wind>ff` (B0 00=adaptive-ANC/01=manual/03=airplane) — different from the over-ear; discrete mode mapping still needs re-capture. Aux: 2003 = real-time volume-meter read. Still _verified:false (guessed): anc_cycle 0682, gaming_mode 0187, touch_tone 0183, wearing_tone 018c, limit_high_volume 2082, auto_power_off 0186, eq 0281, button 0481.",
+
+  "functions": [
+    {
+      "id": "sound_mode",
+      "type": "multitoggle",
+      "title": "Noise control",
+      "title_i18n": { "ru": "Управление шумом" },
+      "capability": "sound_modes",
+      "options": [
+        { "id": "anc",          "label": "Noise Cancelling", "icon": "anc",          "label_i18n": { "ru": "Шумоподавление" } },
+        { "id": "off",          "label": "Off",              "icon": "off",          "label_i18n": { "ru": "Выкл." } },
+        { "id": "transparency", "label": "Transparency",     "icon": "transparency", "label_i18n": { "ru": "Прозрачность" } }
+      ],
+      "set": {
+        "command": "0681",
+        "payload_template": "{mode}5000000005",
+        "option_values": { "anc": "00", "off": "01", "transparency": "02" },
+        "_capture_2026-06-14": "The official app uses a DIFFERENT (adaptive) 0681 payload than the over-ear: 5 bytes `<B0><B1>00<B3 wind>ff`. Captured B0: 00=ambient/adaptive-ANC, 01=manual-ANC (B1=level 1-10, 0b=adaptive), 03=airplane mode; B3=wind/'Air protection' (01/00). Our 6-byte `{mode}5000000005` template differs but switched modes OK in the 2026-06-01 test. The discrete anc/off/transparency mapping below is UNCONFIRMED against the app (which exposes an ANC↔Transparency slider, not 3 buttons) — likely has the same off/transparency swap the over-ear had; re-verify before trusting."
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": 134,
+        "value_map": { "00": "anc", "01": "off", "02": "transparency" }
+      },
+      "inject": "auto",
+      "ui": { "setting_id": 1001, "surfaces": ["device_details", "volume_panel"] },
+      "_verified": true,
+      "_verified_note": "ANC=00 confirmed; full mode mapping needs re-capture (see _capture note). state byte idx134 flips."
+    },
+
+    {
+      "id": "anc_cycle_noise_cancelling",
+      "type": "toggle",
+      "title": "Include ANC in cycle",
+      "capability": "ambient_sound_mode_cycle",
+      "set": { "command": "0682", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "ui": { "setting_id": 2214, "surfaces": ["device_details"] },
+      "_verified": false
+    },
+    {
+      "id": "anc_cycle_transparency",
+      "type": "toggle",
+      "title": "Include Transparency in cycle",
+      "capability": "ambient_sound_mode_cycle",
+      "set": { "command": "0682", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "ui": { "setting_id": 2215, "surfaces": ["device_details"] },
+      "_verified": false
+    },
+
+    {
+      "id": "multipoint",
+      "type": "toggle",
+      "title": "Dual connection",
+      "title_i18n": { "ru": "Мультиточка" },
+      "capability": "dual_connections",
+      "set": { "command": "0b84", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "conflicts_with": ["ldac", "gaming_mode"],
+      "ui": { "setting_id": 2220, "surfaces": ["device_details"] },
+      "_verified": true,
+      "_verified_note": "0b84 on=01/off=00 confirmed live 2026-06-14 via Soundcore app 'Двойные соединения' (btsnoop, Liberty handle 0x000d)."
+    },
+
+    {
+      "id": "ldac",
+      "type": "toggle",
+      "title": "LDAC (Hi-Res)",
+      "capability": "ldac",
+      "set": { "command": "01ff", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
+      "read": { "command": "01ff", "response_command": "01ff", "state_byte_index": null, "value_map": {} },
+      "inject": false,
+      "inject_reason": "Enabling/disabling LDAC reboots the earbuds (~10s) and drops the audio/control link — too disruptive for a tile toggle. In-app only.",
+      "conflicts_with": ["multipoint", "gaming_mode"],
+      "ui": { "setting_id": 2221, "surfaces": [] },
+      "_verified": true,
+      "_verified_note": "Set cmd 01ff on=01(LDAC)/off=00(default) confirmed live 2026-06-14 (btsnoop). Corrects the OpenSCQ30 guess 017f (that's the request id). NOTE: triggers a device reboot."
+    },
+
+    {
+      "id": "gaming_mode",
+      "type": "toggle",
+      "title": "Gaming mode (low latency)",
+      "capability": "gaming_mode",
+      "set": { "command": "0187", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
+      "read": { "command": "0111", "response_command": "0111", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "conflicts_with": ["ldac"],
+      "ui": { "setting_id": 2231, "surfaces": ["device_details"] },
+      "_verified": false
+    },
+
+    {
+      "id": "wearing_detection",
+      "type": "toggle",
+      "title": "In-ear detection (auto-pause)",
+      "capability": "wearing_detection",
+      "set": { "command": "0181", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "ui": { "setting_id": 2232, "surfaces": ["device_details"] },
+      "_verified": true,
+      "_verified_note": "0181 on=01/off=00 confirmed live 2026-06-14 via 'Обнаружение наушника в ухе' (btsnoop, Liberty)."
+    },
+
+    {
+      "id": "touch_tone",
+      "type": "toggle",
+      "title": "Touch tone",
+      "capability": "touch_tone",
+      "set": { "command": "0183", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "ui": { "setting_id": 2233, "surfaces": ["device_details"] },
+      "_verified": false
+    },
+
+    {
+      "id": "wearing_tone",
+      "type": "toggle",
+      "title": "Wearing tone",
+      "capability": "wearing_tone",
+      "set": { "command": "018c", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "ui": { "setting_id": 2234, "surfaces": ["device_details"] },
+      "_verified": false
+    },
+
+    {
+      "id": "sound_leak_compensation",
+      "type": "toggle",
+      "title": "Sound-leak compensation",
+      "capability": "sound_leak_compensation",
+      "set": { "command": "109a", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "ui": { "setting_id": 2235, "surfaces": ["device_details"] },
+      "_verified": true,
+      "_verified_note": "Set cmd 109a on=01/off=00 confirmed live 2026-06-14 via 'Адаптивная компенсация утечки звука' (btsnoop). Corrects the OpenSCQ30 guess 1086 — the Liberty 4 Pro uses its own opcode here."
+    },
+
+    {
+      "id": "low_battery_prompt",
+      "type": "toggle",
+      "title": "Low-battery prompt",
+      "capability": "low_battery_prompt",
+      "set": { "command": "1082", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "ui": { "setting_id": 2225, "surfaces": ["device_details"] },
+      "_verified": true,
+      "_verified_note": "1082 off=00 confirmed live 2026-06-14 via 'Уведомление о низком заряде батареи' under touch-tone submenu (btsnoop). Same opcode as the over-ear."
+    },
+
+    {
+      "id": "limit_high_volume",
+      "type": "toggle",
+      "title": "Limit high volume",
+      "capability": "limit_high_volume",
+      "set": { "command": "2082", "payload_template": "{state}5a", "state_values": { "on": "01", "off": "00" }, "_note": "payload [enabled, db_limit]; 0x5a=90dB." },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "ui": { "setting_id": 2226, "surfaces": ["device_details"] },
+      "_verified": false
+    },
+
+    {
+      "id": "auto_power_off",
+      "type": "list",
+      "title": "Auto power-off",
+      "capability": "auto_power_off",
+      "options": [
+        { "id": "off", "label": "Never" },
+        { "id": "5m", "label": "5 min" },
+        { "id": "10m", "label": "10 min" },
+        { "id": "30m", "label": "30 min" },
+        { "id": "60m", "label": "60 min" }
+      ],
+      "set": { "command": "0186", "payload_template": "{value}", "option_values": { "off": "00", "5m": "01", "10m": "02", "30m": "03", "60m": "04" } },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "ui": { "setting_id": 2227, "surfaces": [] },
+      "_verified": false
+    },
+
+    {
+      "id": "eq_preset",
+      "type": "list",
+      "title": "Equalizer preset",
+      "capability": "equalizer",
+      "options": [
+        { "id": "soundcore_signature", "label": "Soundcore Signature" },
+        { "id": "acoustic", "label": "Acoustic" },
+        { "id": "bass_booster", "label": "Bass Booster" },
+        { "id": "classical", "label": "Classical" },
+        { "id": "podcast", "label": "Podcast" },
+        { "id": "custom", "label": "Custom" }
+      ],
+      "set": { "command": "0281", "payload_template": "{value}", "_note": "preset id LE u16." },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "inject": "auto",
+      "ui": { "setting_id": 2228, "surfaces": [] },
+      "_verified": false
+    },
+
+    {
+      "id": "eq_custom_bands",
+      "type": "slider",
+      "title": "Custom EQ bands",
+      "capability": "equalizer",
+      "range": { "min": -120, "max": 120, "step": 5, "unit": "0.1dB", "bands": 8 },
+      "set": { "command": "0281", "payload_template": "{value}", "_note": "8 band gains." },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null },
+      "inject": "auto",
+      "requires": { "eq_preset": "custom" },
+      "ui": { "setting_id": 2229, "surfaces": [] },
+      "_verified": false
+    },
+
+    {
+      "id": "button_config",
+      "type": "list",
+      "title": "Gesture controls",
+      "capability": "button_configuration",
+      "options": [
+        { "id": "double_press", "label": "Double tap" },
+        { "id": "triple_press", "label": "Triple tap" },
+        { "id": "long_press", "label": "Press & hold" }
+      ],
+      "set": { "command": "0481", "payload_template": "0000{value}", "_note": "0481 double, 0482 triple, 0483 hold, 0484 …" },
+      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null },
+      "inject": "auto",
+      "ui": { "setting_id": 2230, "surfaces": [] },
+      "_verified": false
+    },
+
+    {
+      "id": "battery",
+      "type": "info",
+      "title": "Battery (per bud + case)",
+      "capability": "dual_battery",
+      "read": { "command": "0103", "response_command": "0103", "state_byte_index": null },
+      "inject": false,
+      "ui": { "setting_id": 2240, "surfaces": [] },
+      "_verified": false
+    },
+    {
+      "id": "firmware",
+      "type": "info",
+      "title": "Firmware / serial",
+      "capability": "serial_number_and_dual_firmware_version",
+      "read": { "command": "0105", "response_command": "0105", "state_byte_index": null },
+      "inject": false,
+      "ui": { "setting_id": 2241, "surfaces": [] },
+      "_verified": false
+    }
+  ],
+
+  "_notes": "MAC f4:9d:8a:5c:c3:14. Vendor control UUID encodes model code (…3954). State packet (cmd 0101) is 175 bytes (0x00af); fw '04.29'; model+MAC '395414C35C8A9DF4'; mode byte at idx134, right after marker '44 44 33'. Generic SPP 1101 connects but does NOT carry control protocol — must use vendor UUID. Capability list mirrors Liberty 5 (A3957); verify each command/offset on-device."
+}
