@@ -49,7 +49,8 @@ final class AacpEngine {
         String key = mac.toUpperCase(Locale.ROOT);
         Session s = SESSIONS.computeIfAbsent(key, Session::new);
         synchronized (s.lock) {
-            if (s.socket != null && s.socket.isConnected()) return;
+            if (s.socket != null && s.socket.isConnected()
+                    && s.reader != null && s.reader.isAlive()) return;
             close(s);
             try {
                 s.socket = createL2capSocket(adapter, mac);
@@ -77,9 +78,11 @@ final class AacpEngine {
         s.reader = new Thread(() -> {
             byte[] buf = new byte[1024];
             AapState state = AapState.forMac(s.mac);
+            final java.io.InputStream in = s.in;
+            if (in == null) return;
             try {
                 while (s.running) {
-                    int n = s.in.read(buf);
+                    int n = in.read(buf);
                     if (n < 0) break;
                     Integer mode = AapCodec.parseAncMode(buf, n);
                     if (mode != null) {
@@ -107,6 +110,7 @@ final class AacpEngine {
             {TYPE_L2CAP, true, true, dev, PSM, AAP_UUID},
         };
         Exception last = null;
+        int idx = 0;
         for (Object[] args : specs) {
             try {
                 Class<?>[] types = new Class<?>[args.length];
@@ -121,10 +125,13 @@ final class AacpEngine {
                 }
                 Constructor<?> ctor = BluetoothSocket.class.getDeclaredConstructor(types);
                 ctor.setAccessible(true);
-                return (BluetoothSocket) ctor.newInstance(args);
+                BluetoothSocket sock = (BluetoothSocket) ctor.newInstance(args);
+                Log.i(TAG, "AACP L2CAP socket via ctor spec #" + (idx + 1) + " " + java.util.Arrays.toString(types));
+                return sock;
             } catch (Exception e) {
                 last = e;
             }
+            idx++;
         }
         throw last != null ? last : new IllegalStateException("no L2CAP BluetoothSocket ctor");
     }
@@ -132,7 +139,7 @@ final class AacpEngine {
     private static void close(Session s) {
         s.running = false;
         try { if (s.socket != null) s.socket.close(); } catch (Exception ignored) {}
-        s.socket = null; s.in = null; s.out = null;
+        s.socket = null; s.in = null; s.out = null; s.reader = null;
     }
 
     // ---- manifest-free core (used by the standalone adb test in Task 5) ----
