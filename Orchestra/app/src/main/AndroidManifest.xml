@@ -84,6 +84,7 @@
         <receiver android:name=".DebugSendReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="io.github.thelok1s.orchestra.DEBUG_SEND" />
+                <action android:name="io.github.thelok1s.orchestra.AACP_TEST" />
             </intent-filter>
         </receiver>
     </application>

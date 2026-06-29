@@ -27,8 +27,25 @@ public interface ControlEngine {
         }
     };
 
+    ControlEngine AACP = new ControlEngine() {
+        public boolean applyMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, String optId) {
+            return AacpEngine.applyMode(a, mac, def, f, optId);
+        }
+        public String readMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return AacpEngine.readMode(a, mac, def, f);
+        }
+        public boolean applyToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, boolean on) {
+            return AacpEngine.applyToggle(a, mac, def, f, on);
+        }
+        public Boolean readToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return AacpEngine.readToggle(a, mac, def, f);
+        }
+    };
+
     /** @return the engine for a transport, or null if this app build can't drive it. */
     static ControlEngine forTransport(String transport) {
-        return "rfcomm".equals(transport) ? RFCOMM : null;
+        if ("rfcomm".equals(transport)) return RFCOMM;
+        if ("aacp".equals(transport)) return AACP;
+        return null;
     }
 }
