@@ -40,6 +40,7 @@ final class AacpEngine {
         OutputStream out;
         Thread reader;
         volatile boolean running;
+        volatile boolean sawInbound;
         Session(String mac) { this.mac = mac; }
     }
 
@@ -62,7 +63,15 @@ final class AacpEngine {
                 s.out.write(AapCodec.setFeatureFlags());
                 s.out.write(AapCodec.notificationRequest());
                 s.out.flush();
+                s.sawInbound = false;
                 startReader(s);
+                long deadline = System.currentTimeMillis() + 1500;
+                while (!s.sawInbound && System.currentTimeMillis() < deadline) {
+                    try { Thread.sleep(50); } catch (InterruptedException ignored) {}
+                }
+                if (!s.sawInbound) {
+                    throw new java.io.IOException("AAP session dead: no inbound after bring-up (stale channel?)");
+                }
                 Log.i(TAG, "AACP connected + brought up " + key);
                 Logbook.add("AACP connected " + key);
             } catch (Exception e) {
@@ -84,6 +93,7 @@ final class AacpEngine {
                 while (s.running) {
                     int n = in.read(buf);
                     if (n < 0) break;
+                    s.sawInbound = true;
                     Integer mode = AapCodec.parseAncMode(buf, n);
                     if (mode != null) {
                         state.setAncMode(mode);
