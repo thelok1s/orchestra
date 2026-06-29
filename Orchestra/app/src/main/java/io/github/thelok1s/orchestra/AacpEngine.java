@@ -146,6 +146,10 @@ final class AacpEngine {
 
     /** Write a noise-control mode byte (1..4). Connects + brings up if needed. */
     static boolean setAncByte(BluetoothAdapter adapter, String mac, int modeByte) {
+        if (modeByte < 1 || modeByte > 4) {
+            Log.w(TAG, "AACP ignoring out-of-range ANC mode " + modeByte);
+            return false;
+        }
         ensureConnected(adapter, mac);
         Session s = SESSIONS.get(mac.toUpperCase(Locale.ROOT));
         if (s == null) return false;

@@ -17,8 +17,9 @@ public class App extends Application {
     public void onCreate() {
         super.onCreate();
         appContext = getApplicationContext();
-        // Allow reflecting blocked non-SDK members (the package-private L2CAP BluetoothSocket
-        // constructor used by AacpEngine for AAP). No device-global change; per-process exemption.
-        org.lsposed.hiddenapibypass.HiddenApiBypass.addHiddenApiExemptions("L");
+        // Allow reflecting the package-private L2CAP BluetoothSocket constructor used by
+        // AacpEngine for AAP. Scoped to android.bluetooth only — not all non-SDK members.
+        // No device-global change; per-process exemption.
+        org.lsposed.hiddenapibypass.HiddenApiBypass.addHiddenApiExemptions("Landroid/bluetooth/");
     }
 }
