@@ -34,11 +34,11 @@ public final class AacpEngine {
 
     private static final Map<String, Map<String, Runnable>> LISTENERS = new ConcurrentHashMap<>();
 
-    static void registerListener(String mac, String key, Runnable onChange) {
+    public static void registerListener(String mac, String key, Runnable onChange) {
         LISTENERS.computeIfAbsent(mac.toUpperCase(Locale.ROOT), k -> new ConcurrentHashMap<>())
                  .put(key, onChange);
     }
-    static void unregisterListener(String mac, String key) {
+    public static void unregisterListener(String mac, String key) {
         Map<String, Runnable> m = LISTENERS.get(mac.toUpperCase(Locale.ROOT));
         if (m != null) m.remove(key);
     }

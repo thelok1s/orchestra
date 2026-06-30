@@ -646,8 +646,9 @@ private fun HookedDeviceCard(
 
     // Ear-detection: only for AAP devices (those with an ear_detection capability in their manifest).
     val isAacpDevice = caps.any { it.id == "ear_detection" }
+    var liveTick by remember(d.mac) { mutableStateOf(0) }
     val context = LocalContext.current
-    val earStatus = remember(refreshKey, tick, d.mac) {
+    val earStatus = remember(refreshKey, tick, liveTick, d.mac) {
         if (isAacpDevice) io.github.thelok1s.orchestra.AapState.forMac(d.mac).earSummary() ?: "—"
         else null
     }
@@ -657,6 +658,10 @@ private fun HookedDeviceCard(
             if (adapter != null) withContext(Dispatchers.IO) {
                 io.github.thelok1s.orchestra.AacpEngine.ensureConnected(adapter, d.mac)
             }
+        }
+        DisposableEffect(d.mac) {
+            io.github.thelok1s.orchestra.AacpEngine.registerListener(d.mac, "ui-ear") { liveTick++ }
+            onDispose { io.github.thelok1s.orchestra.AacpEngine.unregisterListener(d.mac, "ui-ear") }
         }
     }
 
