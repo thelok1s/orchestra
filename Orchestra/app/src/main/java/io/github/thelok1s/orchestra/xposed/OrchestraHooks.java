@@ -6,12 +6,19 @@ import android.bluetooth.BluetoothDevice;
 import android.content.Context;
 import android.content.Intent;
 
+import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
+import java.util.zip.ZipFile;
 
 import de.robv.android.xposed.IXposedHookLoadPackage;
+import de.robv.android.xposed.IXposedHookZygoteInit;
+import org.json.JSONArray;
+import org.json.JSONObject;
 import de.robv.android.xposed.XC_MethodHook;
 import de.robv.android.xposed.XposedBridge;
 import de.robv.android.xposed.XposedHelpers;
@@ -29,7 +36,14 @@ import de.robv.android.xposed.callbacks.XC_LoadPackage.LoadPackageParam;
  *    from this privileged process, pointing the system at our config provider. This replaces the
  *    KSU priv-app: Settings holds BLUETOOTH_PRIVILEGED, so setMetadata succeeds here without root.
  */
-public class OrchestraHooks implements IXposedHookLoadPackage {
+public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygoteInit {
+
+    private static volatile String modulePath;
+
+    @Override
+    public void initZygote(StartupParam sp) {
+        modulePath = sp.modulePath;
+    }
 
     private static final String TAG = "Orchestra";
 
@@ -46,8 +60,53 @@ public class OrchestraHooks implements IXposedHookLoadPackage {
     private static final String VAL_PACKAGE = "io.github.thelok1s.orchestra";
     private static final String VAL_CLASS = "io.github.thelok1s.orchestra.ConfigProviderService";
     private static final String VAL_ACTION = "io.github.thelok1s.orchestra.BIND_DEVICE_SETTINGS_CONFIG_PROVIDER";
-    // Devices we tag (provider still gates per user-enabled config). TODO: source from assets.
-    private static final Pattern SUPPORTED = Pattern.compile("(?i)soundcore");
+    // Device-name gate, sourced from the bundled assets/index.json (name_regex per manifest), read
+    // from the module APK. Fail-soft fallback keeps known families tagged if the asset can't be read.
+    private static final Pattern FALLBACK = Pattern.compile("(?i)soundcore|airpods");
+    private static volatile List<Pattern> gatePatterns;
+
+    private static boolean nameSupported(String name) {
+        if (name == null) return false;
+        List<Pattern> pats = gatePatterns;
+        if (pats == null) { pats = loadGatePatterns(); gatePatterns = pats; }
+        if (pats.isEmpty()) return FALLBACK.matcher(name).find();
+        for (Pattern p : pats) if (p.matcher(name).find()) return true;
+        return false;
+    }
+
+    private static List<Pattern> loadGatePatterns() {
+        List<Pattern> out = new ArrayList<>();
+        String path = modulePath;
+        if (path == null) return out;
+        try (ZipFile zip = new ZipFile(path)) {
+            java.util.zip.ZipEntry e = zip.getEntry("assets/index.json");
+            if (e == null) return out;
+            String json;
+            try (InputStream in = zip.getInputStream(e)) {
+                byte[] buf = new byte[in.available() > 0 ? in.available() : 8192];
+                int n, off = 0;
+                java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+                while ((n = in.read(buf)) >= 0) bos.write(buf, 0, n);
+                json = new String(bos.toByteArray(), StandardCharsets.UTF_8);
+            }
+            JSONObject root = new JSONObject(json);
+            JSONArray mans = root.optJSONArray("manufacturers");
+            if (mans != null) for (int i = 0; i < mans.length(); i++) {
+                JSONArray devs = mans.getJSONObject(i).optJSONArray("devices");
+                if (devs == null) continue;
+                for (int j = 0; j < devs.length(); j++) {
+                    String rx = devs.getJSONObject(j).optString("name_regex", null);
+                    if (rx != null && !rx.isEmpty()) {
+                        try { out.add(Pattern.compile(rx)); } catch (Throwable ignore) {}
+                    }
+                }
+            }
+            XposedBridge.log("[MX] device gate: " + out.size() + " pattern(s) from bundled index");
+        } catch (Throwable t) {
+            XposedBridge.log("[MX] device gate load failed, using fallback: " + t);
+        }
+        return out;
+    }
 
     @Override
     public void handleLoadPackage(LoadPackageParam lp) {
@@ -181,7 +240,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage {
             if (bonded == null) return;
             for (BluetoothDevice d : bonded) {
                 String name = safeName(d);
-                if (name == null || !SUPPORTED.matcher(name).find()) continue;
+                if (!nameSupported(name)) continue;
                 assertConfigTags(d);
             }
         } catch (Throwable t) {
