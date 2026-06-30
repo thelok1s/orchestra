@@ -32,6 +32,21 @@ final class AacpEngine {
 
     private static final Map<String, Session> SESSIONS = new ConcurrentHashMap<>();
 
+    private static final Map<String, Runnable> LISTENERS = new ConcurrentHashMap<>();
+
+    static void registerListener(String mac, Runnable onChange) {
+        LISTENERS.put(mac.toUpperCase(Locale.ROOT), onChange);
+    }
+    static void unregisterListener(String mac) {
+        LISTENERS.remove(mac.toUpperCase(Locale.ROOT));
+    }
+    private static void fireListener(String mac) {
+        Runnable r = LISTENERS.get(mac.toUpperCase(Locale.ROOT));
+        if (r != null) {
+            try { r.run(); } catch (Throwable t) { Log.w(TAG, "AACP listener threw: " + t); }
+        }
+    }
+
     private static final class Session {
         final String mac;
         final Object lock = new Object();
@@ -94,11 +109,20 @@ final class AacpEngine {
                     int n = in.read(buf);
                     if (n < 0) break;
                     s.sawInbound = true;
-                    Integer mode = AapCodec.parseAncMode(buf, n);
-                    if (mode != null) {
-                        state.setAncMode(mode);
-                        Log.i(TAG, "AACP notify ANC mode=" + mode + " for " + s.mac);
-                    }
+                    boolean changed = false;
+                    Integer anc = AapCodec.parseAncMode(buf, n);
+                    if (anc != null) { state.setAncMode(anc); changed = true;
+                        Log.i(TAG, "AACP notify ANC mode=" + anc + " for " + s.mac); }
+                    Integer ca = AapCodec.parseFeature(buf, n, 0x28);
+                    if (ca != null) { state.setCaEnabled(ca == 1); changed = true;
+                        Log.i(TAG, "AACP notify CA=" + ca + " for " + s.mac); }
+                    AapCodec.Battery bat = AapCodec.parseBattery(buf, n);
+                    if (bat != null) { state.setBattery(bat); changed = true;
+                        Log.i(TAG, "AACP notify battery " + state.batterySummary() + " for " + s.mac); }
+                    AapCodec.Ear ear = AapCodec.parseEar(buf, n);
+                    if (ear != null) { state.setEar(ear); changed = true;
+                        Log.i(TAG, "AACP notify ear " + state.earSummary() + " for " + s.mac); }
+                    if (changed) fireListener(s.mac);
                 }
             } catch (Exception e) {
                 Log.i(TAG, "AACP reader ended for " + s.mac + ": " + e);
@@ -205,12 +229,44 @@ final class AacpEngine {
         return f.valueMap.get(String.format("%02x", mode & 0xff));
     }
 
-    static boolean applyToggle(BluetoothAdapter a, String mac, DeviceDef def,
+    static boolean applyToggle(BluetoothAdapter adapter, String mac, DeviceDef def,
                                DeviceDef.Func f, boolean on) {
-        return false; // toggles land in a later plan
+        if (f == null || !"conversational_awareness".equals(f.id)) {
+            Log.w(TAG, "AACP applyToggle: unsupported toggle " + (f != null ? f.id : "null"));
+            return false;
+        }
+        ensureConnected(adapter, mac);
+        Session s = SESSIONS.get(mac.toUpperCase(Locale.ROOT));
+        if (s == null) return false;
+        synchronized (s.lock) {
+            if (s.out == null) return false;
+            try {
+                byte[] frame = AapCodec.caSet(on);
+                Log.i(TAG, "AACP TX set CA on=" + on + ": " + HexUtil.hex(frame));
+                s.out.write(frame); s.out.flush();
+                AapState.forMac(s.mac).setCaEnabled(on); // optimistic; reader reconciles
+                return true;
+            } catch (Exception e) {
+                Log.w(TAG, "AACP CA set failed: " + e);
+                close(s);
+                return false;
+            }
+        }
     }
 
-    static Boolean readToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
-        return null; // toggles land in a later plan
+    static Boolean readToggle(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f) {
+        if (f == null || !"conversational_awareness".equals(f.id)) return null;
+        ensureConnected(adapter, mac);
+        return AapState.forMac(mac).getCaEnabled();
+    }
+
+    /** Live display string for an info/battery function ("battery" or "ear_detection"), or null. */
+    static String readInfo(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f) {
+        if (f == null) return null;
+        ensureConnected(adapter, mac);
+        AapState st = AapState.forMac(mac);
+        if ("battery".equals(f.id)) return st.batterySummary();
+        if ("ear_detection".equals(f.id)) return st.earSummary();
+        return null;
     }
 }
