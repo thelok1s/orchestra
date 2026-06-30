@@ -72,7 +72,12 @@ public class SettingProviderService extends Service {
                     DeviceInfo info = data.readTypedObject(DeviceInfo.CREATOR);
                     data.readStrongBinder();
                     if (info != null && info.getAddress() != null) {
-                        listeners.remove(info.getAddress().toUpperCase());
+                        String addr = info.getAddress().toUpperCase();
+                        listeners.remove(addr);
+                        for (DeviceDef.Func f : defInjectedSafe(addr)) {
+                            ControlEngine engine = ControlEngine.forTransport(f.transport);
+                            if (engine != null) { engine.unregisterListener(addr); break; }
+                        }
                     }
                     return true;
                 }
@@ -104,7 +109,24 @@ public class SettingProviderService extends Service {
         final String address = info.getAddress().toUpperCase();
         listeners.put(address, listener);
         Log.i(DeviceDef.TAG, "register " + address);
+        // Live-push: when the buds send a notification (stem press, pod in/out, battery, CA),
+        // re-read + push the full list so the page updates without user interaction.
+        for (DeviceDef.Func f : defInjectedSafe(address)) {
+            ControlEngine engine = ControlEngine.forTransport(f.transport);
+            if (engine != null) {
+                engine.registerListener(address, () -> io.execute(() -> {
+                    IBinder l = listeners.get(address);
+                    if (l != null) readAllAndPush(address, l);
+                }));
+                break; // one transport per device today
+            }
+        }
         io.execute(() -> readAllAndPush(address, listener));
+    }
+
+    private List<DeviceDef.Func> defInjectedSafe(String address) {
+        DeviceDef def = DeviceDef.forAddress(address);
+        return def != null ? def.injectedFuncs(address) : new ArrayList<>();
     }
 
     private void onUpdate(DeviceInfo info, DeviceSettingState state) {
@@ -175,6 +197,7 @@ public class SettingProviderService extends Service {
         if (adapter == null) return;
         ConcurrentHashMap<Integer, Integer> cache = cacheFor(address);
         for (DeviceDef.Func f : injected) {
+            if (f.isInfoRow()) continue; // info rows carry no cached index; summary read at push
             ControlEngine engine = ControlEngine.forTransport(f.transport);
             if (engine == null) continue;
             int idx;
@@ -198,8 +221,15 @@ public class SettingProviderService extends Service {
         ConcurrentHashMap<Integer, Integer> cache = cacheFor(address);
         List<DeviceSetting> list = new ArrayList<>();
         for (DeviceDef.Func f : def.injectedFuncs(address)) {
-            Integer idx = cache.get(f.settingId);
-            list.add(buildSetting(f, idx != null ? idx : 0));
+            if (f.isInfoRow()) {
+                ControlEngine engine = ControlEngine.forTransport(f.transport);
+                String summary = engine != null
+                        ? engine.readInfo(adapter(), address, def, f) : null;
+                list.add(buildSetting(f, 0, summary));
+            } else {
+                Integer idx = cache.get(f.settingId);
+                list.add(buildSetting(f, idx != null ? idx : 0, null));
+            }
         }
         try {
             Binders.listenerOnChanged(listener, list);
@@ -210,9 +240,16 @@ public class SettingProviderService extends Service {
         }
     }
 
-    private DeviceSetting buildSetting(DeviceDef.Func f, int stateIndex) {
+    private DeviceSetting buildSetting(DeviceDef.Func f, int stateIndex, String infoSummary) {
         DeviceSettingPreference pref;
-        if (f.isToggle()) {
+        if (f.isInfoRow()) {
+            String summary = infoSummary != null ? infoSummary : (f.summary != null ? f.summary : "—");
+            pref = new ActionSwitchPreference(
+                    f.title, summary, f.iconName != null ? Icons.forName(f.iconName) : null,
+                    DeviceSettingAction.EMPTY,
+                    /*hasSwitch*/ false, /*checked*/ false,
+                    /*isAllowedChangingState*/ false, new Bundle());
+        } else if (f.isToggle()) {
             pref = new ActionSwitchPreference(
                     f.title, f.summary, f.iconName != null ? Icons.forName(f.iconName) : null,
                     DeviceSettingAction.EMPTY,
