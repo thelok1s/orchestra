@@ -32,17 +32,20 @@ public final class AacpEngine {
 
     private static final Map<String, Session> SESSIONS = new ConcurrentHashMap<>();
 
-    private static final Map<String, Runnable> LISTENERS = new ConcurrentHashMap<>();
+    private static final Map<String, Map<String, Runnable>> LISTENERS = new ConcurrentHashMap<>();
 
-    static void registerListener(String mac, Runnable onChange) {
-        LISTENERS.put(mac.toUpperCase(Locale.ROOT), onChange);
+    static void registerListener(String mac, String key, Runnable onChange) {
+        LISTENERS.computeIfAbsent(mac.toUpperCase(Locale.ROOT), k -> new ConcurrentHashMap<>())
+                 .put(key, onChange);
     }
-    static void unregisterListener(String mac) {
-        LISTENERS.remove(mac.toUpperCase(Locale.ROOT));
+    static void unregisterListener(String mac, String key) {
+        Map<String, Runnable> m = LISTENERS.get(mac.toUpperCase(Locale.ROOT));
+        if (m != null) m.remove(key);
     }
     private static void fireListener(String mac) {
-        Runnable r = LISTENERS.get(mac.toUpperCase(Locale.ROOT));
-        if (r != null) {
+        Map<String, Runnable> m = LISTENERS.get(mac.toUpperCase(Locale.ROOT));
+        if (m == null) return;
+        for (Runnable r : m.values()) {
             try { r.run(); } catch (Throwable t) { Log.w(TAG, "AACP listener threw: " + t); }
         }
     }

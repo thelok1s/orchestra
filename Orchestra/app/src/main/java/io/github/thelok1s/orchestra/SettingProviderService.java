@@ -111,7 +111,7 @@ public class SettingProviderService extends Service {
         for (DeviceDef.Func f : defInjectedSafe(address)) {
             ControlEngine engine = ControlEngine.forTransport(f.transport);
             if (engine != null) {
-                engine.registerListener(address, () -> io.execute(() -> {
+                engine.registerListener(address, "provider", () -> io.execute(() -> {
                     IBinder l = listeners.get(address);
                     if (l != null) readAllAndPush(address, l);
                 }));
@@ -131,7 +131,7 @@ public class SettingProviderService extends Service {
     private void unregisterEngineListener(String address) {
         for (String transport : new String[]{"aacp", "rfcomm"}) {
             ControlEngine engine = ControlEngine.forTransport(transport);
-            if (engine != null) engine.unregisterListener(address);
+            if (engine != null) engine.unregisterListener(address, "provider");
         }
     }
 

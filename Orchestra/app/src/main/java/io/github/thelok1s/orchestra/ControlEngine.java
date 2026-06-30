@@ -12,8 +12,8 @@ public interface ControlEngine {
     boolean applyToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, boolean on);
     Boolean readToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f);
     String readInfo(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f);
-    void registerListener(String mac, Runnable onChange);
-    void unregisterListener(String mac);
+    void registerListener(String mac, String key, Runnable onChange);
+    void unregisterListener(String mac, String key);
 
     ControlEngine RFCOMM = new ControlEngine() {
         public boolean applyMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, String optId) {
@@ -31,8 +31,8 @@ public interface ControlEngine {
         @Override public String readInfo(BluetoothAdapter a, String mac, DeviceDef d, DeviceDef.Func f) {
             return null; // RFCOMM has no info/push functions today
         }
-        @Override public void registerListener(String mac, Runnable onChange) { /* no push channel */ }
-        @Override public void unregisterListener(String mac) { /* no-op */ }
+        @Override public void registerListener(String mac, String key, Runnable onChange) { /* no push channel */ }
+        @Override public void unregisterListener(String mac, String key) { /* no-op */ }
     };
 
     ControlEngine AACP = new ControlEngine() {
@@ -51,11 +51,11 @@ public interface ControlEngine {
         @Override public String readInfo(BluetoothAdapter a, String mac, DeviceDef d, DeviceDef.Func f) {
             return AacpEngine.readInfo(a, mac, d, f);
         }
-        @Override public void registerListener(String mac, Runnable onChange) {
-            AacpEngine.registerListener(mac, onChange);
+        @Override public void registerListener(String mac, String key, Runnable onChange) {
+            AacpEngine.registerListener(mac, key, onChange);
         }
-        @Override public void unregisterListener(String mac) {
-            AacpEngine.unregisterListener(mac);
+        @Override public void unregisterListener(String mac, String key) {
+            AacpEngine.unregisterListener(mac, key);
         }
     };
 
