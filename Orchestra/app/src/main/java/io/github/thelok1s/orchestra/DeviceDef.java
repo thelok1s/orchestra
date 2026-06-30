@@ -27,7 +27,7 @@ final class DeviceDef {
     static final String TAG = "Orchestra";
 
     static final int SUPPORTED_SCHEMA_MIN = 3;
-    static final int SUPPORTED_SCHEMA_MAX = 3;
+    static final int SUPPORTED_SCHEMA_MAX = 4;
 
     final String id;
     final String name;
@@ -386,7 +386,8 @@ final class DeviceDef {
         }
         // Graceful degrade: the running app can only drive rfcomm today. A function on an
         // unknown/unsupported transport is kept in the catalog but never injected.
-        if (func.injectable && !"rfcomm".equals(func.transport)) {
+        boolean drivenTransport = "rfcomm".equals(func.transport) || "aacp".equals(func.transport);
+        if (func.injectable && !drivenTransport) {
             func.injectable = false;
             func.implemented = false;
             func.injectReason = func.transport == null
