@@ -1,6 +1,6 @@
 {
   "index_schema": 1,
-  "generated": "2026-06-25T12:56:51.930Z",
+  "generated": "2026-06-30T11:08:17.114Z",
   "repo": "orchestra-manifests",
   "manufacturers": [
     {
@@ -12,6 +12,7 @@
           "name": "Soundcore Liberty 4 Pro",
           "schema_version": 3,
           "revision": 1,
+          "name_regex": "(?i)soundcore Liberty 4 Pro",
           "match": {
             "name_regex": "(?i)soundcore Liberty 4 Pro",
             "service_uuids_any": [
@@ -37,6 +38,7 @@
           "name": "Soundcore Space One Pro",
           "schema_version": 3,
           "revision": 1,
+          "name_regex": "(?i)soundcore Space One Pro",
           "match": {
             "name_regex": "(?i)soundcore Space One Pro",
             "service_uuids_any": [
@@ -57,6 +59,36 @@
           },
           "url": "manifests/anker-soundcore/soundcore-space-one-pro.json",
           "sha256": "07b163e86c3900825cab41a5408679de40b142b20183d624a1ce96bec03e15a9"
+        }
+      ]
+    },
+    {
+      "slug": "apple",
+      "name": "Apple",
+      "devices": [
+        {
+          "id": "airpods-pro-2",
+          "name": "AirPods Pro 2",
+          "schema_version": 4,
+          "revision": 1,
+          "name_regex": "(?i)airpods pro",
+          "match": {
+            "name_regex": "(?i)airpods pro",
+            "service_uuids_any": [
+              "74ec2172-0bad-4d01-8f77-997b2be0722a"
+            ]
+          },
+          "transports": [
+            "aacp"
+          ],
+          "platforms": [],
+          "counts": {
+            "capabilities": 1,
+            "injectable": 1,
+            "verified": 1
+          },
+          "url": "manifests/apple/airpods-pro-2.json",
+          "sha256": "7668884d85dd6e5d96a7d34e908648d8f2e271921b4632b7b089d03f4bf6aada"
         }
       ]
     }

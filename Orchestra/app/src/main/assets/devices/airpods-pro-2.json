@@ -1,0 +1,57 @@
+{
+  "schema_version": 4,
+  "revision": 1,
+  "revision_date": "2026-06-30",
+  "id": "airpods-pro-2",
+  "name": "AirPods Pro 2",
+  "manufacturer": "Apple",
+  "model_code": "A3048",
+  "match": {
+    "name_regex": "(?i)airpods pro",
+    "service_uuids_any": ["74ec2172-0bad-4d01-8f77-997b2be0722a"]
+  },
+  "channels": {
+    "aacp-main": {
+      "transport": "aacp",
+      "psm": 4097,
+      "secure": false,
+      "protocol": {
+        "framing": "aap_v1",
+        "_doc": "Apple Accessory Protocol over L2CAP PSM 0x1001. Noise control = 11-byte frame 04 00 04 00 09 00 0D <mode> 00 00 00 (mode 01=Off 02=ANC 03=Transparency 04=Adaptive). PSM/UUID/framing are protocol constants in AacpEngine; this block is declarative."
+      }
+    }
+  },
+  "default_channel": "aacp-main",
+  "_capabilities_source": "LibrePods (kavishdevar/librepods) docs/AAP Definitions.md + firmware 7A305. sound_mode (0900 0D) VERIFIED live on AirPods Pro 2 (USB-C) 2026-06-30 via Orchestra AacpEngine: all 4 modes set + device-confirmed + audibly verified.",
+  "functions": [
+    {
+      "id": "sound_mode",
+      "type": "multitoggle",
+      "title": "Noise control",
+      "title_i18n": { "ru": "Управление шумом" },
+      "capability": "sound_modes",
+      "options": [
+        { "id": "off",          "label": "Off",              "icon": "off",          "label_i18n": { "ru": "Выкл." } },
+        { "id": "anc",          "label": "Noise Cancelling", "icon": "anc",          "label_i18n": { "ru": "Шумоподавление" } },
+        { "id": "transparency", "label": "Transparency",     "icon": "transparency", "label_i18n": { "ru": "Прозрачность" } },
+        { "id": "adaptive",     "label": "Adaptive",         "icon": "adaptive",     "label_i18n": { "ru": "Адаптивный" } }
+      ],
+      "set": {
+        "command": "0900",
+        "payload_template": "{mode}",
+        "option_values": { "off": "01", "anc": "02", "transparency": "03", "adaptive": "04" },
+        "_doc": "AacpEngine ignores command/payload_template for aacp and builds the 11-byte AAP frame from the mode byte; option_values map optId → the AAP mode byte (hex)."
+      },
+      "read": {
+        "notify_opcode": "09000d",
+        "state_byte_index": 7,
+        "value_map": { "01": "off", "02": "anc", "03": "transparency", "04": "adaptive" },
+        "_doc": "AAP is push: the engine caches the mode from inbound 04 00 04 00 09 00 0D <mode> notifications; value_map maps the mode byte → optId. notify_opcode/state_byte_index are declarative until Phase 3's generic notification parser."
+      },
+      "inject": "auto",
+      "ui": { "setting_id": 1001, "surfaces": ["device_details"] },
+      "_verified": true,
+      "_verified_note": "All 4 modes set + read live on AirPods Pro 2 (USB-C), Pixel 8 / Android 16, 2026-06-30 (Orchestra Plan 1). Device echoes 0900 0D <mode> after each set; audibly confirmed."
+    }
+  ]
+}
