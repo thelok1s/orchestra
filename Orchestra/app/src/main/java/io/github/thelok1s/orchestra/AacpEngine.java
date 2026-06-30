@@ -121,7 +121,8 @@ public final class AacpEngine {
                         Log.i(TAG, "AACP notify CA=" + ca + " for " + s.mac); }
                     AapCodec.Battery bat = AapCodec.parseBattery(buf, n);
                     if (bat != null) { state.setBattery(bat); changed = true;
-                        Log.i(TAG, "AACP notify battery " + state.batterySummary() + " for " + s.mac); }
+                        Log.i(TAG, "AACP notify battery " + state.batterySummary() + " for " + s.mac);
+                        broadcastBattery(s.mac); }
                     AapCodec.Ear ear = AapCodec.parseEar(buf, n);
                     if (ear != null) { state.setEar(ear); changed = true;
                         Log.i(TAG, "AACP notify ear " + state.earSummary() + " for " + s.mac); }
@@ -271,5 +272,24 @@ public final class AacpEngine {
         if ("battery".equals(f.id)) return st.batterySummary();
         if ("ear_detection".equals(f.id)) return st.earSummary();
         return null;
+    }
+
+    /**
+     * Broadcasts a battery-changed poke to the Settings-process receiver.
+     * Sent with plain sendBroadcast (no receiver-permission arg) because Settings is
+     * platform-signed and cannot hold our signature-level permission. Security is enforced
+     * on the receiver side: the receiver is registered with our signature permission as the
+     * broadcastPermission, so only the Orchestra app (which self-holds it) can deliver.
+     */
+    private static void broadcastBattery(String mac) {
+        try {
+            android.content.Context ctx = App.context();
+            if (ctx == null) return;
+            android.content.Intent i = new android.content.Intent(
+                    "io.github.thelok1s.orchestra.BATTERY_CHANGED");
+            i.setPackage(null); // implicit; received by the dynamically-registered Settings receiver
+            i.putExtra("mac", mac);
+            ctx.sendBroadcast(i); // no permission arg — Settings cannot hold our signature permission
+        } catch (Throwable t) { Log.w(TAG, "battery broadcast failed: " + t); }
     }
 }

@@ -6,6 +6,12 @@
      replacing the KSU priv-app. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Signature permission guarding the battery-change broadcast receiver registered in the
+         Settings process. Only the Orchestra app (same signer) can deliver to that receiver;
+         com.android.settings (platform-signed) is a different signer and cannot hold this. -->
+    <permission android:name="io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST"
+                android:protectionLevel="signature" />
+
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />

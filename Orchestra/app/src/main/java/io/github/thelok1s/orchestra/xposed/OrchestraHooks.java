@@ -278,6 +278,50 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
         return (v != null ? v.toString() : "").getBytes(StandardCharsets.UTF_8);
     }
 
+    private static volatile boolean batteryReceiverRegistered = false;
+
+    /**
+     * Lazily registers a BroadcastReceiver in the Settings process that listens for
+     * {@code io.github.thelok1s.orchestra.BATTERY_CHANGED} and calls {@link #writeBattery} so the
+     * native Fast-Pair header updates live without requiring a Settings screen resume.
+     *
+     * Security model: the receiver is registered with
+     * {@code io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST} as the broadcastPermission,
+     * requiring the sender to hold that permission. The Orchestra app self-holds its own
+     * signature-level permission, so only Orchestra can poke this receiver. Plain
+     * {@code sendBroadcast(intent)} (no receiver-permission arg) is used by the sender because
+     * Settings (platform-signed) cannot hold an app-defined signature permission.
+     */
+    private void ensureBatteryReceiver() {
+        if (batteryReceiverRegistered) return;
+        try {
+            android.app.Application app = AndroidAppHelper.currentApplication();
+            if (app == null) return;
+            android.content.BroadcastReceiver r = new android.content.BroadcastReceiver() {
+                @Override public void onReceive(android.content.Context c, android.content.Intent i) {
+                    try {
+                        String mac = i.getStringExtra("mac");
+                        if (mac == null) return;
+                        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+                        if (adapter == null) return;
+                        BluetoothDevice d = adapter.getRemoteDevice(mac);
+                        if (isAapDevice(d)) writeBattery(d); // re-query ContentProvider + write keys
+                    } catch (Throwable t) { XposedBridge.log("[MX] battery receiver: " + t); }
+                }
+            };
+            android.content.IntentFilter f =
+                    new android.content.IntentFilter("io.github.thelok1s.orchestra.BATTERY_CHANGED");
+            // broadcastPermission: only Orchestra (same signer, self-holds it) can deliver.
+            // RECEIVER_EXPORTED: allow delivery from a different uid (Orchestra app process).
+            app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
+                    null, Context.RECEIVER_EXPORTED);
+            batteryReceiverRegistered = true;
+            XposedBridge.log("[MX] battery-changed receiver registered");
+        } catch (Throwable t) {
+            XposedBridge.log("[MX] battery receiver register failed: " + t);
+        }
+    }
+
     private static final java.util.UUID AAP_UUID =
             java.util.UUID.fromString("74ec2172-0bad-4d01-8f77-997b2be0722a");
 
@@ -292,6 +336,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
     }
 
     private void assertTagsForBondedDevices() {
+        ensureBatteryReceiver(); // idempotent; currentApplication() is non-null here (onResume)
         try {
             BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
             if (adapter == null || !adapter.isEnabled()) return;
