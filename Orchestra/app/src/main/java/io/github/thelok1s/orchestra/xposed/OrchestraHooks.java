@@ -254,9 +254,12 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
             Method set = BluetoothDevice.class.getMethod("setMetadata", int.class, byte[].class);
             set.invoke(device, 6, "true".getBytes(StandardCharsets.UTF_8));
             set.invoke(device, 17, "Untethered Headset".getBytes(StandardCharsets.UTF_8));
-            if (left != null)    set.invoke(device, 10, left.toString().getBytes(StandardCharsets.UTF_8));
-            if (right != null)   set.invoke(device, 11, right.toString().getBytes(StandardCharsets.UTF_8));
-            if (caseLvl != null) set.invoke(device, 12, caseLvl.toString().getBytes(StandardCharsets.UTF_8));
+            // Always write 10/11/12: a valid 0-100 string shows the component; an empty (invalid)
+            // value clears a previously-written key so a disconnected component HIDES (the keys are
+            // persistent — skipping a stale key would leave the old value on the header).
+            set.invoke(device, 10, battBytes(left));
+            set.invoke(device, 11, battBytes(right));
+            set.invoke(device, 12, battBytes(caseLvl));
             set.invoke(device, 13, (lc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
             set.invoke(device, 14, (rc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
             set.invoke(device, 15, (cc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
@@ -269,6 +272,11 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
 
     /** -1 sentinel from the provider -> null (component unknown). */
     private static Integer nz(int v) { return v >= 0 && v <= 100 ? v : null; }
+
+    /** Valid battery -> "0".."100"; null (unknown/disconnected) -> empty = invalid -> header hides it. */
+    private static byte[] battBytes(Integer v) {
+        return (v != null ? v.toString() : "").getBytes(StandardCharsets.UTF_8);
+    }
 
     private static final java.util.UUID AAP_UUID =
             java.util.UUID.fromString("74ec2172-0bad-4d01-8f77-997b2be0722a");

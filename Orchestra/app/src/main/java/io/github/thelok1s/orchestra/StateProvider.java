@@ -39,12 +39,20 @@ public class StateProvider extends ContentProvider {
         MatrixCursor cur = new MatrixCursor(COLS);
         if (b != null) {
             cur.addRow(new Object[]{
-                    b.left != null ? b.left : -1,
-                    b.right != null ? b.right : -1,
-                    b.caseLevel != null ? b.caseLevel : -1,
+                    level(b.left, b.leftStatus),
+                    level(b.right, b.rightStatus),
+                    level(b.caseLevel, b.caseStatus),
                     chargingFlag(b.leftStatus), chargingFlag(b.rightStatus), chargingFlag(b.caseStatus)});
         }
         return cur;
+    }
+
+    // -1 (= hidden in the header) when the component is unknown OR reports disconnected (status 04,
+    // e.g. case lid open / pod in case). Only present components get a battery key written.
+    private static final int STATUS_DISCONNECTED = 4;
+    private static int level(Integer lvl, Integer status) {
+        if (lvl == null || (status != null && status == STATUS_DISCONNECTED)) return -1;
+        return lvl;
     }
 
     private static int chargingFlag(Integer status) { return status != null && status == 1 ? 1 : 0; }
