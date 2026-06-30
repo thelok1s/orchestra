@@ -232,6 +232,57 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
         } catch (Throwable t) { XposedBridge.log("[MX] settings hook failed: " + t); }
     }
 
+    private void writeBattery(BluetoothDevice device) {
+        try {
+            android.app.Application app = AndroidAppHelper.currentApplication();
+            if (app == null) return;
+            android.net.Uri uri = android.net.Uri.parse(
+                    "content://io.github.thelok1s.orchestra.state/battery/" + device.getAddress());
+            Integer left = null, right = null, caseLvl = null;
+            boolean lc = false, rc = false, cc = false;
+            try (android.database.Cursor cur =
+                         app.getContentResolver().query(uri, null, null, null, null)) {
+                if (cur != null && cur.moveToFirst()) {
+                    left = nz(cur.getInt(cur.getColumnIndexOrThrow("left")));
+                    right = nz(cur.getInt(cur.getColumnIndexOrThrow("right")));
+                    caseLvl = nz(cur.getInt(cur.getColumnIndexOrThrow("case_level")));
+                    lc = cur.getInt(cur.getColumnIndexOrThrow("left_charging")) == 1;
+                    rc = cur.getInt(cur.getColumnIndexOrThrow("right_charging")) == 1;
+                    cc = cur.getInt(cur.getColumnIndexOrThrow("case_charging")) == 1;
+                }
+            }
+            Method set = BluetoothDevice.class.getMethod("setMetadata", int.class, byte[].class);
+            set.invoke(device, 6, "true".getBytes(StandardCharsets.UTF_8));
+            set.invoke(device, 17, "Untethered Headset".getBytes(StandardCharsets.UTF_8));
+            if (left != null)    set.invoke(device, 10, left.toString().getBytes(StandardCharsets.UTF_8));
+            if (right != null)   set.invoke(device, 11, right.toString().getBytes(StandardCharsets.UTF_8));
+            if (caseLvl != null) set.invoke(device, 12, caseLvl.toString().getBytes(StandardCharsets.UTF_8));
+            set.invoke(device, 13, (lc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
+            set.invoke(device, 14, (rc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
+            set.invoke(device, 15, (cc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
+            XposedBridge.log("[MX] battery write " + device.getAddress()
+                    + " L=" + left + " R=" + right + " C=" + caseLvl);
+        } catch (Throwable t) {
+            XposedBridge.log("[MX] battery write failed: " + t);
+        }
+    }
+
+    /** -1 sentinel from the provider -> null (component unknown). */
+    private static Integer nz(int v) { return v >= 0 && v <= 100 ? v : null; }
+
+    private static final java.util.UUID AAP_UUID =
+            java.util.UUID.fromString("74ec2172-0bad-4d01-8f77-997b2be0722a");
+
+    private static boolean isAapDevice(BluetoothDevice d) {
+        try {
+            android.os.ParcelUuid[] uuids = d.getUuids();
+            if (uuids != null) for (android.os.ParcelUuid p : uuids) {
+                if (AAP_UUID.equals(p.getUuid())) return true;
+            }
+        } catch (Throwable ignore) {}
+        return false;
+    }
+
     private void assertTagsForBondedDevices() {
         try {
             BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
@@ -242,6 +293,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                 String name = safeName(d);
                 if (!nameSupported(name)) continue;
                 assertConfigTags(d);
+                if (isAapDevice(d)) writeBattery(d);
             }
         } catch (Throwable t) {
             XposedBridge.log("[MX] assertTags failed: " + t);
