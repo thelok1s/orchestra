@@ -180,6 +180,26 @@ public final class AacpEngine {
         s.socket = null; s.in = null; s.out = null; s.reader = null;
     }
 
+    /**
+     * Tear down a device's session on remote disconnect. {@link BluetoothSocket#isConnected()} and
+     * the blocked reader thread do not reliably observe a remote L2CAP drop, so {@code ensureConnected}
+     * would otherwise REUSE a half-open socket and serve stale {@link AapState}. Closing + dropping the
+     * session here forces the next connect to rebuild fresh; clearing the cache stops stale battery/ear
+     * from showing in the gap; notifying refreshes any open UI/header. No-op if no session exists
+     * (e.g. an RFCOMM device), so this is safe to call unconditionally on ACL_DISCONNECTED.
+     */
+    public static void disconnect(String mac) {
+        String key = mac.toUpperCase(Locale.ROOT);
+        Session s = SESSIONS.remove(key);
+        if (s != null) {
+            synchronized (s.lock) { close(s); }
+            Log.i(TAG, "AACP disconnect teardown " + key);
+        }
+        AapState.clear(key);
+        fireListener(key);     // provider re-push + UI recompose -> reflect "no data"
+        broadcastBattery(key); // poke the Settings hook to re-read (cleared) battery -> header hides
+    }
+
     // ---- manifest-free core (used by the standalone adb test in Task 5) ----
 
     /** Write a noise-control mode byte (1..4). Connects + brings up if needed. */

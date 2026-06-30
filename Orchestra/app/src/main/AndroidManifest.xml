@@ -78,6 +78,7 @@
         <receiver android:name=".ConnectReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="io.github.thelok1s.orchestra.APPLY" />
             </intent-filter>

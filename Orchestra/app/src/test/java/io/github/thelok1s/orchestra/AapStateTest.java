@@ -20,4 +20,20 @@ public class AapStateTest {
     @Test public void forMacReturnsSameInstancePerMac() {
         assertSame(AapState.forMac("AA:BB:CC:DD:EE:03"), AapState.forMac("aa:bb:cc:dd:ee:03"));
     }
+
+    @Test public void clearDropsCachedStateForMac() {
+        String mac = "AA:BB:CC:DD:EE:04";
+        AapState.forMac(mac).setAncMode(3);
+        assertEquals(Integer.valueOf(3), AapState.forMac(mac).getAncMode());
+        AapState.clear(mac);
+        // forMac after clear yields a fresh instance with no carried-over state
+        assertNull(AapState.forMac(mac).getAncMode());
+    }
+
+    @Test public void clearIsCaseInsensitive() {
+        String mac = "AA:BB:CC:DD:EE:05";
+        AapState.forMac(mac).setAncMode(4);
+        AapState.clear("aa:bb:cc:dd:ee:05");
+        assertNull(AapState.forMac(mac).getAncMode());
+    }
 }

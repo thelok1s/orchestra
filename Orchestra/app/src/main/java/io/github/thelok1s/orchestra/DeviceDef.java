@@ -84,6 +84,12 @@ final class DeviceDef {
         return null;
     }
 
+    /** True if any channel uses the AAP transport, i.e. an {@link AacpEngine} session applies. */
+    boolean usesAacp() {
+        for (Channel c : channels.values()) if ("aacp".equals(c.transport)) return true;
+        return false;
+    }
+
     /** Look up a function by its slug id. */
     Func funcById(String fid) {
         for (Func f : functions) if (f.id.equals(fid)) return f;

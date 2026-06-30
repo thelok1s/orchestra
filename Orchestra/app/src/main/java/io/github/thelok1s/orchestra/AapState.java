@@ -23,6 +23,12 @@ public final class AapState {
         return CACHE.computeIfAbsent(mac.toUpperCase(Locale.ROOT), k -> new AapState());
     }
 
+    /** Drop a device's cached state (on disconnect) so stale values aren't served until the next
+     *  session delivers fresh frames. The next {@link #forMac} call yields a clean instance. */
+    public static void clear(String mac) {
+        CACHE.remove(mac.toUpperCase(Locale.ROOT));
+    }
+
     void setAncMode(int modeByte) { this.ancMode = modeByte; }
     Integer getAncMode() { return ancMode; }
 
