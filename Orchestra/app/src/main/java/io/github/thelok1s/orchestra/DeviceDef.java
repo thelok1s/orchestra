@@ -174,6 +174,9 @@ final class DeviceDef {
 
         boolean isMultitoggle() { return "multitoggle".equals(type); }
         boolean isToggle() { return "toggle".equals(type); }
+        boolean isInfo() { return "info".equals(type); }
+        boolean isBattery() { return "battery".equals(type); }
+        boolean isInfoRow() { return isInfo() || isBattery(); } // read-only display rows
 
         int indexOfOption(String optId) {
             for (int i = 0; i < options.size(); i++) {
@@ -359,9 +362,12 @@ final class DeviceDef {
                 autoReason = "Slider unsupported on the About page — in-app only.";
                 break;
             case "info":
+            case "battery":
+                autoInjectable = true; // read-only info row (ActionSwitchPreference, no switch)
+                break;
             default:
                 autoInjectable = false;
-                autoReason = "Read-only.";
+                autoReason = "Unsupported control type.";
                 break;
         }
         // `inject` may be a JSON boolean or the string "auto".
@@ -378,9 +384,11 @@ final class DeviceDef {
             func.injectable = autoInjectable;
             if (!autoInjectable) func.injectReason = !overrideReason.isEmpty() ? overrideReason : autoReason;
         }
-        // The provider renders MultiTogglePreference (segmented) and ActionSwitchPreference (switch).
-        // list/slider/info are injectable=false; anything else injectable stays catalog-only.
-        func.implemented = func.injectable && (func.isMultitoggle() || func.isToggle());
+        // The provider renders MultiTogglePreference (segmented), ActionSwitchPreference (switch),
+        // and ActionSwitchPreference (no switch) for info/battery read-only rows.
+        // list/slider stay catalog-only; anything else injectable stays catalog-only.
+        func.implemented = func.injectable
+                && (func.isMultitoggle() || func.isToggle() || func.isInfoRow());
         if (func.injectable && !func.implemented && func.injectReason == null) {
             func.injectReason = "Not yet renderable on the About page.";
         }
