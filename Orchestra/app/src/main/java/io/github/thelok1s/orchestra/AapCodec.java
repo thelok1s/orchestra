@@ -40,19 +40,78 @@ final class AapCodec {
                 new byte[]{(byte) 0xD7, 0, 0, 0, 0, 0, 0, 0});
     }
 
+    /** Generic single-byte feature frame: 04 00 04 00 09 00 <feature> <value> 00 00 00. */
+    static byte[] featureSet(int feature, int value) {
+        return dataPacket(0x09, 0x00, new byte[]{(byte) feature, (byte) value, 0, 0, 0});
+    }
+
     /** Noise-control set frame for mode 1..4 (Off/ANC/Transparency/Adaptive). */
     static byte[] ancSet(int modeByte) {
-        return dataPacket(0x09, 0x00, new byte[]{0x0D, (byte) modeByte, 0, 0, 0});
+        return featureSet(0x0D, modeByte);
+    }
+
+    /** Conversational Awareness set frame (on=01, off=02). */
+    static byte[] caSet(boolean on) {
+        return featureSet(0x28, on ? 1 : 2);
     }
 
     /**
-     * If {@code frame[0..len)} is a noise-control notification ({@code 04 00 04 00 09 00 0D ..}),
-     * return its mode byte (1..4); otherwise null.
+     * If {@code frame[0..len)} is a feature notification ({@code 04 00 04 00 09 00 <feature> ..}),
+     * return its value byte (offset 7); otherwise null. Noise control uses feature 0x0D, CA 0x28.
      */
-    static Integer parseAncMode(byte[] frame, int len) {
-        byte[] prefix = {0x04, 0x00, 0x04, 0x00, 0x09, 0x00, 0x0D};
+    static Integer parseFeature(byte[] frame, int len, int feature) {
+        byte[] prefix = {0x04, 0x00, 0x04, 0x00, 0x09, 0x00, (byte) feature};
         if (len < prefix.length + 1) return null;
         for (int i = 0; i < prefix.length; i++) if (frame[i] != prefix[i]) return null;
         return frame[7] & 0xff;
+    }
+
+    static Integer parseAncMode(byte[] frame, int len) {
+        return parseFeature(frame, len, 0x0D);
+    }
+
+    /** Parsed battery levels/statuses; any missing component is null. */
+    static final class Battery {
+        final Integer left, right, caseLevel;
+        final Integer leftStatus, rightStatus, caseStatus;
+        Battery(Integer l, Integer ls, Integer r, Integer rs, Integer c, Integer cs) {
+            left = l; leftStatus = ls; right = r; rightStatus = rs; caseLevel = c; caseStatus = cs;
+        }
+    }
+
+    /** Parse a battery notification (04 00 04 00 04 00 <count> (<comp> 01 <level> <status> 01)*). */
+    static Battery parseBattery(byte[] frame, int len) {
+        byte[] prefix = {0x04, 0x00, 0x04, 0x00, 0x04, 0x00};
+        if (len < prefix.length + 1) return null;
+        for (int i = 0; i < prefix.length; i++) if (frame[i] != prefix[i]) return null;
+        int count = frame[6] & 0xff;
+        Integer l = null, ls = null, r = null, rs = null, c = null, cs = null;
+        int off = 7;
+        for (int i = 0; i < count && off + 4 < len; i++, off += 5) {
+            int comp = frame[off] & 0xff;
+            int level = frame[off + 2] & 0xff;
+            int status = frame[off + 3] & 0xff;
+            switch (comp) {
+                case 0x04: l = level; ls = status; break;   // Left
+                case 0x02: r = level; rs = status; break;   // Right
+                case 0x08: c = level; cs = status; break;   // Case
+                default: break;
+            }
+        }
+        return new Battery(l, ls, r, rs, c, cs);
+    }
+
+    /** Parsed ear-detection status (0=in-ear, 1=out-of-ear, 2=in-case). */
+    static final class Ear {
+        final int primary, secondary;
+        Ear(int p, int s) { primary = p; secondary = s; }
+    }
+
+    /** Parse an ear-detection notification (04 00 04 00 06 00 <primary> <secondary>). */
+    static Ear parseEar(byte[] frame, int len) {
+        byte[] prefix = {0x04, 0x00, 0x04, 0x00, 0x06, 0x00};
+        if (len < prefix.length + 2) return null;
+        for (int i = 0; i < prefix.length; i++) if (frame[i] != prefix[i]) return null;
+        return new Ear(frame[6] & 0xff, frame[7] & 0xff);
     }
 }
