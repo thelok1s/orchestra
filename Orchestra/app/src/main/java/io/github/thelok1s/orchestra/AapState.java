@@ -30,6 +30,7 @@ final class AapState {
     Boolean getCaEnabled() { return caEnabled; }
 
     void setBattery(AapCodec.Battery b) { this.battery = b; }
+    AapCodec.Battery getBattery() { return battery; }
     /** "L 100% · R 99% · Case 17%" over known components, or null if none known. */
     String batterySummary() {
         AapCodec.Battery b = battery;

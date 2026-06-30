@@ -88,5 +88,13 @@
                 <action android:name="io.github.thelok1s.orchestra.AACP_MF" />
             </intent-filter>
         </receiver>
+
+        <!-- Battery state bridge: the privileged Settings-process hook queries this to read
+             per-bud battery from the app process and write untethered-battery metadata keys. -->
+        <provider
+            android:name=".StateProvider"
+            android:authorities="io.github.thelok1s.orchestra.state"
+            android:exported="true"
+            android:readPermission="android.permission.BLUETOOTH_PRIVILEGED" />
     </application>
 </manifest>
