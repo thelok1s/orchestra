@@ -45,7 +45,7 @@ final class DeviceDef {
     final List<Func> functions;
     final Func soundMode;
 
-    /** A named transport+protocol bundle. Today only rfcomm is driven; others parse but degrade. */
+    /** A named transport+protocol bundle. Today rfcomm + aacp are driven; others parse but degrade. */
     static final class Channel {
         final String id;
         final String transport;             // rfcomm | ble_gatt | aacp
@@ -384,7 +384,7 @@ final class DeviceDef {
         if (func.injectable && !func.implemented && func.injectReason == null) {
             func.injectReason = "Not yet renderable on the About page.";
         }
-        // Graceful degrade: the running app can only drive rfcomm today. A function on an
+        // Graceful degrade: the running app drives rfcomm + aacp today. A function on an
         // unknown/unsupported transport is kept in the catalog but never injected.
         boolean drivenTransport = "rfcomm".equals(func.transport) || "aacp".equals(func.transport);
         if (func.injectable && !drivenTransport) {
