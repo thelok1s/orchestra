@@ -84,7 +84,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
             String json;
             try (InputStream in = zip.getInputStream(e)) {
                 byte[] buf = new byte[in.available() > 0 ? in.available() : 8192];
-                int n, off = 0;
+                int n;
                 java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
                 while ((n = in.read(buf)) >= 0) bos.write(buf, 0, n);
                 json = new String(bos.toByteArray(), StandardCharsets.UTF_8);

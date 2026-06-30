@@ -364,6 +364,7 @@ final class DeviceDef {
             case "info":
             case "battery":
                 autoInjectable = true; // read-only info row (ActionSwitchPreference, no switch)
+                autoReason = "Read-only."; // shown if a definition opts out via inject:false
                 break;
             default:
                 autoInjectable = false;

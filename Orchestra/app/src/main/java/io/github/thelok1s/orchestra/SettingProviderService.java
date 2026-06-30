@@ -74,10 +74,7 @@ public class SettingProviderService extends Service {
                     if (info != null && info.getAddress() != null) {
                         String addr = info.getAddress().toUpperCase();
                         listeners.remove(addr);
-                        for (DeviceDef.Func f : defInjectedSafe(addr)) {
-                            ControlEngine engine = ControlEngine.forTransport(f.transport);
-                            if (engine != null) { engine.unregisterListener(addr); break; }
-                        }
+                        unregisterEngineListener(addr);
                     }
                     return true;
                 }
@@ -127,6 +124,15 @@ public class SettingProviderService extends Service {
     private List<DeviceDef.Func> defInjectedSafe(String address) {
         DeviceDef def = DeviceDef.forAddress(address);
         return def != null ? def.injectedFuncs(address) : new ArrayList<>();
+    }
+
+    /** Unconditionally drop the engine listener for this device across all transports. Safe to call
+     *  even if none was registered (RFCOMM is a no-op); does not depend on the device still resolving. */
+    private void unregisterEngineListener(String address) {
+        for (String transport : new String[]{"aacp", "rfcomm"}) {
+            ControlEngine engine = ControlEngine.forTransport(transport);
+            if (engine != null) engine.unregisterListener(address);
+        }
     }
 
     private void onUpdate(DeviceInfo info, DeviceSettingState state) {
@@ -237,6 +243,7 @@ public class SettingProviderService extends Service {
         } catch (RemoteException e) {
             Log.w(DeviceDef.TAG, "push failed (listener dead?): " + e);
             listeners.remove(address);
+            unregisterEngineListener(address);
         }
     }
 
