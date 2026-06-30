@@ -22,7 +22,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * Plan 1 scope: bring-up + noise-control (ANC) set/read. Battery / ear-detection / toggles / the
  * provider listener arrive in later plans.
  */
-final class AacpEngine {
+public final class AacpEngine {
     private static final String TAG = DeviceDef.TAG;
     private static final int PSM = 4097, TYPE_L2CAP = 3;
     private static final ParcelUuid AAP_UUID =
@@ -61,7 +61,7 @@ final class AacpEngine {
 
     /** Open + bring up the session and start the reader if not already running. Idempotent.
      *  No DeviceDef needed — PSM/UUID are protocol constants. */
-    static void ensureConnected(BluetoothAdapter adapter, String mac) {
+    public static void ensureConnected(BluetoothAdapter adapter, String mac) {
         String key = mac.toUpperCase(Locale.ROOT);
         Session s = SESSIONS.computeIfAbsent(key, Session::new);
         synchronized (s.lock) {

@@ -9,7 +9,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * engine's (non-blocking) accessors. AAP is a push protocol, so reads return the cache rather than
  * issuing I/O.
  */
-final class AapState {
+public final class AapState {
     private static final Map<String, AapState> CACHE = new ConcurrentHashMap<>();
 
     private volatile Integer ancMode;       // 1..4, null = unknown
@@ -19,7 +19,7 @@ final class AapState {
 
     private AapState() {}
 
-    static AapState forMac(String mac) {
+    public static AapState forMac(String mac) {
         return CACHE.computeIfAbsent(mac.toUpperCase(Locale.ROOT), k -> new AapState());
     }
 
@@ -44,7 +44,7 @@ final class AapState {
 
     void setEar(AapCodec.Ear e) { this.ear = e; }
     /** Positional in-ear summary, or null if unknown. */
-    String earSummary() {
+    public String earSummary() {
         AapCodec.Ear e = ear;
         if (e == null) return null;
         boolean pIn = e.primary == 0, sIn = e.secondary == 0;

@@ -644,6 +644,22 @@ private fun HookedDeviceCard(
     val unverified = rest.filter { !it.verified }
     val activeCount = controls.count { it.status == "ACTIVE" }
 
+    // Ear-detection: only for AAP devices (those with an ear_detection capability in their manifest).
+    val isAacpDevice = caps.any { it.id == "ear_detection" }
+    val context = LocalContext.current
+    val earStatus = remember(refreshKey, tick, d.mac) {
+        if (isAacpDevice) io.github.thelok1s.orchestra.AapState.forMac(d.mac).earSummary() ?: "—"
+        else null
+    }
+    if (isAacpDevice) {
+        LaunchedEffect(d.mac) {
+            val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+            if (adapter != null) withContext(Dispatchers.IO) {
+                io.github.thelok1s.orchestra.AacpEngine.ensureConnected(adapter, d.mac)
+            }
+        }
+    }
+
     Card(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
@@ -678,6 +694,15 @@ private fun HookedDeviceCard(
                     if (showStatuses && d.connected && d.batt.any) {
                         Spacer(Modifier.height(2.dp))
                         BatteryRow(d.batt)
+                    }
+                    // Ear-detection row (AAP devices only).
+                    if (earStatus != null) {
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            "Ear detection: $earStatus",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
                     }
                     // Eligibility chips: update-available + sideload badge.
                     val elig = eligibility
