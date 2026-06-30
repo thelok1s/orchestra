@@ -18,12 +18,14 @@ import android.util.Log;
 public class DebugSendReceiver extends BroadcastReceiver {
     static final String ACTION = "io.github.thelok1s.orchestra.DEBUG_SEND";
     static final String ACTION_AACP = "io.github.thelok1s.orchestra.AACP_TEST";
+    static final String ACTION_AACP_MF = "io.github.thelok1s.orchestra.AACP_MF";
 
     @Override
     public void onReceive(Context context, Intent intent) {
         if (intent == null) return;
         final String action = intent.getAction();
         if (ACTION_AACP.equals(action)) { handleAacpTest(context, intent); return; }
+        if (ACTION_AACP_MF.equals(action)) { handleAacpManifest(context, intent); return; }
         if (!ACTION.equals(action)) return;
         final String mac = intent.getStringExtra("mac");
         final String cmd = intent.getStringExtra("cmd");
@@ -48,6 +50,52 @@ public class DebugSendReceiver extends BroadcastReceiver {
                 Log.i(DeviceDef.TAG, "DEBUG_SEND " + address + " cmd=" + cmd + " payload=" + payload);
                 String reply = RfcommEngine.sendRaw(adapter, address, def, cmd, payload);
                 Log.i(DeviceDef.TAG, "DEBUG_SEND reply=" + reply);
+            } finally {
+                pr.finish();
+            }
+        }).start();
+    }
+
+    private void handleAacpManifest(Context context, Intent intent) {
+        final String mac = intent.getStringExtra("mac");
+        if (mac == null) { Log.w(DeviceDef.TAG, "AACP_MF: need --es mac"); return; }
+        final String address = mac.toUpperCase();
+        final String optId = intent.getStringExtra("mode"); // off|anc|transparency|adaptive, or absent = read
+        final Context app = context.getApplicationContext();
+        final PendingResult pr = goAsync();
+        new Thread(() -> {
+            try {
+                BluetoothManager bm = (BluetoothManager) app.getSystemService(Context.BLUETOOTH_SERVICE);
+                BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
+                if (adapter == null) return;
+                // Ensure the device is enabled so DeviceDef.forAddress() resolves it.
+                if (DeviceStore.enabledId(address) == null) {
+                    android.bluetooth.BluetoothDevice dev = adapter.getRemoteDevice(address);
+                    java.util.List<String> uuids = new java.util.ArrayList<>();
+                    android.os.ParcelUuid[] pu = dev.getUuids();
+                    if (pu != null) for (android.os.ParcelUuid p : pu) uuids.add(p.getUuid().toString());
+                    String id = DeviceStore.idForBonded(dev.getName(), uuids, null);
+                    if (id == null) { Log.w(DeviceDef.TAG, "AACP_MF: no manifest matches " + address); return; }
+                    DeviceStore.setEnabled(address, id, true);
+                    Log.i(DeviceDef.TAG, "AACP_MF: enabled " + address + " -> " + id);
+                }
+                DeviceDef def = DeviceDef.forAddress(address);
+                if (def == null || def.soundMode == null) {
+                    Log.w(DeviceDef.TAG, "AACP_MF: forAddress null / no soundMode for " + address);
+                    return;
+                }
+                DeviceDef.Func anc = def.soundMode;
+                ControlEngine engine = ControlEngine.forTransport(anc.transport);
+                if (engine == null) { Log.w(DeviceDef.TAG, "AACP_MF: no engine for transport " + anc.transport); return; }
+                Log.i(DeviceDef.TAG, "AACP_MF: def=" + def.id + " func=" + anc.id
+                        + " transport=" + anc.transport + " injectable=" + anc.injectable);
+                if (optId == null) {
+                    String cur = engine.readMode(adapter, address, def, anc);
+                    Log.i(DeviceDef.TAG, "AACP_MF read = " + cur);
+                } else {
+                    boolean ok = engine.applyMode(adapter, address, def, anc, optId);
+                    Log.i(DeviceDef.TAG, "AACP_MF set " + optId + " ok=" + ok);
+                }
             } finally {
                 pr.finish();
             }

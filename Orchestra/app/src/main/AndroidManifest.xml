@@ -85,6 +85,7 @@
             <intent-filter>
                 <action android:name="io.github.thelok1s.orchestra.DEBUG_SEND" />
                 <action android:name="io.github.thelok1s.orchestra.AACP_TEST" />
+                <action android:name="io.github.thelok1s.orchestra.AACP_MF" />
             </intent-filter>
         </receiver>
     </application>
