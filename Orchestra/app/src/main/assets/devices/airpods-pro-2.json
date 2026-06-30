@@ -1,6 +1,6 @@
 {
   "schema_version": 4,
-  "revision": 2,
+  "revision": 3,
   "revision_date": "2026-06-30",
   "id": "airpods-pro-2",
   "name": "AirPods Pro 2",
@@ -8,7 +8,9 @@
   "model_code": "A3048",
   "match": {
     "name_regex": "(?i)airpods pro",
-    "service_uuids_any": ["74ec2172-0bad-4d01-8f77-997b2be0722a"]
+    "service_uuids_any": [
+      "74ec2172-0bad-4d01-8f77-997b2be0722a"
+    ]
   },
   "channels": {
     "aacp-main": {
@@ -28,28 +30,73 @@
       "id": "sound_mode",
       "type": "multitoggle",
       "title": "Noise control",
-      "title_i18n": { "ru": "Управление шумом" },
+      "title_i18n": {
+        "ru": "Управление шумом"
+      },
       "capability": "sound_modes",
       "options": [
-        { "id": "off",          "label": "Off",              "icon": "off",          "label_i18n": { "ru": "Выкл." } },
-        { "id": "anc",          "label": "Noise Cancelling", "icon": "anc",          "label_i18n": { "ru": "Шумоподавление" } },
-        { "id": "transparency", "label": "Transparency",     "icon": "transparency", "label_i18n": { "ru": "Прозрачность" } },
-        { "id": "adaptive",     "label": "Adaptive",         "icon": "adaptive",     "label_i18n": { "ru": "Адаптивный" } }
+        {
+          "id": "off",
+          "label": "Off",
+          "icon": "off",
+          "label_i18n": {
+            "ru": "Выкл."
+          }
+        },
+        {
+          "id": "anc",
+          "label": "Noise Cancelling",
+          "icon": "anc",
+          "label_i18n": {
+            "ru": "Шумоподавление"
+          }
+        },
+        {
+          "id": "transparency",
+          "label": "Transparency",
+          "icon": "transparency",
+          "label_i18n": {
+            "ru": "Прозрачность"
+          }
+        },
+        {
+          "id": "adaptive",
+          "label": "Adaptive",
+          "icon": "adaptive",
+          "label_i18n": {
+            "ru": "Адаптивный"
+          }
+        }
       ],
       "set": {
         "command": "0900",
         "payload_template": "{mode}",
-        "option_values": { "off": "01", "anc": "02", "transparency": "03", "adaptive": "04" },
+        "option_values": {
+          "off": "01",
+          "anc": "02",
+          "transparency": "03",
+          "adaptive": "04"
+        },
         "_doc": "AacpEngine ignores command/payload_template for aacp and builds the 11-byte AAP frame from the mode byte; option_values map optId → the AAP mode byte (hex)."
       },
       "read": {
         "notify_opcode": "09000d",
         "state_byte_index": 7,
-        "value_map": { "01": "off", "02": "anc", "03": "transparency", "04": "adaptive" },
+        "value_map": {
+          "01": "off",
+          "02": "anc",
+          "03": "transparency",
+          "04": "adaptive"
+        },
         "_doc": "AAP is push: the engine caches the mode from inbound 04 00 04 00 09 00 0D <mode> notifications; value_map maps the mode byte → optId. notify_opcode/state_byte_index are declarative until Phase 3's generic notification parser."
       },
       "inject": "auto",
-      "ui": { "setting_id": 1001, "surfaces": ["device_details"] },
+      "ui": {
+        "setting_id": 1001,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": true,
       "_verified_note": "All 4 modes set + read live on AirPods Pro 2 (USB-C), Pixel 8 / Android 16, 2026-06-30 (Orchestra Plan 1). Device echoes 0900 0D <mode> after each set; audibly confirmed."
     },
@@ -57,14 +104,21 @@
       "id": "battery",
       "type": "battery",
       "title": "Battery",
-      "title_i18n": { "ru": "Батарея" },
+      "title_i18n": {
+        "ru": "Батарея"
+      },
       "capability": "battery",
       "read": {
         "notify_opcode": "040004",
-        "_doc": "AacpEngine parses 04 00 04 00 04 00 <count> (<comp> 01 <level> <status> 01)* into per-bud battery; readInfo('battery') returns the live summary. Read-only info row."
+        "_doc": "AacpEngine parses 04 00 04 00 04 00 <count> (<comp> 01 <level> <status> 01)* into per-bud battery. NOT a native device-settings row (settingslib won't render a switch-less, action-less row); surfaced via the native Fast-Pair battery header (untethered-battery metadata keys) + Orchestra's app. inject:false keeps it off the device-settings page while the engine still parses it."
       },
-      "inject": "auto",
-      "ui": { "setting_id": 1002, "surfaces": ["device_details"] },
+      "inject": false,
+      "ui": {
+        "setting_id": 1002,
+        "surfaces": [
+          "app"
+        ]
+      },
       "_verified": true,
       "_verified_note": "Battery notifications observed live on AirPods Pro 2 (USB-C), Pixel 8 / Android 16, 2026-06-30."
     },
@@ -72,14 +126,21 @@
       "id": "ear_detection",
       "type": "info",
       "title": "Ear detection",
-      "title_i18n": { "ru": "Датчик в ухе" },
+      "title_i18n": {
+        "ru": "Датчик в ухе"
+      },
       "capability": "ear_detection",
       "read": {
         "notify_opcode": "040006",
-        "_doc": "AacpEngine parses 04 00 04 00 06 00 <primary> <secondary> (0=in-ear 1=out 2=case); readInfo('ear_detection') returns the live summary. Read-only info row."
+        "_doc": "AacpEngine parses 04 00 04 00 06 00 <primary> <secondary> (0=in-ear 1=out 2=case); readInfo('ear_detection') returns the live summary. NOT a native device-settings row (settingslib won't render a switch-less, action-less row); surfaced in Orchestra's own app. inject:false keeps it off the device-settings page while the engine still parses it."
       },
-      "inject": "auto",
-      "ui": { "setting_id": 1003, "surfaces": ["device_details"] },
+      "inject": false,
+      "ui": {
+        "setting_id": 1003,
+        "surfaces": [
+          "app"
+        ]
+      },
       "_verified": true,
       "_verified_note": "Ear-detection notifications observed live on AirPods Pro 2 (USB-C), 2026-06-30."
     },
@@ -87,23 +148,36 @@
       "id": "conversational_awareness",
       "type": "toggle",
       "title": "Conversational Awareness",
-      "title_i18n": { "ru": "Чувствительность к разговору" },
+      "title_i18n": {
+        "ru": "Чувствительность к разговору"
+      },
       "summary": "Lowers volume when you start speaking",
       "capability": "conversational_awareness",
       "icon": "anc",
       "set": {
         "command": "0900",
-        "option_values": { "on": "01", "off": "02" },
+        "option_values": {
+          "on": "01",
+          "off": "02"
+        },
         "_doc": "AacpEngine.applyToggle builds 04 00 04 00 09 00 28 <01 on / 02 off> 00 00 00 (feature 0x28). command/option_values declarative; the engine keys on the function id."
       },
       "read": {
         "notify_opcode": "090028",
         "state_byte_index": 7,
-        "value_map": { "01": "on", "02": "off" },
+        "value_map": {
+          "01": "on",
+          "02": "off"
+        },
         "_doc": "AAP sends 04 00 04 00 09 00 28 <status> once after notification-request; the engine caches it (readToggle)."
       },
       "inject": "auto",
-      "ui": { "setting_id": 1004, "surfaces": ["device_details"] },
+      "ui": {
+        "setting_id": 1004,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": true,
       "_verified_note": "CA toggle set/state verified live on AirPods Pro 2 (USB-C), 2026-06-30."
     }
