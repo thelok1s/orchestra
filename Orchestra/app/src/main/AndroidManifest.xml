@@ -11,6 +11,10 @@
          com.android.settings (platform-signed) is a different signer and cannot hold this. -->
     <permission android:name="io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST"
                 android:protectionLevel="signature" />
+    <!-- The app must REQUEST its own signature permission to actually HOLD it (declaring a
+         <permission> does not self-grant). Without this the app's sendBroadcast does not satisfy
+         the receiver's broadcastPermission gate, so the live-battery broadcast never arrives. -->
+    <uses-permission android:name="io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST" />
 
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
