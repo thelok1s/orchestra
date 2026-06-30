@@ -33,7 +33,15 @@ public class StateProvider extends ContentProvider {
             Context c = getContext();
             BluetoothManager bm = c != null ? (BluetoothManager) c.getSystemService(Context.BLUETOOTH_SERVICE) : null;
             BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
-            if (adapter != null) AacpEngine.ensureConnected(adapter, mac); // best-effort; non-blocking enough
+            if (adapter != null) {
+                // Kick the connect on a background thread and return the cache immediately. The caller
+                // (the Settings hook) queries this on the Settings MAIN thread via ContentResolver, so a
+                // synchronous ensureConnected (socket.connect() has no timeout) could ANR on a cold/
+                // out-of-range device. First query returns whatever's cached; the next resume has data.
+                new Thread(() -> {
+                    try { AacpEngine.ensureConnected(adapter, mac); } catch (Throwable ignore) {}
+                }, "state-connect-" + mac).start();
+            }
         } catch (Throwable t) { Log.w(DeviceDef.TAG, "StateProvider connect: " + t); }
         AapCodec.Battery b = AapState.forMac(mac).getBattery();
         MatrixCursor cur = new MatrixCursor(COLS);
