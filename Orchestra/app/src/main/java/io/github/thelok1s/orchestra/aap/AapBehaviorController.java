@@ -8,7 +8,8 @@ import io.github.thelok1s.orchestra.AapCodec;
  * Pure-Java (no android imports) ear-detection behavior controller: fires {@link MediaActions#pause}
  * when the user transitions from worn to not-worn, and {@link MediaActions#play} on the reverse.
  *
- * <p>Worn = at least one bud in-ear ({@code primary == 0 || secondary == 0}).
+ * <p>Worn = BOTH buds in-ear ({@code primary == 0 && secondary == 0}). Removing even one bud
+ * transitions to not-worn and triggers pause; playback resumes only when both are back in-ear.
  *
  * <p>Debounce: a transition that arrives within {@link #DEBOUNCE_MS} ms of the last acted transition
  * is silently dropped, guarding against brief flaps (e.g. re-seating a bud).
@@ -75,8 +76,8 @@ public final class AapBehaviorController {
         }
     }
 
-    /** Worn = at least one bud in-ear (value 0). */
+    /** Worn = BOTH buds in-ear (value 0). Removing even one bud is not-worn. */
     private static boolean isWorn(AapCodec.Ear e) {
-        return e.primary == 0 || e.secondary == 0;
+        return e.primary == 0 && e.secondary == 0;
     }
 }
