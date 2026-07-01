@@ -6,11 +6,15 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.media.AudioManager;
 import android.os.ParcelUuid;
 import android.util.Log;
+import android.view.KeyEvent;
 
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import io.github.thelok1s.orchestra.AacpEngine;
 import io.github.thelok1s.orchestra.AapCodec;
@@ -39,6 +43,12 @@ public final class AapBroker {
             UUID.fromString("74ec2172-0bad-4d01-8f77-997b2be0722a");
 
     private static volatile boolean started = false;
+
+    /** Last-known ear state per MAC; used to detect worn-state transitions. */
+    private static final Map<String, AapCodec.Ear> lastEar = new ConcurrentHashMap<>();
+
+    /** Per-MAC behavior controller (auto-pause / resume). */
+    private static final Map<String, AapBehaviorController> controllers = new ConcurrentHashMap<>();
 
     private AapBroker() {}
 
@@ -77,10 +87,43 @@ public final class AapBroker {
         else if ("ca".equals(op)) AacpEngine.setCa(a, mac, value == 1);
     }
 
+    /**
+     * Auto-pause enable gate. Always {@code true} for now.
+     * TODO Task 3: replace with a real DeviceStore / per-device preference lookup.
+     */
+    private static boolean autoPauseEnabled(String mac) {
+        return true;
+    }
+
+    /** Dispatches a media key (ACTION_DOWN + ACTION_UP) via AudioManager. Fire-and-forget. */
+    private static void dispatchKey(Context ctx, int keyCode) {
+        try {
+            AudioManager am = (AudioManager) ctx.getSystemService(Context.AUDIO_SERVICE);
+            if (am == null) return;
+            am.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, keyCode));
+            am.dispatchMediaKeyEvent(new KeyEvent(KeyEvent.ACTION_UP,   keyCode));
+        } catch (Throwable t) {
+            Log.w(TAG, "dispatchKey keyCode=" + keyCode + " failed: " + t);
+        }
+    }
+
     static void publishState(Context ctx, String mac) {
         AapState s = AapState.forMac(mac);
         AapCodec.Battery b = s.getBattery();
-        AapCodec.Ear e = s.getEar();
+        AapCodec.Ear now = s.getEar();
+
+        // Auto-pause / resume: compare ear to previous and drive the behavior controller.
+        if (now != null && autoPauseEnabled(mac)) {
+            AapCodec.Ear prev = lastEar.put(mac, now); // atomic swap; returns old value (null on first call)
+            AapBehaviorController ctrl = controllers.computeIfAbsent(mac, k ->
+                new AapBehaviorController(new AapBehaviorController.MediaActions() {
+                    @Override public void pause() { dispatchKey(ctx, KeyEvent.KEYCODE_MEDIA_PAUSE); }
+                    @Override public void play()  { dispatchKey(ctx, KeyEvent.KEYCODE_MEDIA_PLAY);  }
+                }, System::currentTimeMillis));
+            ctrl.onEar(prev, now);
+        }
+
+        AapCodec.Ear e = now; // reuse for the broadcast below
         Intent i = new Intent(ACTION_STATE).putExtra("mac", mac)
             .putExtra("anc", s.getAncMode() == null ? -1 : s.getAncMode())
             .putExtra("ca", s.getCaEnabled() == null ? -1 : (s.getCaEnabled() ? 1 : 0))
