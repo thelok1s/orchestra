@@ -42,8 +42,12 @@ public interface ControlEngine {
         public boolean applyMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, String optId) {
             if (f == null) return false;
             String valueHex = f.optionValues.get(optId);
-            if (valueHex == null) return false;
-            AacpClientBridge.sendCommand(mac, "anc", Integer.parseInt(valueHex, 16));
+            if (valueHex == null) { android.util.Log.w(DeviceDef.TAG, "AACP no option_value for " + optId); return false; }
+            int modeByte;
+            try { modeByte = Integer.parseInt(valueHex, 16); }
+            catch (NumberFormatException e) { android.util.Log.w(DeviceDef.TAG, "AACP bad option_value hex: " + valueHex); return false; }
+            AacpClientBridge.sendCommand(mac, "anc", modeByte);
+            AapState.forMac(mac).setAncMode(modeByte); // Fix 2: optimistic echo; broker reconciles on next push
             return true;
         }
         public String readMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
@@ -53,7 +57,13 @@ public interface ControlEngine {
             return f.valueMap.get(String.format("%02x", mode & 0xff));
         }
         public boolean applyToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, boolean on) {
+            // Fix 3: only conversational_awareness is wired; reject any other toggle id (mirrors old AacpEngine guard)
+            if (f == null || !"conversational_awareness".equals(f.id)) {
+                android.util.Log.w(DeviceDef.TAG, "AACP applyToggle: unsupported toggle " + (f != null ? f.id : "null"));
+                return false;
+            }
             AacpClientBridge.sendCommand(mac, "ca", on ? 1 : 0);
+            AapState.forMac(mac).setCaEnabled(on); // Fix 2: optimistic echo; broker reconciles
             return true;
         }
         public Boolean readToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {

@@ -51,8 +51,20 @@ public final class AacpClientBridge {
         Integer bl = nz(i.getIntExtra("bl", -1)),  bls = nz(i.getIntExtra("bls", -1)),
                 br = nz(i.getIntExtra("br", -1)),  brs = nz(i.getIntExtra("brs", -1)),
                 bc = nz(i.getIntExtra("bc", -1)),  bcs = nz(i.getIntExtra("bcs", -1));
-        if (bl != null || br != null || bc != null || bls != null || brs != null || bcs != null) {
+        boolean hasBattery = (bl != null || br != null || bc != null);
+        if (hasBattery || bls != null || brs != null || bcs != null) {
             s.setBattery(new AapCodec.Battery(bl, bls, br, brs, bc, bcs));
+        }
+        // Fix 1: poke the Settings-process battery header from the app process (App.context() is
+        // non-null here; AacpEngine.broadcastBattery is a no-op in SystemUI where App never ran).
+        if (hasBattery) {
+            try {
+                Context ctx = appCtx != null ? appCtx : App.context();
+                if (ctx != null) {
+                    ctx.sendBroadcast(new Intent("io.github.thelok1s.orchestra.BATTERY_CHANGED")
+                            .putExtra("mac", mac));
+                }
+            } catch (Throwable t) { Log.w(DeviceDef.TAG, "AacpClientBridge: battery broadcast failed: " + t); }
         }
         int ep = i.getIntExtra("ep", -1), es = i.getIntExtra("es", -1);
         if (ep >= 0 && es >= 0) s.setEar(new AapCodec.Ear(ep, es));
