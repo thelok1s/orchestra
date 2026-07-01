@@ -1,21 +1,18 @@
 package io.github.thelok1s.orchestra;
 
-import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothManager;
 import android.content.ContentProvider;
 import android.content.ContentValues;
-import android.content.Context;
 import android.database.Cursor;
 import android.database.MatrixCursor;
 import android.net.Uri;
-import android.util.Log;
 
 /**
  * Read-only bridge so the privileged Settings-process hook can read AAP battery (which lives in
  * this app process's {@link AapState}) and write it as untethered-battery metadata keys.
  *   content://io.github.thelok1s.orchestra.state/battery/<MAC>
  * Columns: left,right,case_level (0..100 or -1), left_charging,right_charging,case_charging (1/0).
- * Querying kicks {@link AacpEngine#ensureConnected} so values populate even if nothing else bound.
+ * The socket is owned by the SystemUI broker (Plan 6); this provider only returns the
+ * broadcast-fed {@link AapState} cache and never opens an L2CAP socket.
  */
 public class StateProvider extends ContentProvider {
     static final String AUTHORITY = "io.github.thelok1s.orchestra.state";
@@ -29,20 +26,8 @@ public class StateProvider extends ContentProvider {
         java.util.List<String> seg = uri.getPathSegments();
         if (seg.size() != 2 || !"battery".equals(seg.get(0))) return null;
         String mac = seg.get(1).toUpperCase(java.util.Locale.ROOT);
-        try {
-            Context c = getContext();
-            BluetoothManager bm = c != null ? (BluetoothManager) c.getSystemService(Context.BLUETOOTH_SERVICE) : null;
-            BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
-            if (adapter != null) {
-                // Kick the connect on a background thread and return the cache immediately. The caller
-                // (the Settings hook) queries this on the Settings MAIN thread via ContentResolver, so a
-                // synchronous ensureConnected (socket.connect() has no timeout) could ANR on a cold/
-                // out-of-range device. First query returns whatever's cached; the next resume has data.
-                new Thread(() -> {
-                    try { AacpEngine.ensureConnected(adapter, mac); } catch (Throwable ignore) {}
-                }, "state-connect-" + mac).start();
-            }
-        } catch (Throwable t) { Log.w(DeviceDef.TAG, "StateProvider connect: " + t); }
+        // The SystemUI broker owns the socket and pushes state to this process via AAP_STATE
+        // broadcasts (AacpClientBridge -> AapState). Return the cache; never open a socket here.
         AapCodec.Battery b = AapState.forMac(mac).getBattery();
         MatrixCursor cur = new MatrixCursor(COLS);
         if (b != null) {

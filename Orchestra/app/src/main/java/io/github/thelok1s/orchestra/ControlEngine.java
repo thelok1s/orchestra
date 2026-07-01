@@ -35,21 +35,35 @@ public interface ControlEngine {
         @Override public void unregisterListener(String mac, String key) { /* no-op */ }
     };
 
+    // AAP is brokered: the SystemUI-resident AapBroker owns the socket. This app-process engine
+    // NEVER opens an L2CAP socket — sets go out as AAP_CMD broadcasts, reads come from the
+    // broadcast-fed AapState cache (populated by AacpClientBridge from AAP_STATE).
     ControlEngine AACP = new ControlEngine() {
         public boolean applyMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, String optId) {
-            return AacpEngine.applyMode(a, mac, def, f, optId);
+            if (f == null) return false;
+            String valueHex = f.optionValues.get(optId);
+            if (valueHex == null) return false;
+            AacpClientBridge.sendCommand(mac, "anc", Integer.parseInt(valueHex, 16));
+            return true;
         }
         public String readMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
-            return AacpEngine.readMode(a, mac, def, f);
+            if (f == null) return null;
+            Integer mode = AapState.forMac(mac).getAncMode();
+            if (mode == null) return null;
+            return f.valueMap.get(String.format("%02x", mode & 0xff));
         }
         public boolean applyToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, boolean on) {
-            return AacpEngine.applyToggle(a, mac, def, f, on);
+            AacpClientBridge.sendCommand(mac, "ca", on ? 1 : 0);
+            return true;
         }
         public Boolean readToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
-            return AacpEngine.readToggle(a, mac, def, f);
+            return AapState.forMac(mac).getCaEnabled();
         }
         @Override public String readInfo(BluetoothAdapter a, String mac, DeviceDef d, DeviceDef.Func f) {
-            return AacpEngine.readInfo(a, mac, d, f);
+            if (f == null) return null;
+            if ("battery".equals(f.id)) return AapState.forMac(mac).batterySummary();
+            if ("ear_detection".equals(f.id)) return AapState.forMac(mac).earSummary();
+            return null;
         }
         @Override public void registerListener(String mac, String key, Runnable onChange) {
             AacpEngine.registerListener(mac, key, onChange);

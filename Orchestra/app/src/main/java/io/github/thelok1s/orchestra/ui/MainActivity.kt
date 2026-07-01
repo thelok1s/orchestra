@@ -653,12 +653,9 @@ private fun HookedDeviceCard(
         else null
     }
     if (isAacpDevice) {
-        LaunchedEffect(d.mac) {
-            val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
-            if (adapter != null) withContext(Dispatchers.IO) {
-                io.github.thelok1s.orchestra.AacpEngine.ensureConnected(adapter, d.mac)
-            }
-        }
+        // The SystemUI broker owns the AAP socket (Plan 6); the app process never opens one. Just
+        // subscribe to the app-side listener registry — AacpClientBridge fires it on AAP_STATE, so
+        // the live ear-detection preview still updates.
         DisposableEffect(d.mac) {
             io.github.thelok1s.orchestra.AacpEngine.registerListener(d.mac, "ui-ear") { liveTick++ }
             onDispose { io.github.thelok1s.orchestra.AacpEngine.unregisterListener(d.mac, "ui-ear") }

@@ -21,5 +21,8 @@ public class App extends Application {
         // AacpEngine for AAP. Scoped to android.bluetooth only — not all non-SDK members.
         // No device-global change; per-process exemption.
         org.lsposed.hiddenapibypass.HiddenApiBypass.addHiddenApiExemptions("Landroid/bluetooth/");
+        // Become the AAP broadcast client: consume AAP_STATE from the SystemUI broker and send
+        // AAP_CMD to it. The app process no longer owns the L2CAP socket (Plan 6).
+        AacpClientBridge.init(getApplicationContext());
     }
 }

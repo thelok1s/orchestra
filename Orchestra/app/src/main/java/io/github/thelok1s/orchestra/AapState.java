@@ -30,13 +30,13 @@ public final class AapState {
     }
 
     void setAncMode(int modeByte) { this.ancMode = modeByte; }
-    Integer getAncMode() { return ancMode; }
+    public Integer getAncMode() { return ancMode; }
 
     void setCaEnabled(boolean on) { this.caEnabled = on; }
-    Boolean getCaEnabled() { return caEnabled; }
+    public Boolean getCaEnabled() { return caEnabled; }
 
     void setBattery(AapCodec.Battery b) { this.battery = b; }
-    AapCodec.Battery getBattery() { return battery; }
+    public AapCodec.Battery getBattery() { return battery; }
     /** "L 100% · R 99% · Case 17%" over known components, or null if none known. */
     String batterySummary() {
         AapCodec.Battery b = battery;
@@ -49,6 +49,7 @@ public final class AapState {
     }
 
     void setEar(AapCodec.Ear e) { this.ear = e; }
+    public AapCodec.Ear getEar() { return ear; }
     /** Positional in-ear summary, or null if unknown. */
     public String earSummary() {
         AapCodec.Ear e = ear;

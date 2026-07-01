@@ -16,6 +16,15 @@
          the receiver's broadcastPermission gate, so the live-battery broadcast never arrives. -->
     <uses-permission android:name="io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST" />
 
+    <!-- Signature permission for the AAP state broadcast (SystemUI broker -> app). DECLARED +
+         requested so the guarded-receiver option is available, but the app's AAP_STATE receiver is
+         currently registered with NO permission: SystemUI is a different signer and cannot hold
+         this, so a guarded receiver would reject its broadcast (Plan 5 T3 asymmetry). The payload
+         is non-sensitive device state. Final guard choice pending hardware confirmation. -->
+    <permission android:name="io.github.thelok1s.orchestra.permission.AAP_STATE"
+                android:protectionLevel="signature" />
+    <uses-permission android:name="io.github.thelok1s.orchestra.permission.AAP_STATE" />
+
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />

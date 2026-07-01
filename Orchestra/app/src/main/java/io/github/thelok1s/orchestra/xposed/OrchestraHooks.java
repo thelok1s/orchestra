@@ -116,6 +116,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                 hookPixelDevice(lp.classLoader);
                 forceAncAvailable(lp.classLoader);
                 hookToggleApply(lp.classLoader);
+                startBroker();
                 break;
             case "com.android.settings":
                 XposedBridge.log("[MX] loaded into Settings (metadata writer)");
@@ -139,6 +140,35 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
             default:
                 break;
         }
+    }
+
+    // ---------------- SystemUI: AAP connection broker (single-owner socket) ----------------
+
+    private static volatile boolean brokerStarted = false;
+
+    /**
+     * Start the SystemUI-resident AAP broker once a SystemUI Context is available. SystemUI is
+     * always alive, so it owns the L2CAP socket; the app process is a broadcast client. Reuses the
+     * lazy-context pattern (currentApplication() is null very early), retried off the main thread.
+     */
+    private void startBroker() {
+        if (brokerStarted) return;
+        new Thread(() -> {
+            try {
+                android.app.Application app = null;
+                for (int i = 0; i < 50 && app == null; i++) {
+                    app = AndroidAppHelper.currentApplication();
+                    if (app == null) { try { Thread.sleep(200); } catch (InterruptedException ignored) {} }
+                }
+                if (app == null) { XposedBridge.log("[MX] broker: no SystemUI context, giving up"); return; }
+                if (brokerStarted) return;
+                brokerStarted = true;
+                io.github.thelok1s.orchestra.aap.AapBroker.start(app);
+                XposedBridge.log("[MX] AAP broker started in SystemUI");
+            } catch (Throwable t) {
+                XposedBridge.log("[MX] broker start failed: " + t);
+            }
+        }, "mx-broker-start").start();
     }
 
     // ---------------- SystemUI: volume-panel ANC ----------------

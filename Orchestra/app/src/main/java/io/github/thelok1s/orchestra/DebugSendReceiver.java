@@ -111,14 +111,12 @@ public class DebugSendReceiver extends BroadcastReceiver {
         final PendingResult pr = goAsync();
         new Thread(() -> {
             try {
-                BluetoothManager bm = (BluetoothManager) app.getSystemService(Context.BLUETOOTH_SERVICE);
-                BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
-                if (adapter == null) return;
+                // The SystemUI broker owns the AAP socket (Plan 6). Reads come from the
+                // broadcast-fed cache; sets go out as AAP_CMD via the client bridge — no app-process
+                // socket. (A cold cache reads null until the broker publishes state.)
                 if (mode == null) {
-                    AacpEngine.ensureConnected(adapter, address);
-                    try { Thread.sleep(1500); } catch (InterruptedException ignored) {} // let a notify land
-                    Integer b = AacpEngine.getAncByte(address);
-                    Log.i(DeviceDef.TAG, "AACP_TEST read mode byte = " + b);
+                    Integer b = AapState.forMac(address).getAncMode();
+                    Log.i(DeviceDef.TAG, "AACP_TEST read cached mode byte = " + b);
                 } else {
                     int b;
                     switch (mode) {
@@ -128,8 +126,8 @@ public class DebugSendReceiver extends BroadcastReceiver {
                         case "adaptive": b = 4; break;
                         default: Log.w(DeviceDef.TAG, "AACP_TEST: bad mode " + mode); return;
                     }
-                    boolean ok = AacpEngine.setAncByte(adapter, address, b);
-                    Log.i(DeviceDef.TAG, "AACP_TEST set " + mode + " (byte " + b + ") ok=" + ok);
+                    AacpClientBridge.sendCommand(address, "anc", b);
+                    Log.i(DeviceDef.TAG, "AACP_TEST set " + mode + " (byte " + b + ") dispatched to broker");
                 }
             } finally {
                 pr.finish();

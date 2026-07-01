@@ -42,7 +42,7 @@ public final class AacpEngine {
         Map<String, Runnable> m = LISTENERS.get(mac.toUpperCase(Locale.ROOT));
         if (m != null) m.remove(key);
     }
-    private static void fireListener(String mac) {
+    static void fireListener(String mac) {
         Map<String, Runnable> m = LISTENERS.get(mac.toUpperCase(Locale.ROOT));
         if (m == null) return;
         for (Runnable r : m.values()) {
@@ -203,7 +203,7 @@ public final class AacpEngine {
     // ---- manifest-free core (used by the standalone adb test in Task 5) ----
 
     /** Write a noise-control mode byte (1..4). Connects + brings up if needed. */
-    static boolean setAncByte(BluetoothAdapter adapter, String mac, int modeByte) {
+    public static boolean setAncByte(BluetoothAdapter adapter, String mac, int modeByte) {
         if (modeByte < 1 || modeByte > 4) {
             Log.w(TAG, "AACP ignoring out-of-range ANC mode " + modeByte);
             return false;
@@ -232,6 +232,28 @@ public final class AacpEngine {
     /** The cached raw noise-control mode byte (1..4), or null if unknown. */
     static Integer getAncByte(String mac) {
         return AapState.forMac(mac).getAncMode();
+    }
+
+    /** Write the Conversational Awareness on/off frame. Connects + brings up if needed.
+     *  The transmit half of {@link #applyToggle}, callable without a manifest (the broker's path). */
+    public static boolean setCa(BluetoothAdapter adapter, String mac, boolean on) {
+        ensureConnected(adapter, mac);
+        Session s = SESSIONS.get(mac.toUpperCase(Locale.ROOT));
+        if (s == null) return false;
+        synchronized (s.lock) {
+            if (s.out == null) return false;
+            try {
+                byte[] frame = AapCodec.caSet(on);
+                Log.i(TAG, "AACP TX set CA on=" + on + ": " + HexUtil.hex(frame));
+                s.out.write(frame); s.out.flush();
+                AapState.forMac(s.mac).setCaEnabled(on); // optimistic; reader reconciles
+                return true;
+            } catch (Exception e) {
+                Log.w(TAG, "AACP CA set failed: " + e);
+                close(s);
+                return false;
+            }
+        }
     }
 
     // ---- ControlEngine surface (manifest-driven; exercised from Plan 3 onward) ----

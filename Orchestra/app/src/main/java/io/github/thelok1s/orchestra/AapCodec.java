@@ -9,7 +9,7 @@ package io.github.thelok1s.orchestra;
  * AAP control/notify packets are {@code 04 00 04 00 | <opcode:2> | <data..>}.
  * Noise control is the control command {@code 09 00 | 0D | <mode> 00 00 00}, mode 1..4.
  */
-final class AapCodec {
+public final class AapCodec {
     private static final byte[] HEADER = {0x04, 0x00, 0x04, 0x00};
 
     private AapCodec() {}
@@ -71,10 +71,10 @@ final class AapCodec {
     }
 
     /** Parsed battery levels/statuses; any missing component is null. */
-    static final class Battery {
-        final Integer left, right, caseLevel;
-        final Integer leftStatus, rightStatus, caseStatus;
-        Battery(Integer l, Integer ls, Integer r, Integer rs, Integer c, Integer cs) {
+    public static final class Battery {
+        public final Integer left, right, caseLevel;
+        public final Integer leftStatus, rightStatus, caseStatus;
+        public Battery(Integer l, Integer ls, Integer r, Integer rs, Integer c, Integer cs) {
             left = l; leftStatus = ls; right = r; rightStatus = rs; caseLevel = c; caseStatus = cs;
         }
     }
@@ -102,9 +102,9 @@ final class AapCodec {
     }
 
     /** Parsed ear-detection status (0=in-ear, 1=out-of-ear, 2=in-case). */
-    static final class Ear {
-        final int primary, secondary;
-        Ear(int p, int s) { primary = p; secondary = s; }
+    public static final class Ear {
+        public final int primary, secondary;
+        public Ear(int p, int s) { primary = p; secondary = s; }
     }
 
     /** Parse an ear-detection notification (04 00 04 00 06 00 <primary> <secondary>). */

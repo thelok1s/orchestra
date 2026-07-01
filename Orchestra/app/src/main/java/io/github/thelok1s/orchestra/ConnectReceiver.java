@@ -30,26 +30,19 @@ public class ConnectReceiver extends BroadcastReceiver {
                 if (adapter == null) { Log.w(DeviceDef.TAG, "receiver: no adapter"); return; }
 
                 if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(action)) {
-                    BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
-                    String mac = device != null && device.getAddress() != null
-                            ? device.getAddress().toUpperCase() : null;
-                    // Tear down any AAP session so a remote drop doesn't leave a half-open socket that
-                    // ensureConnected would REUSE (serving stale battery/ear). No-op for non-AAP devices.
-                    if (mac != null) AacpEngine.disconnect(mac);
+                    // AAP socket lifecycle is owned by the SystemUI broker now (single-owner socket,
+                    // Plan 6). The app process no longer opens/tears down the L2CAP socket here; the
+                    // broker will own ACL teardown in Task 5. RFCOMM keeps no persistent session, so
+                    // there is nothing to do on disconnect in the app process.
                 } else if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(action)) {
                     BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                     if (device == null) return;
                     String mac = device.getAddress() != null ? device.getAddress().toUpperCase() : null;
                     DeviceDef def = mac != null ? DeviceDef.enabled().get(mac) : null;
                     if (def != null) {
+                        // Re-assert metadata key 25 (Fast Pair clobber guard). AAP (re)connection is
+                        // the broker's job now — the app must not call ensureConnected for AAP.
                         Metadata.assertConfigTags(device, def.id);
-                        // For AAP devices, force a FRESH session on connect: drop any stale/half-open
-                        // session, then reconnect + bring up so battery/ear/ANC repopulate live without
-                        // waiting for the user to reopen the page. (Already on a background thread.)
-                        if (def.usesAacp()) {
-                            AacpEngine.disconnect(mac);
-                            AacpEngine.ensureConnected(adapter, mac);
-                        }
                     }
                 } else { // BOOT_COMPLETED or APPLY
                     Map<String, DeviceDef> enabled = DeviceDef.enabled();
