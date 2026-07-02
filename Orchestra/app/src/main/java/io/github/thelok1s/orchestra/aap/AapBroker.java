@@ -303,14 +303,21 @@ public final class AapBroker {
             try {
                 AudioManager am = ctx.getSystemService(AudioManager.class);
                 if (am == null) return;
-                int gen = rampGen.incrementAndGet();
-                Integer base = preDuckVolume;
-                if (base == null) {
-                    // only remember the baseline when we're not already ducked/mid-restore, so a
-                    // duck arriving while a restore ramp is still animating can't clobber it with
-                    // a half-restored value.
-                    base = am.getStreamVolume(AudioManager.STREAM_MUSIC);
-                    preDuckVolume = base;
+                int gen;
+                Integer base;
+                synchronized (rampGen) {
+                    // gen bump + baseline handoff are atomic vs. a completing restore ramp:
+                    // otherwise the ramp could clear preDuckVolume AFTER this duck decided to
+                    // keep it, leaving us ducked with no baseline (restore would then no-op).
+                    gen = rampGen.incrementAndGet();
+                    base = preDuckVolume;
+                    if (base == null) {
+                        // only remember the baseline when we're not already ducked/mid-restore, so
+                        // a duck arriving while a restore ramp is still animating can't clobber it
+                        // with a half-restored value.
+                        base = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+                        preDuckVolume = base;
+                    }
                 }
                 int target = Math.max(1, base / 4);
                 Log.i(TAG, "ca_duck: ducking " + mac + " toward " + target);
@@ -348,7 +355,7 @@ public final class AapBroker {
                     int cur = am.getStreamVolume(AudioManager.STREAM_MUSIC);
                     int steps = Math.abs(target - cur);
                     if (steps == 0) {
-                        if (clearOnComplete && rampGen.get() == gen) preDuckVolume = null;
+                        if (clearOnComplete) clearBaselineIfCurrent(gen);
                         return;
                     }
                     int dir = target > cur ? 1 : -1;
@@ -362,13 +369,21 @@ public final class AapBroker {
                             try { Thread.sleep(perStep); } catch (InterruptedException ie) { return; }
                         }
                     }
-                    if (clearOnComplete && rampGen.get() == gen) preDuckVolume = null;
+                    if (clearOnComplete) clearBaselineIfCurrent(gen);
                 } catch (Throwable th) {
                     Log.w(TAG, "aap-volramp failed for " + mac + ": " + th);
                 }
             }, "aap-volramp");
             t.setDaemon(true);
             t.start();
+        }
+
+        /** Clears {@link #preDuckVolume} only if no newer duck/restore superseded {@code gen}
+         *  — atomically vs. duck()'s gen-bump/baseline read (same {@code rampGen} monitor). */
+        private void clearBaselineIfCurrent(int gen) {
+            synchronized (rampGen) {
+                if (rampGen.get() == gen) preDuckVolume = null;
+            }
         }
     }
 
