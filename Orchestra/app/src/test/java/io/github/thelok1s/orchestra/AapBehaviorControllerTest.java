@@ -13,8 +13,9 @@ import io.github.thelok1s.orchestra.aap.AapBehaviorController;
  * clock — no Thread.sleep, no Android dependencies.
  *
  * Ear values: 0 = in-ear, 1 = out-of-ear, 2 = in-case.
- * "Worn" = BOTH buds in-ear (primary == 0 && secondary == 0). Removing even one bud → not-worn → pause.
- * Playback resumes only when BOTH buds are back in-ear.
+ * Model: in-ear COUNT (0..2). Any decrease (a pod removed) → pause; any increase (a pod
+ * inserted) → play; unchanged count → no action. This covers both-pods use AND single-pod use
+ * (hardware-found bug: wearing one pod and removing it must pause).
  */
 public class AapBehaviorControllerTest {
 
@@ -27,7 +28,6 @@ public class AapBehaviorControllerTest {
         int playCount  = 0;
         @Override public void pause() { pauseCount++; }
         @Override public void play()  { playCount++;  }
-        void reset() { pauseCount = 0; playCount = 0; }
     }
 
     /** Mutable fake clock driven by the test. */
@@ -61,15 +61,12 @@ public class AapBehaviorControllerTest {
     }
 
     // ---------------------------------------------------------------------------
-    // 2. Pause on worn → not-worn
-    //    "worn = BOTH buds in-ear" — removing even ONE bud changes worn-state (worn → not-worn)
-    //    and must trigger pause immediately.
+    // 2. Pause on any pod removal (in-ear count decreases)
     // ---------------------------------------------------------------------------
 
     @Test
     public void bothIn_oneRemoved_pause() {
-        // Ear(IN, IN) → Ear(OUT, IN): primary removed, secondary still in-ear.
-        // Under new semantics worn = primary==0 && secondary==0, so (OUT,IN) is not-worn → pause.
+        // Ear(IN, IN) → Ear(OUT, IN): primary removed (count 2→1) → pause.
         FakeActions actions = new FakeActions();
         AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
 
@@ -82,7 +79,7 @@ public class AapBehaviorControllerTest {
 
     @Test
     public void bothIn_secondaryRemoved_pause() {
-        // Symmetric: Ear(IN, IN) → Ear(IN, OUT): secondary removed → not-worn → pause.
+        // Symmetric: Ear(IN, IN) → Ear(IN, OUT): secondary removed (count 2→1) → pause.
         FakeActions actions = new FakeActions();
         AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
 
@@ -118,7 +115,37 @@ public class AapBehaviorControllerTest {
     }
 
     // ---------------------------------------------------------------------------
-    // 3. Play on not-worn → worn (BOTH buds back in-ear)
+    // 2b. Single-pod use (hardware-found bug): wearing ONE pod and removing it must pause
+    // ---------------------------------------------------------------------------
+
+    @Test
+    public void singlePodWorn_removed_pause() {
+        // Ear(IN,OUT) → Ear(OUT,OUT): the only in-ear pod removed (count 1→0) → pause.
+        FakeActions actions = new FakeActions();
+        AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
+
+        ctrl.onEar(null, new AapCodec.Ear(IN, OUT));                          // baseline: one pod worn
+        ctrl.onEar(new AapCodec.Ear(IN, OUT), new AapCodec.Ear(OUT, OUT));    // that pod removed
+
+        assertEquals("removing the only worn pod must pause (count 1→0)", 1, actions.pauseCount);
+        assertEquals(0, actions.playCount);
+    }
+
+    @Test
+    public void singlePodWorn_otherInCase_removed_pause() {
+        // Ear(IN,CASE) → Ear(OUT,CASE): one pod worn, other in case; the worn pod removed → pause.
+        FakeActions actions = new FakeActions();
+        AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
+
+        ctrl.onEar(null, new AapCodec.Ear(IN, CASE));                         // baseline: one pod worn
+        ctrl.onEar(new AapCodec.Ear(IN, CASE), new AapCodec.Ear(OUT, CASE));  // that pod removed
+
+        assertEquals("removing the only worn pod must pause (count 1→0)", 1, actions.pauseCount);
+        assertEquals(0, actions.playCount);
+    }
+
+    // ---------------------------------------------------------------------------
+    // 3. Play on any pod insertion (in-ear count increases)
     // ---------------------------------------------------------------------------
 
     @Test
@@ -134,34 +161,33 @@ public class AapBehaviorControllerTest {
     }
 
     @Test
-    public void notWorn_oneIn_noAction() {
-        // Ear(OUT,OUT) → Ear(IN,OUT): only one bud inserted.
-        // Under new semantics worn = primary==0 && secondary==0, so (IN,OUT) is still not-worn → no action.
+    public void onePodInserted_play() {
+        // Ear(OUT,OUT) → Ear(IN,OUT): a pod inserted (count 0→1) → play (single-pod use resumes).
         FakeActions actions = new FakeActions();
         AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
 
         ctrl.onEar(null, new AapCodec.Ear(OUT, OUT));
-        ctrl.onEar(new AapCodec.Ear(OUT, OUT), new AapCodec.Ear(IN, OUT));    // one bud in — still not worn
+        ctrl.onEar(new AapCodec.Ear(OUT, OUT), new AapCodec.Ear(IN, OUT));    // one pod inserted
 
         assertEquals("no pause expected", 0, actions.pauseCount);
-        assertEquals("play must NOT fire — only one bud in-ear, not yet worn", 0, actions.playCount);
+        assertEquals("play must fire when a pod is inserted (count 0→1)", 1, actions.playCount);
     }
 
     @Test
     public void oneIn_bothIn_play() {
-        // Ear(IN,OUT) → Ear(IN,IN): second bud inserted — transitions from not-worn to worn → play.
+        // Ear(IN,OUT) → Ear(IN,IN): second bud inserted (count 1→2) → play.
         FakeActions actions = new FakeActions();
         AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
 
-        ctrl.onEar(null, new AapCodec.Ear(IN, OUT));                          // baseline: not worn (only one in)
-        ctrl.onEar(new AapCodec.Ear(IN, OUT), new AapCodec.Ear(IN, IN));      // second bud inserted → worn
+        ctrl.onEar(null, new AapCodec.Ear(IN, OUT));                          // baseline: one pod worn
+        ctrl.onEar(new AapCodec.Ear(IN, OUT), new AapCodec.Ear(IN, IN));      // second bud inserted
 
         assertEquals(0, actions.pauseCount);
-        assertEquals("play must fire when second bud inserted (not-worn → worn)", 1, actions.playCount);
+        assertEquals("play must fire when second bud inserted (count 1→2)", 1, actions.playCount);
     }
 
     // ---------------------------------------------------------------------------
-    // 4. No action on ear-unchanged frames (worn-state does not flip)
+    // 4. No action when the in-ear count is unchanged
     // ---------------------------------------------------------------------------
 
     @Test
@@ -177,14 +203,13 @@ public class AapBehaviorControllerTest {
     }
 
     @Test
-    public void positionalChange_bothNotWorn_noAction() {
-        // (IN, OUT) → (OUT, IN): neither configuration has BOTH buds in-ear.
-        // Under new semantics both states are not-worn → worn-state unchanged → no action.
+    public void positionalSwap_countUnchanged_noAction() {
+        // (IN, OUT) → (OUT, IN): the in-ear count stays 1 (a swap, not a removal/insertion) → no action.
         FakeActions actions = new FakeActions();
         AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
 
-        ctrl.onEar(null, new AapCodec.Ear(IN, OUT));                           // baseline: not worn (primary only)
-        ctrl.onEar(new AapCodec.Ear(IN, OUT), new AapCodec.Ear(OUT, IN));      // swap — still not worn (secondary only)
+        ctrl.onEar(null, new AapCodec.Ear(IN, OUT));                           // baseline: one pod worn
+        ctrl.onEar(new AapCodec.Ear(IN, OUT), new AapCodec.Ear(OUT, IN));      // swap — count still 1
 
         assertEquals(0, actions.pauseCount);
         assertEquals(0, actions.playCount);

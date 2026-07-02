@@ -6,10 +6,12 @@ import io.github.thelok1s.orchestra.AapCodec;
 
 /**
  * Pure-Java (no android imports) ear-detection behavior controller: fires {@link MediaActions#pause}
- * when the user transitions from worn to not-worn, and {@link MediaActions#play} on the reverse.
+ * when a pod is removed from the ear, and {@link MediaActions#play} when a pod is inserted.
  *
- * <p>Worn = BOTH buds in-ear ({@code primary == 0 && secondary == 0}). Removing even one bud
- * transitions to not-worn and triggers pause; playback resumes only when both are back in-ear.
+ * <p>Model: the in-ear COUNT (0..2 pods with value 0). Any decrease (a pod removed) pauses; any
+ * increase (a pod inserted) plays; an unchanged count (positional swaps, battery/noise-only frames)
+ * does nothing. The count model covers both-pods use AND single-pod use — a worn-boolean model
+ * ("worn = both in-ear") misses removing the only pod in single-pod use (hardware-found bug).
  *
  * <p>Debounce: a transition that arrives within {@link #DEBOUNCE_MS} ms of the last acted transition
  * is silently dropped, guarding against brief flaps (e.g. re-seating a bud).
@@ -59,25 +61,25 @@ public final class AapBehaviorController {
         if (now == null) return;
         if (prev == null) return; // first frame: establish baseline in caller's lastEar map; no action here
 
-        boolean prevWorn = isWorn(prev);
-        boolean nowWorn  = isWorn(now);
+        int p = inEarCount(prev);
+        int n = inEarCount(now);
 
-        if (prevWorn == nowWorn) return; // worn-state unchanged; ignore positional / noise-only changes
+        if (n == p) return; // count unchanged; ignore positional swaps / noise-only changes
 
         long nowMs = clock.getAsLong();
         if (lastActedAt >= 0 && (nowMs - lastActedAt) < DEBOUNCE_MS) return; // flap within window
 
         lastActedAt = nowMs;
 
-        if (!nowWorn) {
-            actions.pause();
+        if (n < p) {
+            actions.pause(); // a pod was removed
         } else {
-            actions.play();
+            actions.play();  // a pod was inserted
         }
     }
 
-    /** Worn = BOTH buds in-ear (value 0). Removing even one bud is not-worn. */
-    private static boolean isWorn(AapCodec.Ear e) {
-        return e.primary == 0 && e.secondary == 0;
+    /** Number of pods currently in-ear (value 0): 0, 1, or 2. */
+    private static int inEarCount(AapCodec.Ear e) {
+        return (e.primary == 0 ? 1 : 0) + (e.secondary == 0 ? 1 : 0);
     }
 }
