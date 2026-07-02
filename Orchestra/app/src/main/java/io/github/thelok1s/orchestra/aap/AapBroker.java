@@ -471,6 +471,7 @@ public final class AapBroker {
         }
 
         AapCodec.Ear e = now; // reuse for the broadcast below
+        Integer as = s.getAdaptiveStrength();
         Intent i = new Intent(ACTION_STATE).putExtra("mac", mac)
             .putExtra("anc", s.getAncMode() == null ? -1 : s.getAncMode())
             .putExtra("ca", s.getCaEnabled() == null ? -1 : (s.getCaEnabled() ? 1 : 0))
@@ -481,7 +482,8 @@ public final class AapBroker {
             .putExtra("bc",  b == null || b.caseLevel == null   ? -1 : b.caseLevel)
             .putExtra("bcs", b == null || b.caseStatus == null  ? -1 : b.caseStatus)
             .putExtra("ep",  e == null ? -1 : e.primary)
-            .putExtra("es",  e == null ? -1 : e.secondary);
+            .putExtra("es",  e == null ? -1 : e.secondary)
+            .putExtra("as",  as == null ? -1 : as);
         ctx.sendBroadcast(i); // plain; the app receiver is EXPORTED (different-signer asymmetry)
     }
 

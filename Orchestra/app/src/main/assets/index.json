@@ -1,6 +1,6 @@
 {
   "index_schema": 1,
-  "generated": "2026-07-02T10:16:43.000Z",
+  "generated": "2026-07-02T11:43:48.864Z",
   "repo": "orchestra-manifests",
   "manufacturers": [
     {
@@ -70,7 +70,7 @@
           "id": "airpods-pro-2",
           "name": "AirPods Pro 2",
           "schema_version": 4,
-          "revision": 6,
+          "revision": 7,
           "name_regex": "(?i)airpods pro",
           "match": {
             "name_regex": "(?i)airpods pro",
@@ -83,12 +83,12 @@
           ],
           "platforms": [],
           "counts": {
-            "capabilities": 6,
+            "capabilities": 7,
             "injectable": 4,
             "verified": 6
           },
           "url": "manifests/apple/airpods-pro-2.json",
-          "sha256": "b7a9c8ea26d4f8e71f559d7db63569f226675356634cd6d88ae69937f1594e88"
+          "sha256": "158377bda08aac57e215cb793b87af390eb5a9e9eab2111e151af4716080ad72"
         }
       ]
     }

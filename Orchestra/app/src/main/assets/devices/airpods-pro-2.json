@@ -1,6 +1,6 @@
 {
   "schema_version": 4,
-  "revision": 6,
+  "revision": 7,
   "revision_date": "2026-07-02",
   "id": "airpods-pro-2",
   "name": "AirPods Pro 2",
@@ -224,6 +224,29 @@
       },
       "_verified": true,
       "_verified_note": "Verified live on AirPods Pro 2 (USB-C), Pixel 8, 2026-07-02 (Plan 6 Task 5): speaking ducks media with a ~0.4s fade, restores with a ~1.2s fade after the buds' end-of-speech ramp; About-page toggle gates it."
+    },
+    {
+      "id": "adaptive_strength",
+      "type": "level",
+      "title": "Adaptive Audio strength",
+      "title_i18n": {
+        "ru": "Сила адаптивного звука"
+      },
+      "summary": "How much ambient noise Adaptive mode lets through (0 = quietest, 100 = most aware)",
+      "capability": "adaptive_strength",
+      "feature": "2E",
+      "min": 0,
+      "max": 100,
+      "step": 5,
+      "inject": false,
+      "ui": {
+        "setting_id": 1007,
+        "surfaces": [
+          "app"
+        ]
+      },
+      "_verified": false,
+      "_verified_note": "Pending hardware verification (Plan 7 Task 4)."
     }
   ]
 }

@@ -16,6 +16,7 @@ public final class AapState {
     private volatile Boolean caEnabled;      // null = unknown
     private volatile AapCodec.Battery battery;
     private volatile AapCodec.Ear ear;
+    private volatile Integer adaptiveStrength;   // 0..100, null = unknown
 
     private AapState() {}
 
@@ -34,6 +35,9 @@ public final class AapState {
 
     void setCaEnabled(boolean on) { this.caEnabled = on; }
     public Boolean getCaEnabled() { return caEnabled; }
+
+    void setAdaptiveStrength(int v) { this.adaptiveStrength = v; }
+    public Integer getAdaptiveStrength() { return adaptiveStrength; }
 
     void setBattery(AapCodec.Battery b) { this.battery = b; }
     public AapCodec.Battery getBattery() { return battery; }

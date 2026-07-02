@@ -89,5 +89,10 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
     testImplementation("junit:junit:4.13.2")
+    // Real org.json impl for unit tests: the android.jar used to compile main sources ships a
+    // body-stripped org.json that throws "not mocked" at test runtime (same mechanism as other
+    // android.* stubs). This real implementation shadows it on the unit-test runtime classpath so
+    // DeviceDef's JSONObject-based parsing is exercisable without Robolectric.
+    testImplementation("org.json:json:20240303")
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
 }

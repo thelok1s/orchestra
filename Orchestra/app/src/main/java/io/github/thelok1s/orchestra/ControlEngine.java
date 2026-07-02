@@ -12,6 +12,8 @@ public interface ControlEngine {
     boolean applyToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, boolean on);
     Boolean readToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f);
     String readInfo(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f);
+    boolean applyLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, int value);
+    Integer readLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f);
     void registerListener(String mac, String key, Runnable onChange);
     void unregisterListener(String mac, String key);
 
@@ -30,6 +32,12 @@ public interface ControlEngine {
         }
         @Override public String readInfo(BluetoothAdapter a, String mac, DeviceDef d, DeviceDef.Func f) {
             return null; // RFCOMM has no info/push functions today
+        }
+        @Override public boolean applyLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, int value) {
+            return false; // RFCOMM has no level/push channel today
+        }
+        @Override public Integer readLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return null;
         }
         @Override public void registerListener(String mac, String key, Runnable onChange) { /* no push channel */ }
         @Override public void unregisterListener(String mac, String key) { /* no-op */ }
@@ -73,6 +81,20 @@ public interface ControlEngine {
             if (f == null) return null;
             if ("battery".equals(f.id)) return AapState.forMac(mac).batterySummary();
             if ("ear_detection".equals(f.id)) return AapState.forMac(mac).earSummary();
+            return null;
+        }
+        @Override public boolean applyLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, int value) {
+            if (f == null || f.featureByte < 0) return false;
+            int v = Math.max(f.min, Math.min(f.max, value));
+            AacpClientBridge.sendFeature(mac, f.featureByte, v);
+            // Task 2 spike: 0x2E is NOT echoed on write (buds only report it at bring-up / on
+            // physical change), so the optimistic echo here is load-bearing, exactly like ANC/CA.
+            if ("adaptive_strength".equals(f.id)) AapState.forMac(mac).setAdaptiveStrength(v);
+            return true;
+        }
+        @Override public Integer readLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            if (f == null) return null;
+            if ("adaptive_strength".equals(f.id)) return AapState.forMac(mac).getAdaptiveStrength();
             return null;
         }
         @Override public void registerListener(String mac, String key, Runnable onChange) {

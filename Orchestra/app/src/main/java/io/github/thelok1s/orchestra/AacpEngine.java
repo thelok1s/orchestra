@@ -136,6 +136,9 @@ public final class AacpEngine {
                     Integer ca = AapCodec.parseFeature(buf, n, 0x28);
                     if (ca != null) { state.setCaEnabled(ca == 1); changed = true;
                         Log.i(TAG, "AACP notify CA=" + ca + " for " + s.mac); }
+                    Integer adapt = AapCodec.parseAdaptiveStrength(buf, n);
+                    if (adapt != null) { state.setAdaptiveStrength(adapt); changed = true;
+                        Log.i(TAG, "AACP notify adaptive strength=" + adapt + " for " + s.mac); }
                     AapCodec.Battery bat = AapCodec.parseBattery(buf, n);
                     if (bat != null) { state.setBattery(bat); changed = true;
                         Log.i(TAG, "AACP notify battery " + state.batterySummary() + " for " + s.mac);

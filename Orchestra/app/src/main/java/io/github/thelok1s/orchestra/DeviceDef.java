@@ -165,6 +165,9 @@ public final class DeviceDef {
         // ui
         final int settingId;
         final List<String> surfaces = new ArrayList<>();
+        // type:"level" only (e.g. AirPods adaptive-audio strength, AAP feature 0x2E)
+        int featureByte = -1;   // AAP feature byte for type:"level"; -1 if unset
+        int min = 0, max = 100, step = 1;
         // relations + injectability (assigned during parse)
         final List<String> conflictsWith = new ArrayList<>();
         final Map<String, String> requires = new LinkedHashMap<>();
@@ -195,10 +198,15 @@ public final class DeviceDef {
         boolean isInfo() { return "info".equals(type); }
         boolean isBattery() { return "battery".equals(type); }
         public boolean isInfoRow() { return isInfo() || isBattery(); } // read-only display rows
+        public boolean isLevel() { return "level".equals(type); }
 
         // ---- public accessors (package-private fields are invisible to the Kotlin `ui` subpackage) ----
         public String getId() { return id; }
         public String getTitle() { return title; }
+        public int getFeatureByte() { return featureByte; }
+        public int getMin() { return min; }
+        public int getMax() { return max; }
+        public int getStep() { return step; }
 
         int indexOfOption(String optId) {
             for (int i = 0; i < options.size(); i++) {
@@ -294,6 +302,12 @@ public final class DeviceDef {
                 platforms, functions);
     }
 
+    /** Test seam: exposes the private {@link #parseFunc} parse path to unit tests (no channels
+     *  needed for the fields exercised there), which can't otherwise reach it from src/test. */
+    static Func parseFuncForTest(JSONObject fn) throws Exception {
+        return parseFunc(fn, new LinkedHashMap<>(), null);
+    }
+
     private static Func parseFunc(JSONObject fn, Map<String, Channel> channels, String defaultChannel) throws Exception {
         String type = fn.optString("type", "multitoggle");
         JSONObject set = fn.optJSONObject("set");
@@ -319,6 +333,17 @@ public final class DeviceDef {
         Channel ch = channels.get(func.channelId);
         func.transport = ch != null ? ch.transport : null;
         if (fn.has("summary") || fn.has("summary_i18n")) func.summary = localized(fn, "summary", "");
+
+        if ("level".equals(type)) {
+            String feat = fn.optString("feature", null);
+            if (feat != null) {
+                try { func.featureByte = Integer.parseInt(feat, 16); }
+                catch (NumberFormatException e) { func.featureByte = -1; }
+            }
+            func.min = fn.optInt("min", 0);
+            func.max = fn.optInt("max", 100);
+            func.step = fn.optInt("step", 1);
+        }
 
         // options (multitoggle/list)
         JSONArray opts = fn.optJSONArray("options");
@@ -383,6 +408,10 @@ public final class DeviceDef {
             case "slider":
                 autoInjectable = false;
                 autoReason = "Slider unsupported on the About page — in-app only.";
+                break;
+            case "level":
+                autoInjectable = false;
+                autoReason = "No native slider control on the About page — in-app only.";
                 break;
             case "info":
             case "battery":

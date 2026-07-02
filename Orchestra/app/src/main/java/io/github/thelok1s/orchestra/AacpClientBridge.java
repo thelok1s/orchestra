@@ -84,6 +84,8 @@ public final class AacpClientBridge {
         }
         int ep = i.getIntExtra("ep", -1), es = i.getIntExtra("es", -1);
         if (ep >= 0 && es >= 0) s.setEar(new AapCodec.Ear(ep, es));
+        int as = i.getIntExtra("as", -1);
+        if (as >= 0) s.setAdaptiveStrength(as);
         // Refresh the device-settings provider + any Devices-tab UI subscribed via the app-side
         // keyed listener registry (the broker's own "broker" key lives in the SystemUI process).
         AacpEngine.fireListener(mac);
