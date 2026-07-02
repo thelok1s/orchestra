@@ -30,10 +30,11 @@ public class ConnectReceiver extends BroadcastReceiver {
                 if (adapter == null) { Log.w(DeviceDef.TAG, "receiver: no adapter"); return; }
 
                 if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(action)) {
-                    // AAP socket lifecycle is owned by the SystemUI broker now (single-owner socket,
-                    // Plan 6). The app process no longer opens/tears down the L2CAP socket here; the
-                    // broker will own ACL teardown in Task 5. RFCOMM keeps no persistent session, so
-                    // there is nothing to do on disconnect in the app process.
+                    // AAP socket lifecycle is owned by the SystemUI broker (single-owner socket,
+                    // Plan 6): AapBroker registers its own ACL_DISCONNECTED receiver and tears the
+                    // session down there (io.github.thelok1s.orchestra.aap.AapBroker). RFCOMM keeps
+                    // no persistent session, so there is nothing to do on disconnect in the app
+                    // process — this branch is an intentional no-op.
                 } else if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(action)) {
                     BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                     if (device == null) return;

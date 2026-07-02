@@ -43,6 +43,22 @@ public final class AacpClientBridge {
     private static void applyState(Intent i) {
         String mac = i.getStringExtra("mac");
         if (mac == null) return;
+        if (i.getBooleanExtra("cleared", false)) {
+            // Authoritative disconnect clear (broker's ACL_DISCONNECTED path). A fully -1 AAP_STATE
+            // is a no-op below (every field guard is `>= 0`), so a cleared session would otherwise
+            // leave this app-side cache frozen on its last-known values — the explicit `cleared`
+            // extra closes that gap.
+            AapState.clear(mac);
+            try {
+                Context ctx = appCtx != null ? appCtx : App.context();
+                if (ctx != null) {
+                    ctx.sendBroadcast(new Intent("io.github.thelok1s.orchestra.BATTERY_CHANGED")
+                            .putExtra("mac", mac));
+                }
+            } catch (Throwable t) { Log.w(DeviceDef.TAG, "AacpClientBridge: cleared battery broadcast failed: " + t); }
+            AacpEngine.fireListener(mac);
+            return;
+        }
         AapState s = AapState.forMac(mac);
         int anc = i.getIntExtra("anc", -1);
         if (anc >= 0) s.setAncMode(anc);

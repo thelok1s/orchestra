@@ -34,7 +34,11 @@ import io.github.thelok1s.orchestra.AapState;
  *     engine's per-device change listener.
  *
  * NOTE: {@code App.context()} is null in the SystemUI process, so broker code always uses the
- * SystemUI Context passed to {@link #start}. ACL lifecycle ownership arrives in Task 5.
+ * SystemUI Context passed to {@link #start}. The broker also owns the AAP ACL lifecycle (mirrors
+ * the pre-broker app-side fix, commit {@code 1ba33bc}, now re-homed here since the socket lives in
+ * this process): on {@code ACTION_ACL_DISCONNECTED} it tears the session down and publishes an
+ * explicit cleared state; on {@code ACTION_ACL_CONNECTED} it forces a fresh session so a remote
+ * L2CAP drop can never leave a stale/half-open socket in play.
  */
 public final class AapBroker {
     private static final String TAG = "Orchestra";
@@ -77,6 +81,37 @@ public final class AapBroker {
         };
         ctx.registerReceiver(cmd, new IntentFilter(ACTION_CMD), Context.RECEIVER_EXPORTED);
         Log.i(TAG, "AapBroker started (AAP_CMD receiver registered)");
+
+        BroadcastReceiver acl = new BroadcastReceiver() {
+            @Override public void onReceive(Context c, Intent i) {
+                try {
+                    String action = i.getAction();
+                    BluetoothDevice device = i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                    if (action == null || device == null || !isAap(device)) return;
+                    final String mac = device.getAddress().toUpperCase(Locale.ROOT);
+                    final String act = action;
+                    new Thread(() -> {
+                        try {
+                            if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(act)) {
+                                onAclDisconnected(ctx, mac);
+                            } else if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(act)) {
+                                onAclConnected(ctx, mac);
+                            }
+                        } catch (Throwable t) {
+                            Log.w(TAG, "AapBroker ACL handling failed for " + mac + ": " + t);
+                        }
+                    }, "aap-acl").start();
+                } catch (Throwable t) {
+                    Log.w(TAG, "AapBroker ACL receiver dispatch failed: " + t);
+                }
+            }
+        };
+        IntentFilter aclFilter = new IntentFilter();
+        aclFilter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
+        aclFilter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
+        ctx.registerReceiver(acl, aclFilter, Context.RECEIVER_EXPORTED);
+        Log.i(TAG, "AapBroker started (ACL receiver registered)");
+
         connectKnown(ctx);
     }
 
@@ -85,10 +120,54 @@ public final class AapBroker {
         if (a == null || a.getBondedDevices() == null) return;
         for (BluetoothDevice d : a.getBondedDevices()) {
             if (!isAap(d)) continue;
-            final String mac = d.getAddress().toUpperCase(Locale.ROOT);
-            AacpEngine.registerListener(mac, "broker", () -> publishState(ctx, mac));
-            new Thread(() -> AacpEngine.ensureConnected(a, mac), "aap-conn").start();
+            registerAndConnect(ctx, a, d.getAddress().toUpperCase(Locale.ROOT));
         }
+    }
+
+    /**
+     * Registers the broker's engine listener (idempotent — {@link AacpEngine#registerListener}
+     * overwrites by key) and kicks off {@link AacpEngine#ensureConnected} on a background thread.
+     * Shared by boot-time {@link #connectKnown} and the {@code ACTION_ACL_CONNECTED} path so
+     * connect-time registration isn't duplicated.
+     */
+    private static void registerAndConnect(Context ctx, BluetoothAdapter a, String mac) {
+        AacpEngine.registerListener(mac, "broker", () -> publishState(ctx, mac));
+        new Thread(() -> AacpEngine.ensureConnected(a, mac), "aap-conn").start();
+    }
+
+    /**
+     * Mirrors {@code 1ba33bc}'s ACL_DISCONNECTED handling, now in the broker: tear the (possibly
+     * half-open) session down so the next connect can't reuse it, reset the auto-pause baseline so
+     * the next session's first ear frame is treated as a fresh baseline rather than a phantom
+     * transition (which would otherwise fire a spurious pause/play), and tell the app-side bridge
+     * to clear its cache via an explicit {@code cleared} extra (see {@link #publishState} — its own
+     * all- -1 payload from {@code AacpEngine.disconnect}'s {@code fireListener} is a no-op app-side
+     * by design; this explicit broadcast is the authoritative clear).
+     */
+    private static void onAclDisconnected(Context ctx, String mac) {
+        AacpEngine.disconnect(mac);
+        lastEar.remove(mac);
+        publishCleared(ctx, mac);
+    }
+
+    /**
+     * Mirrors {@code 1ba33bc}'s ACL_CONNECTED handling: force a fresh session on every connect
+     * (drop then reconnect) so a remote drop can never leave stale battery/ear/ANC behind, and
+     * (re)register the "broker" listener via {@link #registerAndConnect}.
+     */
+    private static void onAclConnected(Context ctx, String mac) {
+        BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
+        if (a == null) return;
+        AacpEngine.disconnect(mac);
+        registerAndConnect(ctx, a, mac);
+    }
+
+    /** Explicit disconnect-clear publish for {@link io.github.thelok1s.orchestra.AacpClientBridge}:
+     *  a fully -1 {@code AAP_STATE} is indistinguishable from "nothing new to report" app-side, so
+     *  the clear is carried by a dedicated {@code cleared} boolean extra instead. */
+    private static void publishCleared(Context ctx, String mac) {
+        Intent i = new Intent(ACTION_STATE).putExtra("mac", mac).putExtra("cleared", true);
+        ctx.sendBroadcast(i);
     }
 
     static void handleCommand(String mac, String op, int value) {
