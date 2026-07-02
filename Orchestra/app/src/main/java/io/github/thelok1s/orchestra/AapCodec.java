@@ -70,6 +70,11 @@ public final class AapCodec {
         return parseFeature(frame, len, 0x0D);
     }
 
+    /** Adaptive-audio noise strength notification (feature 0x2E), value 0..100; null otherwise. */
+    static Integer parseAdaptiveStrength(byte[] frame, int len) {
+        return parseFeature(frame, len, 0x2E);
+    }
+
     /** Parsed battery levels/statuses; any missing component is null. */
     public static final class Battery {
         public final Integer left, right, caseLevel;

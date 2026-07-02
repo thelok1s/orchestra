@@ -100,4 +100,15 @@ public final class AacpClientBridge {
         ctx.sendBroadcast(i); // plain; the broker's receiver is EXPORTED (no permission)
         Log.i(DeviceDef.TAG, "AAP_CMD -> " + mac + " " + op + "=" + value);
     }
+
+    /** Send a generic AAP feature-set command to the broker (op="feature"): feature byte + value. */
+    public static void sendFeature(String mac, int feature, int value) {
+        Context ctx = appCtx != null ? appCtx : App.context();
+        if (ctx == null) { Log.w(DeviceDef.TAG, "AacpClientBridge.sendFeature: no context"); return; }
+        Intent i = new Intent(AapBroker.ACTION_CMD)
+                .putExtra("mac", mac).putExtra("op", "feature")
+                .putExtra("feature", feature).putExtra("value", value);
+        ctx.sendBroadcast(i); // plain; the broker's receiver is EXPORTED (no permission)
+        Log.i(DeviceDef.TAG, "AAP_CMD -> " + mac + " feature=" + Integer.toHexString(feature) + " value=" + value);
+    }
 }

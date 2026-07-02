@@ -249,6 +249,31 @@ public final class AacpEngine {
         }
     }
 
+    /** Send an arbitrary single-byte AAP feature frame (04 00 04 00 09 00 <feature> <value> ..).
+     *  Used by manifest-driven "level" controls (e.g. adaptive strength 0x2E). Connects + brings
+     *  up if needed, mirrors {@link #setAncByte}'s session/lock/write pattern. */
+    public static boolean setFeature(BluetoothAdapter adapter, String mac, int feature, int value) {
+        ensureConnected(adapter, mac);
+        Session s = SESSIONS.get(mac.toUpperCase(Locale.ROOT));
+        if (s == null) return false;
+        synchronized (s.lock) {
+            if (s.out == null) return false;
+            try {
+                byte[] frame = AapCodec.featureSet(feature, value);
+                Log.i(TAG, "AACP TX set feature " + Integer.toHexString(feature) + "=" + value
+                        + ": " + HexUtil.hex(frame));
+                Logbook.add("AACP set feature " + Integer.toHexString(feature) + "=" + value);
+                s.out.write(frame);
+                s.out.flush();
+                return true;
+            } catch (Exception e) {
+                Log.w(TAG, "AACP set feature failed: " + e);
+                close(s);
+                return false;
+            }
+        }
+    }
+
     /** The cached raw noise-control mode byte (1..4), or null if unknown. */
     static Integer getAncByte(String mac) {
         return AapState.forMac(mac).getAncMode();

@@ -33,9 +33,10 @@ import io.github.thelok1s.orchestra.AapState;
  * hook, which calls {@link #start(Context)} once a SystemUI Context is available.
  *
  * Wiring:
- *   • app -> broker: {@code AAP_CMD} (mac, op ∈ {anc,ca,autopause,caduck}, value) drives the socket
- *     off the caller's thread, serialized on a single-thread executor ({@link #CMD_EXECUTOR}); the
- *     socket ops ("anc"/"ca") additionally gate the broadcast-supplied MAC on bonded+AAP before
+ *   • app -> broker: {@code AAP_CMD} (mac, op ∈ {anc,ca,feature,autopause,caduck}, value[, feature])
+ *     drives the socket off the caller's thread, serialized on a single-thread executor
+ *     ({@link #CMD_EXECUTOR}); the socket ops ("anc"/"ca"/"feature") additionally gate the
+ *     broadcast-supplied MAC on bonded+AAP before
  *     touching {@link AacpEngine} (see {@link #handleCommand}) — the receiver is EXPORTED with no
  *     permission (see the manifest), so any zero-permission app can fire it.
  *   • broker -> app: {@code AAP_STATE} (mac + anc/ca/battery/ear, -1 = null) published from the
@@ -98,8 +99,9 @@ public final class AapBroker {
                 String mac = i.getStringExtra("mac");
                 String op = i.getStringExtra("op");
                 int value = i.getIntExtra("value", -1);
+                int feature = i.getIntExtra("feature", -1);
                 if (mac == null || op == null) return;
-                CMD_EXECUTOR.execute(() -> handleCommand(mac, op, value));
+                CMD_EXECUTOR.execute(() -> handleCommand(mac, op, value, feature));
             }
         };
         ctx.registerReceiver(cmd, new IntentFilter(ACTION_CMD), Context.RECEIVER_EXPORTED);
@@ -226,7 +228,7 @@ public final class AapBroker {
         ctx.sendBroadcast(i);
     }
 
-    static void handleCommand(String mac, String op, int value) {
+    static void handleCommand(String mac, String op, int value, int feature) {
         // autopause/caduck are LOCAL cache updates (the app process persisted the enable in
         // DeviceStore and is just pushing it here); they never touch the AAP socket, so handle
         // them before the adapter lookup.
@@ -263,6 +265,13 @@ public final class AapBroker {
         }
         if ("anc".equals(op)) AacpEngine.setAncByte(a, mac, value);
         else if ("ca".equals(op)) AacpEngine.setCa(a, mac, value == 1);
+        else if ("feature".equals(op)) {
+            if (feature < 0 || feature > 0xFF || value < 0 || value > 0xFF) {
+                Log.w(TAG, "handleCommand feature: out-of-range feature/value, dropping");
+                return;
+            }
+            AacpEngine.setFeature(a, mac, feature, value);
+        }
     }
 
     /**
