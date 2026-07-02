@@ -17,6 +17,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import io.github.thelok1s.orchestra.AacpEngine;
@@ -30,7 +33,11 @@ import io.github.thelok1s.orchestra.AapState;
  * hook, which calls {@link #start(Context)} once a SystemUI Context is available.
  *
  * Wiring:
- *   • app -> broker: {@code AAP_CMD} (mac, op ∈ {anc,ca}, value) drives the socket off-thread.
+ *   • app -> broker: {@code AAP_CMD} (mac, op ∈ {anc,ca,autopause,caduck}, value) drives the socket
+ *     off the caller's thread, serialized on a single-thread executor ({@link #CMD_EXECUTOR}); the
+ *     socket ops ("anc"/"ca") additionally gate the broadcast-supplied MAC on bonded+AAP before
+ *     touching {@link AacpEngine} (see {@link #handleCommand}) — the receiver is EXPORTED with no
+ *     permission (see the manifest), so any zero-permission app can fire it.
  *   • broker -> app: {@code AAP_STATE} (mac + anc/ca/battery/ear, -1 = null) published from the
  *     engine's per-device change listener.
  *
@@ -50,6 +57,20 @@ public final class AapBroker {
             UUID.fromString("74ec2172-0bad-4d01-8f77-997b2be0722a");
 
     private static volatile boolean started = false;
+
+    /**
+     * Serializes AAP_CMD intake. The receiver is EXPORTED with no permission (SystemUI is a
+     * different signer and cannot hold the app's signature permission — see the manifest), so any
+     * zero-permission app can fire this broadcast. A single-thread executor bounds the damage: no
+     * more thread-storming SystemUI, and concurrent socket ops against the same/different MACs are
+     * serialized rather than racing. Daemon thread so it never blocks SystemUI shutdown.
+     */
+    private static final ExecutorService CMD_EXECUTOR = Executors.newSingleThreadExecutor(
+            (ThreadFactory) r -> {
+                Thread t = new Thread(r, "aap-cmd");
+                t.setDaemon(true);
+                return t;
+            });
 
     /** Last-known ear state per MAC; used to detect worn-state transitions. */
     private static final Map<String, AapCodec.Ear> lastEar = new ConcurrentHashMap<>();
@@ -78,7 +99,7 @@ public final class AapBroker {
                 String op = i.getStringExtra("op");
                 int value = i.getIntExtra("value", -1);
                 if (mac == null || op == null) return;
-                new Thread(() -> handleCommand(mac, op, value), "aap-cmd").start();
+                CMD_EXECUTOR.execute(() -> handleCommand(mac, op, value));
             }
         };
         ctx.registerReceiver(cmd, new IntentFilter(ACTION_CMD), Context.RECEIVER_EXPORTED);
@@ -219,8 +240,27 @@ public final class AapBroker {
             Log.i(TAG, "ca_duck cache <- " + mac + "=" + (value == 1));
             return;
         }
+        // Socket ops ("anc"/"ca") drive the L2CAP connection, so gate the broadcast-supplied MAC
+        // before touching it: bonded + a known-AAP device only. The AAP_CMD receiver is EXPORTED
+        // (see the manifest) with no permission, so any zero-permission app can supply an arbitrary
+        // MAC here — this keeps a hostile broadcast from driving connect attempts at random devices.
         BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
         if (a == null) return;
+        BluetoothDevice device;
+        try {
+            device = a.getRemoteDevice(mac);
+        } catch (IllegalArgumentException e) {
+            Log.w(TAG, "handleCommand: invalid MAC " + mac + ": " + e);
+            return;
+        }
+        if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
+            Log.w(TAG, "handleCommand: " + mac + " not bonded, dropping op=" + op);
+            return;
+        }
+        if (!isAap(device)) {
+            Log.w(TAG, "handleCommand: " + mac + " not an AAP device, dropping op=" + op);
+            return;
+        }
         if ("anc".equals(op)) AacpEngine.setAncByte(a, mac, value);
         else if ("ca".equals(op)) AacpEngine.setCa(a, mac, value == 1);
     }

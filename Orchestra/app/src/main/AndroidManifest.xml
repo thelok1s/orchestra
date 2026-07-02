@@ -100,8 +100,10 @@
             </intent-filter>
         </receiver>
 
-        <!-- Debug: send an arbitrary RFCOMM cmd+payload to probe control sequences. -->
-        <receiver android:name=".DebugSendReceiver" android:exported="true">
+        <!-- Debug: send an arbitrary RFCOMM cmd+payload to probe control sequences. Not exported —
+             root/adb shell can still reach it via `am broadcast -n` with the component named, so
+             the debug workflow is unaffected. -->
+        <receiver android:name=".DebugSendReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="io.github.thelok1s.orchestra.DEBUG_SEND" />
                 <action android:name="io.github.thelok1s.orchestra.AACP_TEST" />
