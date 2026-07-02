@@ -33,12 +33,18 @@ import io.github.thelok1s.orchestra.AapState;
  * hook, which calls {@link #start(Context)} once a SystemUI Context is available.
  *
  * Wiring:
- *   • app -> broker: {@code AAP_CMD} (mac, op ∈ {anc,ca,feature,autopause,caduck}, value[, feature])
- *     drives the socket off the caller's thread, serialized on a single-thread executor
- *     ({@link #CMD_EXECUTOR}); the socket ops ("anc"/"ca"/"feature") additionally gate the
+ *   • app -> broker: {@code AAP_CMD} (mac, op ∈ {anc,ca,feature,autopause,caduck,rename}, value[,
+ *     feature] | name) drives the socket off the caller's thread, serialized on a single-thread
+ *     executor ({@link #CMD_EXECUTOR}); the socket ops ("anc"/"ca"/"feature") additionally gate the
  *     broadcast-supplied MAC on bonded+AAP before
  *     touching {@link AacpEngine} (see {@link #handleCommand}) — the receiver is EXPORTED with no
- *     permission (see the manifest), so any zero-permission app can fire it.
+ *     permission (see the manifest), so any zero-permission app can fire it. {@code rename} carries
+ *     a string {@code name} extra instead of the int {@code value} extra the other ops use, and is
+ *     routed to {@link #handleRename} rather than {@link #handleCommand} so the latter's all-int
+ *     signature stays clean; it is handled in this (SystemUI) process — not the app process —
+ *     because {@code BluetoothDevice.setAlias} needs {@code BLUETOOTH_PRIVILEGED}, which is
+ *     signature|privileged and the app does not hold at runtime. It uses the same bonded+AAP gate
+ *     as the socket ops since this receiver is exported with no permission.
  *   • broker -> app: {@code AAP_STATE} (mac + anc/ca/battery/ear, -1 = null) published from the
  *     engine's per-device change listener.
  *
@@ -100,7 +106,12 @@ public final class AapBroker {
                 String op = i.getStringExtra("op");
                 int value = i.getIntExtra("value", -1);
                 int feature = i.getIntExtra("feature", -1);
+                String name = i.getStringExtra("name");
                 if (mac == null || op == null) return;
+                if ("rename".equals(op)) {
+                    CMD_EXECUTOR.execute(() -> handleRename(mac, name));
+                    return;
+                }
                 CMD_EXECUTOR.execute(() -> handleCommand(mac, op, value, feature));
             }
         };
@@ -271,6 +282,45 @@ public final class AapBroker {
                 return;
             }
             AacpEngine.setFeature(a, mac, feature, value);
+        }
+    }
+
+    /**
+     * Rename is a LOCAL op — no AAP socket, no {@link AacpEngine} call — so it's kept separate
+     * from {@link #handleCommand} rather than overloading that method's all-int signature with a
+     * string. Runs on {@link #CMD_EXECUTOR} in the SystemUI process, which holds
+     * {@code BLUETOOTH_PRIVILEGED} (the app process does not), so {@code setAlias} succeeds here
+     * where it throws {@code SecurityException} app-side. Uses the same bonded+AAP gate as
+     * {@link #handleCommand} since the {@code AAP_CMD} receiver is EXPORTED with no permission —
+     * any zero-permission app can supply an arbitrary MAC + name here.
+     */
+    static void handleRename(String mac, String name) {
+        try {
+            if (name == null || name.trim().isEmpty()) {
+                Log.w(TAG, "handleRename: empty name for " + mac + ", dropping");
+                return;
+            }
+            BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
+            if (a == null) return;
+            BluetoothDevice device;
+            try {
+                device = a.getRemoteDevice(mac);
+            } catch (IllegalArgumentException e) {
+                Log.w(TAG, "handleRename: invalid MAC " + mac + ": " + e);
+                return;
+            }
+            if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
+                Log.w(TAG, "handleRename: " + mac + " not bonded, dropping");
+                return;
+            }
+            if (!isAap(device)) {
+                Log.w(TAG, "handleRename: " + mac + " not an AAP device, dropping");
+                return;
+            }
+            int status = device.setAlias(name.trim());
+            Log.i(TAG, "handleRename: " + mac + " -> \"" + name.trim() + "\" status=" + status);
+        } catch (Throwable t) {
+            Log.w(TAG, "handleRename failed for " + mac + ": " + t);
         }
     }
 

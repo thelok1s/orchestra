@@ -113,4 +113,20 @@ public final class AacpClientBridge {
         ctx.sendBroadcast(i); // plain; the broker's receiver is EXPORTED (no permission)
         Log.i(DeviceDef.TAG, "AAP_CMD -> " + mac + " feature=" + Integer.toHexString(feature) + " value=" + value);
     }
+
+    /**
+     * Send a rename command to the broker (op="rename"): a string "name" extra rather than the
+     * int "value" extra the other ops use. The app process cannot call
+     * {@code BluetoothDevice.setAlias} itself — that needs {@code BLUETOOTH_PRIVILEGED}, which is
+     * signature|privileged and held only by the SystemUI/Settings hook processes, not the app —
+     * so rename is routed through the broker the same way anc/ca/feature are.
+     */
+    public static void sendRename(String mac, String name) {
+        Context ctx = appCtx != null ? appCtx : App.context();
+        if (ctx == null) { Log.w(DeviceDef.TAG, "AacpClientBridge.sendRename: no context"); return; }
+        Intent i = new Intent(AapBroker.ACTION_CMD)
+                .putExtra("mac", mac).putExtra("op", "rename").putExtra("name", name);
+        ctx.sendBroadcast(i); // plain; the broker's receiver is EXPORTED (no permission)
+        Log.i(DeviceDef.TAG, "AAP_CMD -> " + mac + " rename=" + name);
+    }
 }

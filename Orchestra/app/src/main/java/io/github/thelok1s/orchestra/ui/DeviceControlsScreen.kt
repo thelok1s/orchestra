@@ -94,11 +94,15 @@ private fun DeviceControlRow(mac: String, f: DeviceDef.Func, liveTick: Int) {
             }
         }
         f.isText -> {
-            // Local rename: android.bluetooth.BluetoothDevice.getAlias()/setAlias(String) are
-            // PUBLIC API since SDK 30 (minSdk here is 31), so no HiddenApiBypass/reflection is
-            // needed — unlike @SystemApi members elsewhere in this app. setAlias returns a
-            // BluetoothStatusCodes int rather than throwing on most failure paths, so both a
-            // status check and a SecurityException catch are needed to fully cover it.
+            // Rename is routed through the SystemUI broker (AacpClientBridge.sendRename ->
+            // AapBroker.handleRename): the app process does NOT hold BLUETOOTH_PRIVILEGED at
+            // runtime (it's signature|privileged, held only by the SystemUI/Settings hook
+            // processes), so a direct BluetoothDevice.setAlias() call here throws
+            // SecurityException on hardware. Reading the current alias for the field's initial
+            // value only needs BLUETOOTH_CONNECT, which the app does hold, so that read stays
+            // local. The broker applies the rename asynchronously with no ack path back to the
+            // app, so the button is optimistic: it fires the broadcast and reports "Renamed"
+            // immediately rather than waiting on (or claiming) success/failure.
             val adapter = remember { android.bluetooth.BluetoothAdapter.getDefaultAdapter() }
             var text by remember(mac) {
                 mutableStateOf(
@@ -108,23 +112,16 @@ private fun DeviceControlRow(mac: String, f: DeviceDef.Func, liveTick: Int) {
                     } catch (e: SecurityException) { "" }
                 )
             }
-            var error by remember(mac) { mutableStateOf<String?>(null) }
+            var status by remember(mac) { mutableStateOf<String?>(null) }
             Column {
                 OutlinedTextField(
-                    value = text, onValueChange = { text = it }, singleLine = true,
-                    label = { Text(f.title) }, isError = error != null,
-                    supportingText = { error?.let { Text(it) } }
+                    value = text, onValueChange = { text = it; status = null }, singleLine = true,
+                    label = { Text(f.title) }, isError = false,
+                    supportingText = { status?.let { Text(it) } }
                 )
                 Button(onClick = {
-                    error = try {
-                        val status = adapter?.getRemoteDevice(mac)?.setAlias(text.trim())
-                        if (status == null || status == android.bluetooth.BluetoothStatusCodes.SUCCESS) null
-                        else "Rename failed (code $status)"
-                    } catch (e: SecurityException) {
-                        "No permission to rename (needs privileged access)"
-                    } catch (e: Throwable) {
-                        "Rename failed: ${e.message}"
-                    }
+                    io.github.thelok1s.orchestra.AacpClientBridge.sendRename(mac, text.trim())
+                    status = "Renamed"
                 }) { Text("Rename") }
             }
         }
