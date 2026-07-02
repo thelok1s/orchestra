@@ -438,9 +438,14 @@ With the socket living in SystemUI, the **app process becomes a pure broadcast c
 
 Two plain broadcasts connect the app and the broker (`AapBroker`, `io.github.thelok1s.orchestra.aap`):
 
-- **`AAP_CMD`** (app → broker): `mac`, `op`, `value`. `op` ∈ `{anc, ca, autopause, caduck}` — `anc`/`ca`
-  drive the L2CAP socket (set noise-control mode / Conversational Awareness); `autopause`/`caduck` are
-  local enable-flag pushes for the background behaviors (§13d) and touch no socket.
+- **`AAP_CMD`** (app → broker): `mac`, `op`, `value`. `op` ∈ `{anc, ca, feature, autopause, caduck, rename}`
+  — `anc`/`ca` drive the L2CAP socket (set noise-control mode / Conversational Awareness); `feature` is a
+  generic single-byte AAP feature-set (carries `feature` + `value` extras, both a hex feature id and its
+  value, e.g. AirPods Pro 2's Adaptive Audio strength) routed through the same socket path as `anc`/`ca`;
+  `autopause`/`caduck` are local enable-flag pushes for the background behaviors (§13d) and touch no
+  socket; `rename` (string `name` extra) calls `BluetoothDevice.setAlias` in the SystemUI process — the
+  one op that exists purely because the **app process lacks `BLUETOOTH_PRIVILEGED` at runtime** while
+  SystemUI holds it, not because of any socket/protocol need.
 - **`AAP_STATE`** (broker → app): a full state snapshot per change — ANC mode, CA enabled, per-bud +
   case battery level/status, ear-detection primary/secondary — with **`-1` meaning "null"** field by
   field, plus a dedicated **`cleared`** boolean extra set on ACL disconnect (a broadcast that's *all*
@@ -489,5 +494,15 @@ that side is low-stakes.
 `AAP_CMD` is the sharper edge: any zero-permission app on the device can fire it. Worst case, a local app
 can toggle ANC/CA/behaviors on a bonded AirPods device, or force the client to show `cleared`/stale state.
 It cannot address arbitrary Bluetooth devices or thread-storm SystemUI: the intake is **serialized on a
-single-thread executor**, and the socket ops (`anc`/`ca`) are gated on `getBondState() == BOND_BONDED`
-and the existing `isAap(device)` UUID check before anything reaches `AacpEngine` — see `AapBroker.handleCommand`.
+single-thread executor**, and the socket ops (`anc`/`ca`/`feature`) are gated on `getBondState() ==
+BOND_BONDED` and the existing `isAap(device)` UUID check before anything reaches `AacpEngine` — see
+`AapBroker.handleCommand`.
+
+The generic `feature` op widens this a little further: instead of only the two hardcoded ANC/CA writes, a
+local app can now write **any** single-byte AAP feature to a bonded, AAP-recognized device (still subject
+to the same bonded+AAP gate and single-thread serialization — it cannot reach unbonded devices or race
+itself). This is still bounded to devices already paired with AAP's UUID, but it's a strictly bigger
+attack surface than the fixed `anc`/`ca` writes it sits alongside. If that's ever judged too broad, the
+mitigation is a **manifest-declared feature-byte whitelist** — only forward `feature` writes whose byte
+appears in the connected device's manifest, rejecting anything else at `handleCommand` before it reaches
+`AacpEngine.setFeature`. Not implemented today.

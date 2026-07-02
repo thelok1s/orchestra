@@ -78,7 +78,7 @@ Currently shipped + hardware-verified:
 |---|---|---|
 | **Soundcore Space One Pro** | A3062 | 4-mode ANC (Noise Cancelling / Off / Adaptive / Transparency) + Dolby Audio, Surrounding sounds, Side tone, Multipoint, Low-battery prompt switches |
 | **Soundcore Liberty 4 Pro** | A3957 | 3-mode ANC (Noise Cancelling / Off / Transparency) + native TWS battery (L / Case / R) |
-| **AirPods Pro 2** | A3048 | 4-mode Noise Control (Off / ANC / Transparency / Adaptive), Conversational Awareness toggle, live per-bud + case battery on the native header, ear detection (in-app), background auto-pause on ear removal, CA volume-duck (gradual fade) |
+| **AirPods Pro 2** | A3048 | 4-mode Noise Control (Off / ANC / Transparency / Adaptive), Conversational Awareness toggle, live per-bud + case battery on the native header, ear detection (in-app), background auto-pause on ear removal, CA volume-duck (gradual fade), Adaptive Audio strength (in-app 0–100 slider, active while Noise Control = Adaptive), Rename (in-app, sets the local Bluetooth alias) |
 
 Both render correctly on the Android 17 **About-device** page. Each manifest also catalogues further
 controls that ship **disabled** until their command bytes are hardware-confirmed (`_verified: false`).
@@ -162,8 +162,11 @@ The app uses that repo at runtime:
 
 - **Volume-panel ANC tile is broken on Android 17** (the About-device page is unaffected). Google
   reworked that System-UI chain; the fix is tracked for the modern-libxposed engine rework.
-- **No in-app screen yet** for `slider` / `list` / composite controls (EQ bands, manual ANC level…) —
-  they show as *in-app only*.
+- A per-device **in-app control screen** (tap an AirPods device card in the Devices tab) renders
+  `slider`/`level` and `text` functions that can't be injected into the native About page — e.g.
+  AirPods Pro 2's Adaptive Audio strength slider and Rename field, plus live battery/ear rows. A
+  control shipped `_verified: false` still needs the Devices-tab opt-in before it appears here.
+  `list` / composite controls (EQ bands…) aren't covered by this screen yet.
 - Only **2 devices** are fully verified; several per-device opcodes remain `_verified: false`.
 - The module currently uses the **legacy Xposed API**; a dual legacy + **modern libxposed** engine
   (works across `<100` and `≥101` framework API levels) is on the roadmap.

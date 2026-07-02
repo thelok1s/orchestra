@@ -53,6 +53,9 @@ Each function is one capability / user-facing control.
 | `capability` | OpenSCQ30 module name this came from (provenance) |
 | `options[]` | for `multitoggle`/`list`: `{id,label,icon,label_i18n?}` |
 | `range` | for `slider`: `{min,max,step,unit?}` |
+| `feature` | for `level` (AAP only): hex feature byte (e.g. `"2E"`) written/read via the generic single-byte AAP feature frame |
+| `min` / `max` / `step` | for `level`: flat bounds/step (distinct from `slider`'s nested `range`) |
+| `local` | `true` when the control has no `set`/`read` protocol frame at all — handled entirely on-device (e.g. `rename` via `BluetoothDevice.setAlias`); app-surface only |
 | `set` | how to write the value (see below) |
 | `read` | how to read current value (see below) |
 | `inject` | `"auto"` (default) \| `true` \| `false` — see injectability |
@@ -70,6 +73,8 @@ Each function is one capability / user-facing control.
 | `toggle` | `ActionSwitchPreference` (Switch) | ✅ |
 | `list` | — (no native list pref in the configurable fragment) | ❌ auto-false (`no-native-list`) → in-app screen |
 | `slider` | — (no slider in the configurable fragment) | ❌ auto-false (`no-native-slider`) → in-app screen |
+| `level` | — (no native slider in the configurable fragment) | ❌ auto-false (`no-native-slider`), app-surface only — a 0–max scalar control (e.g. AirPods Adaptive Audio strength) driven by a generic AAP feature byte instead of a full protocol command |
+| `text` | — (no native text input in the configurable fragment) | ❌ auto-false, app-surface only — a local free-text control (e.g. rename); typically `local:true` (no `set`/`read` protocol frame) |
 | `info` | `FooterPreference` / read-only row | display-only (`inject:false`, not a control) |
 
 **`inject: "auto"`** applies the rules above. Set `inject:false` (with `inject_reason`) to force
