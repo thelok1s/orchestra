@@ -207,6 +207,7 @@ public final class DeviceDef {
         boolean isBattery() { return "battery".equals(type); }
         public boolean isInfoRow() { return isInfo() || isBattery(); } // read-only display rows
         public boolean isLevel() { return "level".equals(type); }
+        public boolean isText() { return "text".equals(type); }
 
         // ---- public accessors (package-private fields are invisible to the Kotlin `ui` subpackage) ----
         public String getId() { return id; }
@@ -420,6 +421,10 @@ public final class DeviceDef {
             case "level":
                 autoInjectable = false;
                 autoReason = "No native slider control on the About page — in-app only.";
+                break;
+            case "text":
+                autoInjectable = false;
+                autoReason = "No native text input on the About page — in-app only.";
                 break;
             case "info":
             case "battery":

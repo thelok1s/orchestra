@@ -1,6 +1,6 @@
 {
   "schema_version": 4,
-  "revision": 8,
+  "revision": 9,
   "revision_date": "2026-07-02",
   "id": "airpods-pro-2",
   "name": "AirPods Pro 2",
@@ -247,6 +247,27 @@
       },
       "_verified": true,
       "_verified_note": "Verified live on AirPods Pro 2 (USB-C), Pixel 8, 2026-07-02 (Plan 7 Task 4): 0-100 slider audibly changes Adaptive-mode ambient passthrough, routed through the SystemUI broker, gated to ANC=Adaptive, value persists on reopen."
+    },
+    {
+      "id": "rename",
+      "type": "text",
+      "title": "Rename",
+      "title_i18n": {
+        "ru": "Переименовать"
+      },
+      "summary": "Set a local name for this device (shown across the system)",
+      "capability": "rename",
+      "local": true,
+      "_doc": "LOCAL: sets the Android Bluetooth alias (BluetoothDevice.setAlias); no AAP frame.",
+      "inject": false,
+      "ui": {
+        "setting_id": 1008,
+        "surfaces": [
+          "app"
+        ]
+      },
+      "_verified": true,
+      "_verified_note": "Local alias rename; no protocol dependency."
     }
   ]
 }

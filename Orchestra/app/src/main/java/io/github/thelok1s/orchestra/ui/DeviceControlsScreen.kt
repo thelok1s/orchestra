@@ -93,6 +93,41 @@ private fun DeviceControlRow(mac: String, f: DeviceDef.Func, liveTick: Int) {
                 }
             }
         }
+        f.isText -> {
+            // Local rename: android.bluetooth.BluetoothDevice.getAlias()/setAlias(String) are
+            // PUBLIC API since SDK 30 (minSdk here is 31), so no HiddenApiBypass/reflection is
+            // needed — unlike @SystemApi members elsewhere in this app. setAlias returns a
+            // BluetoothStatusCodes int rather than throwing on most failure paths, so both a
+            // status check and a SecurityException catch are needed to fully cover it.
+            val adapter = remember { android.bluetooth.BluetoothAdapter.getDefaultAdapter() }
+            var text by remember(mac) {
+                mutableStateOf(
+                    try {
+                        val dev = adapter?.getRemoteDevice(mac)
+                        dev?.alias ?: dev?.name ?: ""
+                    } catch (e: SecurityException) { "" }
+                )
+            }
+            var error by remember(mac) { mutableStateOf<String?>(null) }
+            Column {
+                OutlinedTextField(
+                    value = text, onValueChange = { text = it }, singleLine = true,
+                    label = { Text(f.title) }, isError = error != null,
+                    supportingText = { error?.let { Text(it) } }
+                )
+                Button(onClick = {
+                    error = try {
+                        val status = adapter?.getRemoteDevice(mac)?.setAlias(text.trim())
+                        if (status == null || status == android.bluetooth.BluetoothStatusCodes.SUCCESS) null
+                        else "Rename failed (code $status)"
+                    } catch (e: SecurityException) {
+                        "No permission to rename (needs privileged access)"
+                    } catch (e: Throwable) {
+                        "Rename failed: ${e.message}"
+                    }
+                }) { Text("Rename") }
+            }
+        }
         else -> ListItem(
             headlineContent = { Text(f.title) },
             supportingContent = { Text("Coming soon") })
