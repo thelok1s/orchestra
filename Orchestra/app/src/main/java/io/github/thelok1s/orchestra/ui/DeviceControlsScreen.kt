@@ -120,8 +120,12 @@ private fun DeviceControlRow(mac: String, f: DeviceDef.Func, liveTick: Int) {
                     supportingText = { status?.let { Text(it) } }
                 )
                 Button(onClick = {
-                    io.github.thelok1s.orchestra.AacpClientBridge.sendRename(mac, text.trim())
-                    status = "Renamed"
+                    if (text.isBlank()) {
+                        status = "Name can't be empty"
+                    } else {
+                        io.github.thelok1s.orchestra.AacpClientBridge.sendRename(mac, text.trim())
+                        status = "Renamed"
+                    }
                 }) { Text("Rename") }
             }
         }
