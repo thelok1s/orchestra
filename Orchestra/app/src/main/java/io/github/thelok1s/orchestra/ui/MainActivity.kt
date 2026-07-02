@@ -145,13 +145,12 @@ fun OrchestraApp(refreshKey: Int) {
     }
     MaterialExpressiveTheme(colorScheme = colorScheme) {
         var openDeviceMac by remember { mutableStateOf<String?>(null) }
+        var dest by rememberSaveable { mutableStateOf(Dest.STATUS) }
+        var debugOpen by rememberSaveable { mutableStateOf(false) }
         val opened = openDeviceMac
         if (opened != null) {
             DeviceControlsScreen(opened, onBack = { openDeviceMac = null })
         } else {
-            var dest by rememberSaveable { mutableStateOf(Dest.STATUS) }
-            var debugOpen by rememberSaveable { mutableStateOf(false) }
-
             Box(Modifier.fillMaxSize()) {
                 Scaffold(
                     topBar = { TopAppBar(title = { Text("Orchestra") }) },

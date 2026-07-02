@@ -16,6 +16,14 @@ import io.github.thelok1s.orchestra.DeviceDef
 @Composable
 fun DeviceControlsScreen(mac: String, onBack: () -> Unit) {
     val def = remember(mac) { DeviceDef.forAddress(mac) }
+    // Live battery/ear rows: the app process never owns the AAP socket (the SystemUI broker
+    // does), so just subscribe to the app-side listener registry the same way HookedDeviceCard
+    // does — AacpEngine fires it on every AAP notification, we bump liveTick, rows recompose.
+    var liveTick by remember(mac) { mutableStateOf(0) }
+    DisposableEffect(mac) {
+        io.github.thelok1s.orchestra.AacpEngine.registerListener(mac, "controls-screen") { liveTick++ }
+        onDispose { io.github.thelok1s.orchestra.AacpEngine.unregisterListener(mac, "controls-screen") }
+    }
     Scaffold(topBar = {
         TopAppBar(
             title = { Text(def?.name ?: "Device") },
@@ -33,22 +41,24 @@ fun DeviceControlsScreen(mac: String, onBack: () -> Unit) {
             if (funcs.isEmpty()) {
                 Text("No in-app controls for this device.")
             } else {
-                for (f in funcs) DeviceControlRow(mac, f)
+                for (f in funcs) DeviceControlRow(mac, f, liveTick)
             }
         }
     }
 }
 
 @Composable
-private fun DeviceControlRow(mac: String, f: DeviceDef.Func) {
+private fun DeviceControlRow(mac: String, f: DeviceDef.Func, liveTick: Int) {
     // Read-only rows for now; Task 4 adds the level slider, Task 5 the rename field.
     when {
         f.isInfoRow -> {
-            val summary = when (f.id) {
-                "battery" -> AapState.forMac(mac).batterySummary()
-                "ear_detection" -> AapState.forMac(mac).earSummary()
-                else -> null
-            } ?: "—"
+            val summary = remember(mac, f.id, liveTick) {
+                when (f.id) {
+                    "battery" -> AapState.forMac(mac).batterySummary()
+                    "ear_detection" -> AapState.forMac(mac).earSummary()
+                    else -> null
+                } ?: "—"
+            }
             ListItem(headlineContent = { Text(f.title) }, supportingContent = { Text(summary) })
         }
         else -> ListItem(
