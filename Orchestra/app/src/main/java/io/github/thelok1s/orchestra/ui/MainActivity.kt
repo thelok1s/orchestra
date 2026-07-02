@@ -48,6 +48,7 @@ import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Extension
@@ -143,67 +144,73 @@ fun OrchestraApp(refreshKey: Int) {
         withContext(Dispatchers.IO) { ManifestUpdater.refreshIndexIfStale() }
     }
     MaterialExpressiveTheme(colorScheme = colorScheme) {
-        var dest by rememberSaveable { mutableStateOf(Dest.STATUS) }
-        var debugOpen by rememberSaveable { mutableStateOf(false) }
+        var openDeviceMac by remember { mutableStateOf<String?>(null) }
+        val opened = openDeviceMac
+        if (opened != null) {
+            DeviceControlsScreen(opened, onBack = { openDeviceMac = null })
+        } else {
+            var dest by rememberSaveable { mutableStateOf(Dest.STATUS) }
+            var debugOpen by rememberSaveable { mutableStateOf(false) }
 
-        Box(Modifier.fillMaxSize()) {
-            Scaffold(
-                topBar = { TopAppBar(title = { Text("Orchestra") }) },
-                bottomBar = {
-                    NavigationBar {
-                        Dest.entries.forEach { d ->
-                            NavigationBarItem(
-                                selected = dest == d,
-                                onClick = { dest = d },
-                                icon = { Icon(d.icon, contentDescription = d.label) },
-                                label = { Text(d.label) },
-                            )
+            Box(Modifier.fillMaxSize()) {
+                Scaffold(
+                    topBar = { TopAppBar(title = { Text("Orchestra") }) },
+                    bottomBar = {
+                        NavigationBar {
+                            Dest.entries.forEach { d ->
+                                NavigationBarItem(
+                                    selected = dest == d,
+                                    onClick = { dest = d },
+                                    icon = { Icon(d.icon, contentDescription = d.label) },
+                                    label = { Text(d.label) },
+                                )
+                            }
+                        }
+                    },
+                ) { padding ->
+                    AnimatedContent(
+                        targetState = dest,
+                        transitionSpec = {
+                            (fadeIn(tween(220)) + slideInVertically { it / 14 })
+                                .togetherWith(fadeOut(tween(120)))
+                        },
+                        label = "tab",
+                        modifier = Modifier.padding(padding)
+                    ) { d ->
+                        when (d) {
+                            Dest.STATUS -> StatusScreen(refreshKey)
+                            Dest.DEVICES -> DevicesScreen(refreshKey, onOpenDevice = { openDeviceMac = it })
+                            Dest.SETTINGS -> SettingsScreen(onOpenDebug = { debugOpen = true })
                         }
                     }
-                },
-            ) { padding ->
-                AnimatedContent(
-                    targetState = dest,
-                    transitionSpec = {
-                        (fadeIn(tween(220)) + slideInVertically { it / 14 })
-                            .togetherWith(fadeOut(tween(120)))
-                    },
-                    label = "tab",
-                    modifier = Modifier.padding(padding)
-                ) { d ->
-                    when (d) {
-                        Dest.STATUS -> StatusScreen(refreshKey)
-                        Dest.DEVICES -> DevicesScreen(refreshKey)
-                        Dest.SETTINGS -> SettingsScreen(onOpenDebug = { debugOpen = true })
-                    }
                 }
-            }
 
-            // Debug as an overlay screen, dismissed by the predictive back gesture (animated).
-            AnimatedVisibility(
-                visible = debugOpen,
-                enter = slideInHorizontally(tween(260)) { it } + fadeIn(tween(260)),
-                exit = slideOutHorizontally(tween(220)) { it } + fadeOut(tween(220)),
-            ) {
-                var backProgress by remember { mutableStateOf(0f) }
-                PredictiveBackHandler(enabled = debugOpen) { flow ->
-                    try {
-                        flow.collect { e -> backProgress = e.progress }
-                        debugOpen = false; backProgress = 0f
-                    } catch (c: CancellationException) {
-                        backProgress = 0f
-                    }
-                }
-                Surface(
-                    Modifier.fillMaxSize().graphicsLayer {
-                        val s = 1f - 0.08f * backProgress
-                        scaleX = s; scaleY = s
-                        translationX = size.width * 0.14f * backProgress
-                        alpha = 1f - 0.25f * backProgress
-                    },
-                    color = MaterialTheme.colorScheme.surface,
+                // Debug as an overlay screen, dismissed by the predictive back gesture (animated).
+                AnimatedVisibility(
+                    visible = debugOpen,
+                    enter = slideInHorizontally(tween(260)) { it } + fadeIn(tween(260)),
+                    exit = slideOutHorizontally(tween(220)) { it } + fadeOut(tween(220)),
                 ) {
-                    DebugScreen(refreshKey, onBack = { debugOpen = false })
+                    var backProgress by remember { mutableStateOf(0f) }
+                    PredictiveBackHandler(enabled = debugOpen) { flow ->
+                        try {
+                            flow.collect { e -> backProgress = e.progress }
+                            debugOpen = false; backProgress = 0f
+                        } catch (c: CancellationException) {
+                            backProgress = 0f
+                        }
+                    }
+                    Surface(
+                        Modifier.fillMaxSize().graphicsLayer {
+                            val s = 1f - 0.08f * backProgress
+                            scaleX = s; scaleY = s
+                            translationX = size.width * 0.14f * backProgress
+                            alpha = 1f - 0.25f * backProgress
+                        },
+                        color = MaterialTheme.colorScheme.surface,
+                    ) {
+                        DebugScreen(refreshKey, onBack = { debugOpen = false })
+                    }
                 }
             }
         }
@@ -476,7 +483,7 @@ private fun StatusCard(
 // ---------- Devices ----------
 
 @Composable
-private fun DevicesScreen(refreshKey: Int) {
+private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
     val context = LocalContext.current
     var tick by remember { mutableStateOf(0) }
     val supported = remember(refreshKey, tick) { bondedSupported(context) }
@@ -510,7 +517,8 @@ private fun DevicesScreen(refreshKey: Int) {
                     d, refreshKey, tick, showStatuses, showUnverified, showInApp, showMac,
                     onUnhook = { DeviceStore.setEnabled(d.mac, d.deviceId, false); tick++ },
                     onChange = { tick++ },
-                    onManifestUpdated = { tick++ })
+                    onManifestUpdated = { tick++ },
+                    onOpen = { onOpenDevice(d.mac) })
             }
         }
         if (available.isNotEmpty()) {
@@ -616,6 +624,7 @@ private fun HookedDeviceCard(
     onUnhook: () -> Unit,
     onChange: () -> Unit,
     onManifestUpdated: () -> Unit = {},
+    onOpen: () -> Unit = {},
 ) {
     // Eligibility: update-available + sideload badge. Computed off the main thread.
     val eligibility by produceState<DeviceEligibility?>(initialValue = null, d, tick) {
@@ -758,6 +767,12 @@ private fun HookedDeviceCard(
                     }
                 }
                 Switch(checked = true, onCheckedChange = { onUnhook() })
+                // Only AAP (AirPods-protocol) devices have a dedicated in-app control screen today.
+                if (isAacpDevice) {
+                    IconButton(onClick = onOpen) {
+                        Icon(Icons.Filled.ChevronRight, contentDescription = "Open device controls")
+                    }
+                }
                 Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                     contentDescription = "Expand")
             }

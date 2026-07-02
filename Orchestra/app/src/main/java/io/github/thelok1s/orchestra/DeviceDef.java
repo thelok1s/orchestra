@@ -23,7 +23,7 @@ import java.util.Map;
  * {@link #injectedFuncs} (implemented + user-enabled + conflict-resolved); the UI lists everything
  * and greys out the rest with {@link Func#injectReason}.
  */
-final class DeviceDef {
+public final class DeviceDef {
     static final String TAG = "Orchestra";
 
     static final int SUPPORTED_SCHEMA_MIN = 3;
@@ -78,6 +78,9 @@ final class DeviceDef {
         this.soundMode = anc != null ? anc : first;
     }
 
+    /** Device display name (public: read from the Kotlin {@code ui} subpackage). */
+    public String getName() { return name; }
+
     /** Look up a function by its device-setting id (for routing updates). */
     Func funcBySettingId(int settingId) {
         for (Func f : functions) if (f.settingId == settingId) return f;
@@ -120,6 +123,13 @@ final class DeviceDef {
         return false;
     }
 
+    /** Functions this device declares for the in-app surface (ui.surfaces contains "app"). */
+    public java.util.List<Func> appFunctions() {
+        java.util.List<Func> out = new java.util.ArrayList<>();
+        for (Func f : functions) if (f.surfaces.contains("app")) out.add(f);
+        return out;
+    }
+
     /** True if an earlier-declared, enabled capability conflicts with {@code f} (so f yields). */
     boolean conflictSuppressed(String address, Func f) {
         for (Func other : functions) {
@@ -131,7 +141,7 @@ final class DeviceDef {
     }
 
     /** A single capability + its UI mapping + injectability metadata. */
-    static final class Func {
+    public static final class Func {
         final String id;
         final String type;                                  // multitoggle|toggle|list|slider|info
         final String title;                                 // already localized
@@ -184,7 +194,11 @@ final class DeviceDef {
         boolean isToggle() { return "toggle".equals(type); }
         boolean isInfo() { return "info".equals(type); }
         boolean isBattery() { return "battery".equals(type); }
-        boolean isInfoRow() { return isInfo() || isBattery(); } // read-only display rows
+        public boolean isInfoRow() { return isInfo() || isBattery(); } // read-only display rows
+
+        // ---- public accessors (package-private fields are invisible to the Kotlin `ui` subpackage) ----
+        public String getId() { return id; }
+        public String getTitle() { return title; }
 
         int indexOfOption(String optId) {
             for (int i = 0; i < options.size(); i++) {
@@ -213,7 +227,7 @@ final class DeviceDef {
     // ---- loading ----
 
     /** Returns the def for an enabled device address, or null if not enabled / unknown. */
-    static DeviceDef forAddress(String address) {
+    public static DeviceDef forAddress(String address) {
         if (address == null) return null;
         return loadById(DeviceStore.enabledId(address));
     }

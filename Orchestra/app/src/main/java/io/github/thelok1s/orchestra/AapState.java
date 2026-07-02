@@ -38,7 +38,7 @@ public final class AapState {
     void setBattery(AapCodec.Battery b) { this.battery = b; }
     public AapCodec.Battery getBattery() { return battery; }
     /** "L 100% · R 99% · Case 17%" over known components, or null if none known. */
-    String batterySummary() {
+    public String batterySummary() {
         AapCodec.Battery b = battery;
         if (b == null) return null;
         StringBuilder sb = new StringBuilder();
