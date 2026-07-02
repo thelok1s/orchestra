@@ -112,6 +112,15 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
     public void handleLoadPackage(LoadPackageParam lp) {
         switch (lp.packageName) {
             case "com.android.systemui":
+                // LSPosed fires handleLoadPackage for EVERY process of the package — including
+                // on-demand helpers like com.android.systemui:screenshot. A broker started in a
+                // helper would fight the main broker for the single-owner AAP socket (observed
+                // live: taking a screenshot spawned a second broker whose connect storm starved
+                // battery/ear from the real session). Main process only.
+                if (!"com.android.systemui".equals(lp.processName)) {
+                    XposedBridge.log("[MX] skipping SystemUI helper process " + lp.processName);
+                    return;
+                }
                 XposedBridge.log("[MX] loaded into SystemUI");
                 hookPixelDevice(lp.classLoader);
                 forceAncAvailable(lp.classLoader);
@@ -119,6 +128,12 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                 startBroker();
                 break;
             case "com.android.settings":
+                // Same helper-process guard as SystemUI (the BT settings UI + metadata writer live
+                // in the main process; a duplicate battery receiver in a helper is useless churn).
+                if (!"com.android.settings".equals(lp.processName)) {
+                    XposedBridge.log("[MX] skipping Settings helper process " + lp.processName);
+                    return;
+                }
                 XposedBridge.log("[MX] loaded into Settings (metadata writer)");
                 hookSettingsMetadataWriter(lp.classLoader);
                 break;
