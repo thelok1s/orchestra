@@ -1,6 +1,6 @@
 {
   "schema_version": 4,
-  "revision": 5,
+  "revision": 6,
   "revision_date": "2026-07-02",
   "id": "airpods-pro-2",
   "name": "AirPods Pro 2",
@@ -222,8 +222,8 @@
           "device_details"
         ]
       },
-      "_verified": false,
-      "_verified_note": "Pending hardware verification (Plan 6 Task 5)."
+      "_verified": true,
+      "_verified_note": "Verified live on AirPods Pro 2 (USB-C), Pixel 8, 2026-07-02 (Plan 6 Task 5): speaking ducks media with a ~0.4s fade, restores with a ~1.2s fade after the buds' end-of-speech ramp; About-page toggle gates it."
     }
   ]
 }
