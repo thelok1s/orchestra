@@ -5,8 +5,8 @@
 <h1 align="center">Orchestra</h1>
 
 <p align="center">
-  Native Soundcore (Anker) headphone controls inside Pixel / Android system UI —
-  no vendor app, driven by per-device manifests over an RFCOMM control channel.
+  Native headphone controls inside Pixel / Android system UI — no vendor app, driven by
+  per-device manifests over RFCOMM (Soundcore) or AAP/L2CAP (AirPods).
 </p>
 
 ---
@@ -15,20 +15,21 @@
 
 **Orchestra** is a single APK that is *both* a launchable Compose app **and** an LSPosed module. It
 makes the stock Android Bluetooth **"About device"** page render native controls — ANC / noise-control
-modes, feature switches, and battery — for Soundcore headphones, by impersonating the device-settings
-integration that Pixel Buds use. There is no Soundcore app in the loop: Orchestra talks to the
-headphones directly over their RFCOMM protocol, and every device is described by a small **JSON
-manifest** so adding a model is data, not code.
+modes, feature switches, and battery — for Soundcore and AirPods headphones, by impersonating the
+device-settings integration that Pixel Buds use. There is no vendor app in the loop: Orchestra talks to
+the headphones directly over their native control protocol (RFCOMM for Soundcore, Apple's Accessory
+Protocol over L2CAP for AirPods), and every device is described by a small **JSON manifest** so adding
+a model is data, not code.
 
 The same controls that Pixel Buds get natively (segmented ANC control, feature toggles, per-bud
-battery) appear for your Soundcore device, in the system Settings UI, themed with Material You.
+battery) appear for your headphones, in the system Settings UI, themed with Material You.
 
 ## Requirements
 
 - A device where **root + LSPosed** (or a compatible Xposed framework) is available — developed on a
   **Pixel** running **Android 16 / 17**.
 - The **LSPosed** (or "Vector"/modern Xposed) manager.
-- A supported Soundcore device (see below) — or write a manifest for your own.
+- A supported headphone (see below) — or write a manifest for your own.
 
 > Orchestra needs LSPosed because it writes a privileged Bluetooth metadata tag and hooks the system
 > UI. It does **not** require a separate KSU/Magisk module.
@@ -77,11 +78,17 @@ Currently shipped + hardware-verified:
 |---|---|---|
 | **Soundcore Space One Pro** | A3062 | 4-mode ANC (Noise Cancelling / Off / Adaptive / Transparency) + Dolby Audio, Surrounding sounds, Side tone, Multipoint, Low-battery prompt switches |
 | **Soundcore Liberty 4 Pro** | A3957 | 3-mode ANC (Noise Cancelling / Off / Transparency) + native TWS battery (L / Case / R) |
+| **AirPods Pro 2** | A3048 | 4-mode Noise Control (Off / ANC / Transparency / Adaptive), Conversational Awareness toggle, live per-bud + case battery on the native header, ear detection (in-app), background auto-pause on ear removal, CA volume-duck (gradual fade) |
 
 Both render correctly on the Android 17 **About-device** page. Each manifest also catalogues further
-controls that ship **disabled** until their command bytes are hardware-confirmed (`_verified: false`);
-you can opt in per control in the app's **Devices** tab. The live, authoritative device list is the
-catalog index in the manifests repo.
+controls that ship **disabled** until their command bytes are hardware-confirmed (`_verified: false`).
+A control shipped `_verified: false` must be opted in **per device** in the app's **Devices** tab
+before its About-page toggle appears; verified controls inject automatically. The live, authoritative
+device list is the catalog index in the manifests repo.
+
+AirPods Pro 2 still needs **root + LSPosed** like every other device here — it is not a special case,
+despite talking a different (Apple AAP) protocol under the hood. Its manifest ships in the app's
+**bundled seed** at revision 6.
 
 ## How it works
 
@@ -92,8 +99,10 @@ Buds use):
   the system at Orchestra's **config provider service**.
 - **Provider services** (`ConfigProviderService` / `SettingProviderService`) return the About-page
   layout and serve/handle each control, with optimistic UI and a persistent control socket.
-- The **`RfcommEngine`** frames and exchanges the Soundcore protocol (`soundcore_v1`) with the
-  headphones; an engine registry abstracts the transport so future GATT/AACP backends can plug in.
+- A transport-abstraction registry (`ControlEngine`) selects the per-device engine: **`RfcommEngine`**
+  frames and exchanges the Soundcore protocol (`soundcore_v1`) over RFCOMM; **`AacpEngine`** speaks
+  Apple's Accessory Protocol over an L2CAP socket (PSM 4097) for AirPods. `ble_gatt` is the remaining
+  reserved slot.
 - An **LSPosed hook in System UI** gates the volume-panel ANC tile (see *Known limitations*).
 
 Deeper design lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -103,8 +112,8 @@ Deeper design lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 Every supported device is one **JSON manifest** (schema **v3**). A manifest declares:
 
 - **`match`** — how to recognise the device (name regex / advertised UUIDs / model prefix).
-- **`channels`** — named transport + protocol bundles (`rfcomm` today; `ble_gatt` / `aacp` are reserved
-  slots) with a `default_channel`.
+- **`channels`** — named transport + protocol bundles (`rfcomm` and `aacp` are live; `ble_gatt` is a
+  reserved slot) with a `default_channel`.
 - **`functions[]`** — the full reverse-engineered capability catalogue. Each function has a UI `type`
   (`multitoggle` / `toggle` / `list` / `slider` / `info`), its set/read command bytes, conflicts /
   dependencies, an injectability verdict, and a `_verified` flag (only hardware-confirmed controls

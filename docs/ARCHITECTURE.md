@@ -6,6 +6,8 @@
 > into a **single app + LSPosed module with NO KSU/root** (metadata key 25 is written from a
 > privileged Settings-process hook). For the current design start at **`../INDEX.md`**; the goal,
 > the device-settings mechanism, the Pixel-UUID gate, and the RFCOMM protocol below remain accurate.
+> AirPods support added a second, live transport (AAP over L2CAP) and a SystemUI-resident connection
+> broker — see **§13** at the bottom of this document.
 
 **Goal.** Make non‑Pixel Bluetooth headphones (Soundcore) controllable from the **native Pixel system UI** —
 both the Bluetooth **"About device"** page in Settings *and* the **system volume panel** — exactly as if
@@ -394,3 +396,98 @@ Net surfaces delivered: **About‑device page = full inline Noise Control** (pri
 via the Pixel‑spoof (UUID/LSPosed) path documented above, which is a fragile, deep‑RE option, not the shipped default.
 
 See also the memory notes: `volume-panel-anc-pixel-uuid-gate`, `maestro-devicesettings-arch`, `soundcore-proxy-project`.
+
+---
+
+## 13. AirPods / AAP transport, and the SystemUI connection-broker inversion (2026-07)
+
+Everything above predates AirPods support and describes the RFCOMM-only, no-hook shipped design. This
+section documents what changed to add a second transport (Apple's Accessory Protocol) and, with it, a
+structural inversion of who owns the control socket.
+
+### 13a. AAP is a live transport, not a reserved slot
+
+`aacp` (`AacpEngine`) is a fully implemented `ControlEngine`, on the same footing as `RfcommEngine`:
+it opens an **L2CAP socket on PSM 4097** to the AAP service UUID (`74ec2172-0bad-4d01-8f77-997b2be0722a`),
+frames requests/replies as `aap_v1`, and — unlike RFCOMM's request/response model — treats AAP as a
+**push protocol**: the accessory unsolicitedly notifies battery, ear-detection, and speech-detection
+state, so the engine parses inbound notifications into a shared `AapState` rather than only reacting to
+reads. `ble_gatt` remains the only unimplemented/reserved channel type.
+
+### 13b. Why the socket moved into SystemUI
+
+Every earlier layer in this document (config/setting provider services, `RfcommEngine`) runs the control
+socket **in the app process**, on demand, per bind. That model doesn't fit AAP: AirPods need a
+**long-lived, single-owner** connection to receive push notifications (battery/ear/speech) even when no
+Settings page is open, and Android routinely kills or restricts the app process in the background. So for
+AAP, ownership of the socket moved to **`com.android.systemui`** — a process that's effectively always
+alive — via an LSPosed hook that calls `AapBroker.start(Context)` once SystemUI has finished loading.
+
+The hook is gated on `LoadPackageParam.processName`: LSPosed's `handleLoadPackage` fires once per
+*process* of a package, including on-demand helper processes such as `com.android.systemui:screenshot`.
+A broker started in a helper process fights the main-process broker for the single L2CAP socket — this
+was observed live (a screenshot spawned a second broker whose connect storm starved battery/ear from the
+real session) — so the hook only proceeds when `processName.equals("com.android.systemui")` (and
+symmetrically `"com.android.settings"` for the metadata-writer hook); every other process is skipped with
+a log line.
+
+With the socket living in SystemUI, the **app process becomes a pure broadcast client**
+(`AacpClientBridge`) — it never touches `AacpEngine` or the L2CAP socket directly for AAP devices.
+
+### 13c. Wiring: AAP_CMD / AAP_STATE
+
+Two plain broadcasts connect the app and the broker (`AapBroker`, `io.github.thelok1s.orchestra.aap`):
+
+- **`AAP_CMD`** (app → broker): `mac`, `op`, `value`. `op` ∈ `{anc, ca, autopause, caduck}` — `anc`/`ca`
+  drive the L2CAP socket (set noise-control mode / Conversational Awareness); `autopause`/`caduck` are
+  local enable-flag pushes for the background behaviors (§13d) and touch no socket.
+- **`AAP_STATE`** (broker → app): a full state snapshot per change — ANC mode, CA enabled, per-bud +
+  case battery level/status, ear-detection primary/secondary — with **`-1` meaning "null"** field by
+  field, plus a dedicated **`cleared`** boolean extra set on ACL disconnect (a broadcast that's *all*
+  `-1` is indistinguishable from "nothing new to report" app-side, so the clear is carried explicitly
+  rather than inferred).
+
+### 13d. The broker owns the ACL reconnect lifecycle
+
+Connecting the AAP channel immediately on `ACTION_ACL_CONNECTED` (~60 ms after ACL comes up) yields a
+**partial bring-up dump**: the accessory acks ANC/CA but never sends battery/ear for the life of that
+session, because its own state engines are still initializing while the classic Bluetooth profiles come
+up. The broker compensates: on every `ACL_CONNECTED` it forces a **fresh session** (tear down any
+existing one, never reuse a half-open socket), waits **2.5 s**, connects, then **verifies** the bring-up
+dump actually delivered a battery reading within a grace window — retrying up to **3 times** if not. This
+whole sequence is **serialized per MAC** (a `synchronized` per-device lock), because `ACL_CONNECTED` can
+fire more than once per physical connection (BR/EDR and LE transports each raise it) and two concurrent
+retry loops would tear down each other's fresh sessions.
+
+### 13e. Background behaviors run in the broker, gated per-device
+
+Two behaviors run entirely inside the SystemUI process, off the AAP push stream:
+
+- **Auto-pause / resume** — driven by ear-detection transitions (in-ear pod count going to/from zero);
+  dispatches media pause/play keys via `AudioManager`.
+- **CA volume-duck** — driven by the speech-detection opcode (`0x4B`) the accessory pushes during
+  Conversational Awareness; ramps `STREAM_MUSIC` down then back up (an Apple-like fade, not a jump).
+
+Both are gated on a **per-device, per-behavior enable flag** that mirrors a toggle on the app's
+About-page (`auto_pause`, `ca_duck`). Because the broker lives in a different process/uid than the app
+(and can't read the app's SharedPreferences directly), the enable state is synchronized two ways: the app
+**pushes** it over `AAP_CMD` (`op=autopause`/`caduck`) whenever the toggle changes, and the broker falls
+back to a **pull** query against the app's `StateProvider` (`content://io.github.thelok1s.orchestra.state/behavior/<MAC>/<id>`)
+on a cache miss — e.g. right after a SystemUI restart, before any push has arrived. A pull failure (app
+process dead and can't be started, provider not yet exported, etc.) is treated as disabled, matching the
+app-side default-off.
+
+### 13f. The trade-off: unprotected broadcasts
+
+`AAP_CMD` and `AAP_STATE` are **intentionally unprotected** — registered with `RECEIVER_EXPORTED` and no
+`broadcastPermission`. This is a hard constraint, not an oversight: SystemUI and the Orchestra app are
+signed by **different signers** (platform vs. the app's own key), so SystemUI cannot hold the app's
+signature-protected permissions, and a permission gate on `AAP_STATE` (app → broker's payload) would
+simply reject the broker's own broadcasts. The `AAP_STATE` payload is non-sensitive device telemetry, so
+that side is low-stakes.
+
+`AAP_CMD` is the sharper edge: any zero-permission app on the device can fire it. Worst case, a local app
+can toggle ANC/CA/behaviors on a bonded AirPods device, or force the client to show `cleared`/stale state.
+It cannot address arbitrary Bluetooth devices or thread-storm SystemUI: the intake is **serialized on a
+single-thread executor**, and the socket ops (`anc`/`ca`) are gated on `getBondState() == BOND_BONDED`
+and the existing `isAap(device)` UUID check before anything reaches `AacpEngine` — see `AapBroker.handleCommand`.
