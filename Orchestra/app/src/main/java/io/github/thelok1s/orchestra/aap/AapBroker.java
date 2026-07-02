@@ -17,6 +17,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import io.github.thelok1s.orchestra.AacpEngine;
 import io.github.thelok1s.orchestra.AapCodec;
@@ -270,16 +271,28 @@ public final class AapBroker {
 
     /**
      * {@link AapBehaviorController.MediaActions} impl (SystemUI process, holds audio privileges):
-     * pause/play dispatch media keys (Task 2); duck/restore (Task 5) directly move
-     * {@code STREAM_MUSIC} — no UI (flags 0) — remembering the pre-duck volume per instance so
-     * {@code restore()} can put it back. One instance lives per MAC (see {@link #controllerFor}),
-     * so the remembered volume is naturally per-device.
+     * pause/play dispatch media keys (Task 2); duck/restore (Task 5) move {@code STREAM_MUSIC} —
+     * no UI (flags 0) — remembering the pre-duck volume per instance so {@code restore()} can put
+     * it back. One instance lives per MAC (see {@link #controllerFor}), so the remembered volume
+     * is naturally per-device.
+     *
+     * <p>duck()/restore() run on the per-device AAP reader thread and must never sleep on it, so
+     * the actual fade is a background {@code aap-volramp} thread stepping the stream index one at
+     * a time (duck: ~{@link #DUCK_RAMP_MS} fast fade down; restore: ~{@link #RESTORE_RAMP_MS}
+     * gentle fade up — matches Apple's Conversational Awareness). {@code rampGen} cancels a
+     * still-animating ramp when a newer duck/restore supersedes it; the ramp thread checks it
+     * before every step.
      */
     private static final class MediaActionsImpl implements AapBehaviorController.MediaActions {
+        private static final long DUCK_RAMP_MS = 400;
+        private static final long RESTORE_RAMP_MS = 1200;
+
         private final Context ctx;
         private final String mac;
         /** Volume to restore to, or null when not currently ducked. */
         private volatile Integer preDuckVolume;
+        /** Bumped on every duck()/restore() call; a ramp thread bails out once it's stale. */
+        private final AtomicInteger rampGen = new AtomicInteger();
 
         MediaActionsImpl(Context ctx, String mac) { this.ctx = ctx; this.mac = mac; }
 
@@ -290,10 +303,18 @@ public final class AapBroker {
             try {
                 AudioManager am = ctx.getSystemService(AudioManager.class);
                 if (am == null) return;
-                int cur = am.getStreamVolume(AudioManager.STREAM_MUSIC);
-                preDuckVolume = cur;
-                am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.max(1, cur / 4), 0);
-                Log.i(TAG, "ca_duck: ducked " + mac + " from " + cur);
+                int gen = rampGen.incrementAndGet();
+                Integer base = preDuckVolume;
+                if (base == null) {
+                    // only remember the baseline when we're not already ducked/mid-restore, so a
+                    // duck arriving while a restore ramp is still animating can't clobber it with
+                    // a half-restored value.
+                    base = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+                    preDuckVolume = base;
+                }
+                int target = Math.max(1, base / 4);
+                Log.i(TAG, "ca_duck: ducking " + mac + " toward " + target);
+                ramp(am, target, DUCK_RAMP_MS, gen, false);
             } catch (Throwable t) {
                 Log.w(TAG, "ca_duck: duck failed for " + mac + ": " + t);
             }
@@ -304,12 +325,50 @@ public final class AapBroker {
                 Integer v = preDuckVolume;
                 if (v == null) return; // nothing to restore
                 AudioManager am = ctx.getSystemService(AudioManager.class);
-                if (am != null) am.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0);
-                preDuckVolume = null;
-                Log.i(TAG, "ca_duck: restored " + mac + " to " + v);
+                if (am == null) return;
+                int gen = rampGen.incrementAndGet();
+                Log.i(TAG, "ca_duck: restoring " + mac + " toward " + v);
+                ramp(am, v, RESTORE_RAMP_MS, gen, true);
             } catch (Throwable t) {
                 Log.w(TAG, "ca_duck: restore failed for " + mac + ": " + t);
             }
+        }
+
+        /**
+         * Steps {@code STREAM_MUSIC} from its current index to {@code target}, one index per
+         * {@code totalMs / steps}, on a dedicated daemon thread. Bails out (silently, no log) the
+         * moment {@code rampGen} moves past {@code gen} — a newer duck/restore took over. When
+         * {@code clearOnComplete} the ramp owns clearing {@link #preDuckVolume}, and only does so
+         * if it finishes without being superseded (a superseded restore must leave the original
+         * baseline in place for whatever duck/restore comes next).
+         */
+        private void ramp(AudioManager am, int target, long totalMs, int gen, boolean clearOnComplete) {
+            Thread t = new Thread(() -> {
+                try {
+                    int cur = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+                    int steps = Math.abs(target - cur);
+                    if (steps == 0) {
+                        if (clearOnComplete && rampGen.get() == gen) preDuckVolume = null;
+                        return;
+                    }
+                    int dir = target > cur ? 1 : -1;
+                    long perStep = totalMs / steps;
+                    int v = cur;
+                    for (int i = 0; i < steps; i++) {
+                        if (rampGen.get() != gen) return; // superseded mid-flight
+                        v += dir;
+                        am.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0);
+                        if (perStep > 0) {
+                            try { Thread.sleep(perStep); } catch (InterruptedException ie) { return; }
+                        }
+                    }
+                    if (clearOnComplete && rampGen.get() == gen) preDuckVolume = null;
+                } catch (Throwable th) {
+                    Log.w(TAG, "aap-volramp failed for " + mac + ": " + th);
+                }
+            }, "aap-volramp");
+            t.setDaemon(true);
+            t.start();
         }
     }
 
