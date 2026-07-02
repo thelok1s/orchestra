@@ -7,6 +7,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -144,10 +145,14 @@ fun OrchestraApp(refreshKey: Int) {
         withContext(Dispatchers.IO) { ManifestUpdater.refreshIndexIfStale() }
     }
     MaterialExpressiveTheme(colorScheme = colorScheme) {
-        var openDeviceMac by remember { mutableStateOf<String?>(null) }
+        var openDeviceMac by rememberSaveable { mutableStateOf<String?>(null) }
         var dest by rememberSaveable { mutableStateOf(Dest.STATUS) }
         var debugOpen by rememberSaveable { mutableStateOf(false) }
         val opened = openDeviceMac
+        // System/gesture back on the device-controls screen must return to the tabs, not exit the
+        // activity — plain (non-predictive) since this screen replaces content wholesale rather
+        // than animating over it like the Debug overlay below.
+        BackHandler(enabled = opened != null) { openDeviceMac = null }
         if (opened != null) {
             DeviceControlsScreen(opened, onBack = { openDeviceMac = null })
         } else {

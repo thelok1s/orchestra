@@ -102,17 +102,21 @@ public final class AapBroker {
         started = true;
         BroadcastReceiver cmd = new BroadcastReceiver() {
             @Override public void onReceive(Context c, Intent i) {
-                String mac = i.getStringExtra("mac");
-                String op = i.getStringExtra("op");
-                int value = i.getIntExtra("value", -1);
-                int feature = i.getIntExtra("feature", -1);
-                String name = i.getStringExtra("name");
-                if (mac == null || op == null) return;
-                if ("rename".equals(op)) {
-                    CMD_EXECUTOR.execute(() -> handleRename(mac, name));
-                    return;
+                try {
+                    String mac = i.getStringExtra("mac");
+                    String op = i.getStringExtra("op");
+                    int value = i.getIntExtra("value", -1);
+                    int feature = i.getIntExtra("feature", -1);
+                    String name = i.getStringExtra("name");
+                    if (mac == null || op == null) return;
+                    if ("rename".equals(op)) {
+                        CMD_EXECUTOR.execute(() -> handleRename(mac, name));
+                        return;
+                    }
+                    CMD_EXECUTOR.execute(() -> handleCommand(mac, op, value, feature));
+                } catch (Throwable t) {
+                    Log.w(TAG, "AapBroker CMD receiver dispatch failed: " + t);
                 }
-                CMD_EXECUTOR.execute(() -> handleCommand(mac, op, value, feature));
             }
         };
         ctx.registerReceiver(cmd, new IntentFilter(ACTION_CMD), Context.RECEIVER_EXPORTED);
@@ -240,48 +244,53 @@ public final class AapBroker {
     }
 
     static void handleCommand(String mac, String op, int value, int feature) {
-        // autopause/caduck are LOCAL cache updates (the app process persisted the enable in
-        // DeviceStore and is just pushing it here); they never touch the AAP socket, so handle
-        // them before the adapter lookup.
-        if ("autopause".equals(op)) {
-            behaviorCache.put(mac.toUpperCase(Locale.ROOT) + "|auto_pause", value == 1);
-            Log.i(TAG, "auto_pause cache <- " + mac + "=" + (value == 1));
-            return;
-        }
-        if ("caduck".equals(op)) {
-            behaviorCache.put(mac.toUpperCase(Locale.ROOT) + "|ca_duck", value == 1);
-            Log.i(TAG, "ca_duck cache <- " + mac + "=" + (value == 1));
-            return;
-        }
-        // Socket ops ("anc"/"ca") drive the L2CAP connection, so gate the broadcast-supplied MAC
-        // before touching it: bonded + a known-AAP device only. The AAP_CMD receiver is EXPORTED
-        // (see the manifest) with no permission, so any zero-permission app can supply an arbitrary
-        // MAC here — this keeps a hostile broadcast from driving connect attempts at random devices.
-        BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
-        if (a == null) return;
-        BluetoothDevice device;
         try {
-            device = a.getRemoteDevice(mac);
-        } catch (IllegalArgumentException e) {
-            Log.w(TAG, "handleCommand: invalid MAC " + mac + ": " + e);
-            return;
-        }
-        if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
-            Log.w(TAG, "handleCommand: " + mac + " not bonded, dropping op=" + op);
-            return;
-        }
-        if (!isAap(device)) {
-            Log.w(TAG, "handleCommand: " + mac + " not an AAP device, dropping op=" + op);
-            return;
-        }
-        if ("anc".equals(op)) AacpEngine.setAncByte(a, mac, value);
-        else if ("ca".equals(op)) AacpEngine.setCa(a, mac, value == 1);
-        else if ("feature".equals(op)) {
-            if (feature < 0 || feature > 0xFF || value < 0 || value > 0xFF) {
-                Log.w(TAG, "handleCommand feature: out-of-range feature/value, dropping");
+            // autopause/caduck are LOCAL cache updates (the app process persisted the enable in
+            // DeviceStore and is just pushing it here); they never touch the AAP socket, so handle
+            // them before the adapter lookup.
+            if ("autopause".equals(op)) {
+                behaviorCache.put(mac.toUpperCase(Locale.ROOT) + "|auto_pause", value == 1);
+                Log.i(TAG, "auto_pause cache <- " + mac + "=" + (value == 1));
                 return;
             }
-            AacpEngine.setFeature(a, mac, feature, value);
+            if ("caduck".equals(op)) {
+                behaviorCache.put(mac.toUpperCase(Locale.ROOT) + "|ca_duck", value == 1);
+                Log.i(TAG, "ca_duck cache <- " + mac + "=" + (value == 1));
+                return;
+            }
+            // Socket ops ("anc"/"ca") drive the L2CAP connection, so gate the broadcast-supplied
+            // MAC before touching it: bonded + a known-AAP device only. The AAP_CMD receiver is
+            // EXPORTED (see the manifest) with no permission, so any zero-permission app can supply
+            // an arbitrary MAC here — this keeps a hostile broadcast from driving connect attempts
+            // at random devices.
+            BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
+            if (a == null) return;
+            BluetoothDevice device;
+            try {
+                device = a.getRemoteDevice(mac);
+            } catch (IllegalArgumentException e) {
+                Log.w(TAG, "handleCommand: invalid MAC " + mac + ": " + e);
+                return;
+            }
+            if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
+                Log.w(TAG, "handleCommand: " + mac + " not bonded, dropping op=" + op);
+                return;
+            }
+            if (!isAap(device)) {
+                Log.w(TAG, "handleCommand: " + mac + " not an AAP device, dropping op=" + op);
+                return;
+            }
+            if ("anc".equals(op)) AacpEngine.setAncByte(a, mac, value);
+            else if ("ca".equals(op)) AacpEngine.setCa(a, mac, value == 1);
+            else if ("feature".equals(op)) {
+                if (feature < 0 || feature > 0xFF || value < 0 || value > 0xFF) {
+                    Log.w(TAG, "handleCommand feature: out-of-range feature/value, dropping");
+                    return;
+                }
+                AacpEngine.setFeature(a, mac, feature, value);
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "handleCommand failed for " + mac + " op=" + op + ": " + t);
         }
     }
 
