@@ -123,10 +123,18 @@ public final class DeviceDef {
         return false;
     }
 
-    /** Functions this device declares for the in-app surface (ui.surfaces contains "app"). */
-    public java.util.List<Func> appFunctions() {
+    /**
+     * Functions this device declares for the in-app surface (ui.surfaces contains "app"), gated by
+     * the same per-capability opt-in as {@link #injectedFuncs}: verified functions default-enabled,
+     * unverified ones default-off until the user flips them on in the Devices tab.
+     */
+    public java.util.List<Func> appFunctions(String address) {
         java.util.List<Func> out = new java.util.ArrayList<>();
-        for (Func f : functions) if (f.surfaces.contains("app")) out.add(f);
+        for (Func f : functions) {
+            if (!f.surfaces.contains("app")) continue;
+            if (!DeviceStore.isCapabilityEnabled(address, f.id, f.verified)) continue;
+            out.add(f);
+        }
         return out;
     }
 

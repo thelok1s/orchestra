@@ -799,7 +799,11 @@ private fun HookedDeviceCard(
                     if (showInApp && inApp.isNotEmpty()) {
                         Accordion("In-app only", inApp.size,
                             MaterialTheme.colorScheme.onSurfaceVariant, d.mac + "_inapp") {
-                            inApp.forEach { c -> CapabilityRow(c, onToggle = {}) }
+                            inApp.forEach { c ->
+                                CapabilityRow(c, onToggle = {
+                                    DeviceStore.setCapabilityEnabled(d.mac, c.id, !c.enabled); onChange()
+                                })
+                            }
                         }
                     }
                 }

@@ -283,8 +283,11 @@ public final class DeviceStore {
             else status = "AVAILABLE";
             String reason = f.injectReason != null ? f.injectReason : "";
             if (conflicted) reason = "Conflicts with another enabled control.";
-            // Toggle is meaningful for anything that could be injected (implemented or pending).
-            boolean toggleable = f.injectable && (f.implemented || "PENDING".equals(status));
+            // Toggle is meaningful for anything that could be injected (implemented or pending), and
+            // also for app-surfaced controls that will never be injectable (e.g. sliders/lists) —
+            // those still need a Devices-tab opt-in gate before DeviceControlsScreen shows them.
+            boolean toggleable = (f.injectable && (f.implemented || "PENDING".equals(status)))
+                    || (!f.injectable && f.surfaces.contains("app"));
             out.add(new Capability(f.id, f.title, f.type, status, reason, toggleable, enabled,
                     f.verified));
         }

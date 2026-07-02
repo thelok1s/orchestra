@@ -268,6 +268,9 @@ public final class AacpEngine {
                 Logbook.add("AACP set feature " + Integer.toHexString(feature) + "=" + value);
                 s.out.write(frame);
                 s.out.flush();
+                if (feature == 0x2E) {
+                    AapState.forMac(s.mac).setAdaptiveStrength(value); // optimistic; buds don't echo 0x2E, reader reconciles at next bring-up
+                }
                 return true;
             } catch (Exception e) {
                 Log.w(TAG, "AACP set feature failed: " + e);

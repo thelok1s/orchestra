@@ -37,7 +37,7 @@ fun DeviceControlsScreen(mac: String, onBack: () -> Unit) {
             Modifier.padding(pad).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            val funcs = def?.appFunctions() ?: emptyList()
+            val funcs = def?.appFunctions(mac) ?: emptyList()
             if (funcs.isEmpty()) {
                 Text("No in-app controls for this device.")
             } else {
@@ -85,7 +85,9 @@ private fun DeviceControlRow(mac: String, f: DeviceDef.Func, liveTick: Int) {
                             engine.applyLevel(adapter, mac, def, f, pos.toInt())
                         },
                         valueRange = f.min.toFloat()..f.max.toFloat(),
-                        steps = ((f.max - f.min) / f.step - 1).coerceAtLeast(0)
+                        // A sideloaded manifest bypasses schema checks, so f.step may be 0/negative;
+                        // fall back to a plain continuous slider instead of dividing by zero.
+                        steps = if (f.step <= 0) 0 else ((f.max - f.min) / f.step - 1).coerceAtLeast(0)
                     )
                     Text("${pos.toInt()}")
                 }
