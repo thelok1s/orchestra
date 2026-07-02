@@ -30,6 +30,10 @@ public final class AapBehaviorController {
     public interface MediaActions {
         void pause();
         void play();
+        /** Lower media volume for the duration of a Conversational Awareness speech episode. */
+        void duck();
+        /** Restore the volume {@link #duck()} lowered. */
+        void restore();
     }
 
     /** Transitions occurring within this many ms of the last acted transition are dropped. */
@@ -43,6 +47,9 @@ public final class AapBehaviorController {
      * {@code -1} means we have never acted (no debounce for the first real transition).
      */
     private long lastActedAt = -1;
+
+    /** Whether {@link MediaActions#duck()} has fired without a matching {@link MediaActions#restore()} yet. */
+    private boolean ducked = false;
 
     public AapBehaviorController(MediaActions actions, LongSupplier clock) {
         this.actions = actions;
@@ -81,5 +88,28 @@ public final class AapBehaviorController {
     /** Number of pods currently in-ear (value 0): 0, 1, or 2. */
     private static int inEarCount(AapCodec.Ear e) {
         return (e.primary == 0 ? 1 : 0) + (e.secondary == 0 ? 1 : 0);
+    }
+
+    /**
+     * Called by the broker on every Conversational Awareness speech-level notification
+     * ({@link AapCodec#parseCaSpeech}). Per the Task 5 spike, levels 01/02 mean speech is
+     * ACTIVE, 08/09 mean speech has ENDED, and 03/04/0b are intermediate ramp values that are
+     * ignored. This is a state machine driven by the level protocol itself, not a debounced
+     * transition like {@link #onEar}, so {@link #DEBOUNCE_MS} / {@link #lastActedAt} do not apply
+     * here: duck/restore only fire on the edges (active while not yet ducked; ended while ducked),
+     * so repeated same-direction levels (e.g. 01 then 02) are no-ops.
+     */
+    public void onCaSpeech(int level) {
+        boolean active = level == 0x01 || level == 0x02;
+        boolean ended  = level == 0x08 || level == 0x09;
+        if (!active && !ended) return; // intermediate levels (03/04/0b): ignore
+
+        if (active && !ducked) {
+            actions.duck();
+            ducked = true;
+        } else if (ended && ducked) {
+            actions.restore();
+            ducked = false;
+        }
     }
 }

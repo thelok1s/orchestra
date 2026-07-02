@@ -164,6 +164,8 @@ final class DeviceDef {
         boolean implemented;    // the current provider can actually render it (today: multitoggle)
         String injectReason;    // shown in UI when not injectable
         boolean verified;       // set/read bytes confirmed on hardware
+        boolean local;          // LOCAL behavior toggle (e.g. auto_pause, ca_duck): not an AAP/RFCOMM
+                                 // command; a privileged process (SystemUI broker) gates it at runtime
 
         Func(String id, String type, String title, String capability, String setCommand,
              String payloadTemplate, String readCommand, int stateByteIndex, int settingId) {
@@ -297,6 +299,7 @@ final class DeviceDef {
                 fn.optString("capability", ""),
                 setCmd, payload, readCmd, stateByteIndex, settingId);
         func.verified = fn.optBoolean("_verified", false);
+        func.local = fn.optBoolean("local", false);
         func.iconName = fn.optString("icon", null);
         func.channelId = fn.optString("channel", defaultChannel);
         Channel ch = channels.get(func.channelId);

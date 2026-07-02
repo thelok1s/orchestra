@@ -167,15 +167,15 @@ public class SettingProviderService extends Service {
         IBinder l = listeners.get(address);
         if (l != null) pushFromCache(def, address, l);
 
-        // auto_pause is a LOCAL behavior toggle, NOT an AAP command: persist the enable to
-        // DeviceStore and push it to the SystemUI broker's cache. It must never reach
+        // LOCAL behavior toggles (auto_pause, ca_duck) are NOT AAP commands: persist the enable to
+        // DeviceStore and push it to the SystemUI broker's cache. They must never reach
         // ControlEngine.applyToggle/readToggle (the AACP impl rejects any toggle id other than
         // conversational_awareness).
-        if ("auto_pause".equals(f.id)) {
+        if (isLocalBehavior(f)) {
             boolean on = chosenIndex == 1;
-            DeviceStore.setBehaviorEnabled(address, "auto_pause", on);
-            AacpClientBridge.sendCommand(address, "autopause", on ? 1 : 0);
-            Log.i(DeviceDef.TAG, "update " + address + " local behavior auto_pause -> " + on);
+            DeviceStore.setBehaviorEnabled(address, f.id, on);
+            AacpClientBridge.sendCommand(address, localBehaviorCmdOp(f.id), on ? 1 : 0);
+            Log.i(DeviceDef.TAG, "update " + address + " local behavior " + f.id + " -> " + on);
             return;
         }
 
@@ -217,11 +217,11 @@ public class SettingProviderService extends Service {
         ConcurrentHashMap<Integer, Integer> cache = cacheFor(address);
         for (DeviceDef.Func f : injected) {
             if (f.isInfoRow()) continue; // info rows carry no cached index; summary read at push
-            // auto_pause is a LOCAL behavior toggle (no AAP command): read the persisted enable
-            // straight from DeviceStore instead of engine.readToggle, which would reject it (only
+            // LOCAL behavior toggles (no AAP command): read the persisted enable straight from
+            // DeviceStore instead of engine.readToggle, which would reject them (only
             // conversational_awareness is a real AACP toggle) and always fall back to 0.
-            if ("auto_pause".equals(f.id)) {
-                cache.put(f.settingId, DeviceStore.behaviorEnabled(address, "auto_pause") ? 1 : 0);
+            if (isLocalBehavior(f)) {
+                cache.put(f.settingId, DeviceStore.behaviorEnabled(address, f.id) ? 1 : 0);
                 continue;
             }
             ControlEngine engine = ControlEngine.forTransport(f.transport);
@@ -292,6 +292,22 @@ public class SettingProviderService extends Service {
                     /*isAllowedChangingState*/ true, new Bundle());
         }
         return new DeviceSetting(f.settingId, pref, new Bundle());
+    }
+
+    /**
+     * True for LOCAL behavior toggles (auto_pause, ca_duck, ...): manifest-declared {@code "local":
+     * true} functions that a privileged process (the SystemUI AAP broker) gates at runtime, rather
+     * than a real AAP/RFCOMM command routed through {@link ControlEngine}. Prefers {@link
+     * DeviceDef.Func#local} (the manifest flag); falls back to the id allowlist for older/sideloaded
+     * manifests that predate the flag.
+     */
+    private static boolean isLocalBehavior(DeviceDef.Func f) {
+        return f.local || "auto_pause".equals(f.id) || "ca_duck".equals(f.id);
+    }
+
+    /** Maps a local behavior's function id to the {@code AAP_CMD} op the broker's cache expects. */
+    private static String localBehaviorCmdOp(String funcId) {
+        return "auto_pause".equals(funcId) ? "autopause" : "caduck";
     }
 
     private BluetoothAdapter adapter() {

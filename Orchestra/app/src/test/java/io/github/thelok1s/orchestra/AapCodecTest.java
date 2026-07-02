@@ -81,4 +81,41 @@ public class AapCodecTest {
         assertEquals(0, e.primary);
         assertEquals(0, e.secondary);
     }
+
+    // ---------------------------------------------------------------------------
+    // parseCaSpeech: 04 00 04 00 4b 00 02 00 01 <level>
+    // ---------------------------------------------------------------------------
+
+    @Test public void parseCaSpeech_validFrame_returnsLevel() {
+        // 04 00 04 00 4b 00 02 00 01 <level>
+        byte[] f = HexUtil.unhex("040004004b00020001" + "01");
+        assertEquals(Integer.valueOf(0x01), AapCodec.parseCaSpeech(f, f.length));
+    }
+
+    @Test public void parseCaSpeech_level02() {
+        byte[] f = HexUtil.unhex("040004004b0002000102");
+        assertEquals(Integer.valueOf(0x02), AapCodec.parseCaSpeech(f, f.length));
+    }
+
+    @Test public void parseCaSpeech_level09_endRamp() {
+        byte[] f = {4,0,4,0,0x4b,0,2,0,1,0x09};
+        assertEquals(Integer.valueOf(0x09), AapCodec.parseCaSpeech(f, f.length));
+    }
+
+    @Test public void parseCaSpeech_wrongOpcode_returnsNull() {
+        // opcode 0x06 (ear) instead of 0x4b
+        byte[] f = {4,0,4,0,0x06,0,2,0,1,0x01};
+        assertNull(AapCodec.parseCaSpeech(f, f.length));
+    }
+
+    @Test public void parseCaSpeech_shortFrame_returnsNull() {
+        byte[] f = {4,0,4,0,0x4b,0,2,0,1}; // missing level byte
+        assertNull(AapCodec.parseCaSpeech(f, f.length));
+    }
+
+    @Test public void parseCaSpeech_wrongSubPrefix_returnsNull() {
+        // sub-prefix byte (offset 6) wrong: 03 instead of 02
+        byte[] f = {4,0,4,0,0x4b,0,3,0,1,0x01};
+        assertNull(AapCodec.parseCaSpeech(f, f.length));
+    }
 }

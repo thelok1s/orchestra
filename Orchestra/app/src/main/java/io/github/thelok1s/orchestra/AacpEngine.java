@@ -50,6 +50,23 @@ public final class AacpEngine {
         }
     }
 
+    /**
+     * Task 5: Conversational Awareness speech-level EVENT dispatch (opcode 0x4B), distinct from
+     * {@link #LISTENERS}/{@link AapState}: speech is an edge event (duck/restore), not persisted
+     * state, so it does not go through {@code fireListener} or get cached in {@link AapState}.
+     * Single listener per mac is fine — only the broker registers.
+     */
+    private static final Map<String, java.util.function.IntConsumer> SPEECH_LISTENERS = new ConcurrentHashMap<>();
+
+    public static void registerSpeechListener(String mac, java.util.function.IntConsumer l) {
+        SPEECH_LISTENERS.put(mac.toUpperCase(Locale.ROOT), l);
+    }
+    static void fireSpeech(String mac, int level) {
+        java.util.function.IntConsumer l = SPEECH_LISTENERS.get(mac.toUpperCase(Locale.ROOT));
+        if (l == null) return;
+        try { l.accept(level); } catch (Throwable t) { Log.w(TAG, "AACP speech listener threw: " + t); }
+    }
+
     private static final class Session {
         final String mac;
         final Object lock = new Object();
@@ -126,6 +143,9 @@ public final class AacpEngine {
                     AapCodec.Ear ear = AapCodec.parseEar(buf, n);
                     if (ear != null) { state.setEar(ear); changed = true;
                         Log.i(TAG, "AACP notify ear " + state.earSummary() + " for " + s.mac); }
+                    Integer sp = AapCodec.parseCaSpeech(buf, n);
+                    if (sp != null) { Log.i(TAG, "AACP notify CA speech level=" + sp + " for " + s.mac);
+                        fireSpeech(s.mac, sp); }
                     if (changed) fireListener(s.mac);
                 }
             } catch (Exception e) {

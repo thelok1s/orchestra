@@ -57,13 +57,14 @@ public final class AapBroker {
     private static final Map<String, AapBehaviorController> controllers = new ConcurrentHashMap<>();
 
     /**
-     * Task 3: auto_pause per-device enable cache, keyed by MAC. Populated by the app's push
-     * ({@code AAP_CMD op="autopause"} -> {@link #handleCommand}) and, on a cache miss (e.g. after a
-     * SystemUI restart), by a pull query against the app's {@code StateProvider}
-     * ({@link #autoPauseEnabled}). The broker cannot read the app's SharedPreferences directly
+     * Task 3+5: per-device LOCAL BEHAVIOR enable cache (auto_pause, ca_duck, ...), keyed
+     * {@code "<MAC>|<behaviorId>"}. Populated by the app's push
+     * ({@code AAP_CMD op="autopause"/"caduck"} -> {@link #handleCommand}) and, on a cache miss
+     * (e.g. after a SystemUI restart), by a pull query against the app's {@code StateProvider}
+     * ({@link #behaviorEnabled}). The broker cannot read the app's SharedPreferences directly
      * (different uid), hence the push+pull design.
      */
-    private static final Map<String, Boolean> autoPauseCache = new ConcurrentHashMap<>();
+    private static final Map<String, Boolean> behaviorCache = new ConcurrentHashMap<>();
 
     private AapBroker() {}
 
@@ -133,6 +134,7 @@ public final class AapBroker {
      */
     private static void registerAndConnect(Context ctx, BluetoothAdapter a, String mac) {
         AacpEngine.registerListener(mac, "broker", () -> publishState(ctx, mac));
+        AacpEngine.registerSpeechListener(mac, level -> onSpeechLevel(ctx, mac, level));
         new Thread(() -> AacpEngine.ensureConnected(a, mac), "aap-conn").start();
     }
 
@@ -171,6 +173,7 @@ public final class AapBroker {
         BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
         if (a == null) return;
         AacpEngine.registerListener(mac, "broker", () -> publishState(ctx, mac));
+        AacpEngine.registerSpeechListener(mac, level -> onSpeechLevel(ctx, mac, level));
         synchronized (RECONNECT_LOCKS.computeIfAbsent(mac, k -> new Object())) {
         if (AapState.forMac(mac).getBattery() != null) return; // a concurrent attempt already completed
         for (int attempt = 1; attempt <= 3; attempt++) {
@@ -202,12 +205,17 @@ public final class AapBroker {
     }
 
     static void handleCommand(String mac, String op, int value) {
-        // autopause is a LOCAL cache update (the app process persisted the enable in DeviceStore
-        // and is just pushing it here); it never touches the AAP socket, so handle it before the
-        // adapter lookup.
+        // autopause/caduck are LOCAL cache updates (the app process persisted the enable in
+        // DeviceStore and is just pushing it here); they never touch the AAP socket, so handle
+        // them before the adapter lookup.
         if ("autopause".equals(op)) {
-            autoPauseCache.put(mac.toUpperCase(Locale.ROOT), value == 1);
-            Log.i(TAG, "autopause cache <- " + mac + "=" + (value == 1));
+            behaviorCache.put(mac.toUpperCase(Locale.ROOT) + "|auto_pause", value == 1);
+            Log.i(TAG, "auto_pause cache <- " + mac + "=" + (value == 1));
+            return;
+        }
+        if ("caduck".equals(op)) {
+            behaviorCache.put(mac.toUpperCase(Locale.ROOT) + "|ca_duck", value == 1);
+            Log.i(TAG, "ca_duck cache <- " + mac + "=" + (value == 1));
             return;
         }
         BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
@@ -217,31 +225,33 @@ public final class AapBroker {
     }
 
     /**
-     * Auto-pause enable gate: cache lookup, falling back to a pull query against the app's
-     * {@code StateProvider} on a miss (e.g. after a SystemUI restart, before any push has arrived).
-     * Any failure (app process dead + can't be started, provider not exported yet, etc.) is treated
-     * as disabled — matches {@code DeviceStore.behaviorEnabled}'s default-off.
+     * LOCAL behavior enable gate (auto_pause, ca_duck, ...): cache lookup, falling back to a pull
+     * query against the app's {@code StateProvider} on a miss (e.g. after a SystemUI restart,
+     * before any push has arrived). Any failure (app process dead + can't be started, provider not
+     * exported yet, etc.) is treated as disabled — matches {@code DeviceStore.behaviorEnabled}'s
+     * default-off. Generalized from Task 3's {@code auto_pause}-only cache.
      */
-    private static boolean autoPauseEnabled(Context ctx, String mac) {
-        String key = mac.toUpperCase(Locale.ROOT);
-        Boolean cached = autoPauseCache.get(key);
+    private static boolean behaviorEnabled(Context ctx, String mac, String behaviorId) {
+        String macKey = mac.toUpperCase(Locale.ROOT);
+        String cacheKey = macKey + "|" + behaviorId;
+        Boolean cached = behaviorCache.get(cacheKey);
         if (cached != null) return cached;
-        boolean enabled = queryAutoPauseEnabled(ctx, key);
-        autoPauseCache.put(key, enabled);
+        boolean enabled = queryBehaviorEnabled(ctx, macKey, behaviorId);
+        behaviorCache.put(cacheKey, enabled);
         return enabled;
     }
 
-    private static boolean queryAutoPauseEnabled(Context ctx, String mac) {
+    private static boolean queryBehaviorEnabled(Context ctx, String mac, String behaviorId) {
         try {
             Uri uri = Uri.parse("content://io.github.thelok1s.orchestra.state/behavior/"
-                    + mac + "/auto_pause");
+                    + mac + "/" + behaviorId);
             try (Cursor cur = ctx.getContentResolver().query(uri, null, null, null, null)) {
                 if (cur != null && cur.moveToFirst()) {
                     return cur.getInt(cur.getColumnIndexOrThrow("enabled")) == 1;
                 }
             }
         } catch (Throwable t) {
-            Log.w(TAG, "autoPauseEnabled: pull query failed for " + mac + ": " + t);
+            Log.w(TAG, "behaviorEnabled: pull query failed for " + mac + "/" + behaviorId + ": " + t);
         }
         return false;
     }
@@ -258,20 +268,83 @@ public final class AapBroker {
         }
     }
 
+    /**
+     * {@link AapBehaviorController.MediaActions} impl (SystemUI process, holds audio privileges):
+     * pause/play dispatch media keys (Task 2); duck/restore (Task 5) directly move
+     * {@code STREAM_MUSIC} — no UI (flags 0) — remembering the pre-duck volume per instance so
+     * {@code restore()} can put it back. One instance lives per MAC (see {@link #controllerFor}),
+     * so the remembered volume is naturally per-device.
+     */
+    private static final class MediaActionsImpl implements AapBehaviorController.MediaActions {
+        private final Context ctx;
+        private final String mac;
+        /** Volume to restore to, or null when not currently ducked. */
+        private volatile Integer preDuckVolume;
+
+        MediaActionsImpl(Context ctx, String mac) { this.ctx = ctx; this.mac = mac; }
+
+        @Override public void pause() { dispatchKey(ctx, KeyEvent.KEYCODE_MEDIA_PAUSE); }
+        @Override public void play()  { dispatchKey(ctx, KeyEvent.KEYCODE_MEDIA_PLAY);  }
+
+        @Override public void duck() {
+            try {
+                AudioManager am = ctx.getSystemService(AudioManager.class);
+                if (am == null) return;
+                int cur = am.getStreamVolume(AudioManager.STREAM_MUSIC);
+                preDuckVolume = cur;
+                am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.max(1, cur / 4), 0);
+                Log.i(TAG, "ca_duck: ducked " + mac + " from " + cur);
+            } catch (Throwable t) {
+                Log.w(TAG, "ca_duck: duck failed for " + mac + ": " + t);
+            }
+        }
+
+        @Override public void restore() {
+            try {
+                Integer v = preDuckVolume;
+                if (v == null) return; // nothing to restore
+                AudioManager am = ctx.getSystemService(AudioManager.class);
+                if (am != null) am.setStreamVolume(AudioManager.STREAM_MUSIC, v, 0);
+                preDuckVolume = null;
+                Log.i(TAG, "ca_duck: restored " + mac + " to " + v);
+            } catch (Throwable t) {
+                Log.w(TAG, "ca_duck: restore failed for " + mac + ": " + t);
+            }
+        }
+    }
+
+    /** The single per-MAC {@link AapBehaviorController} instance, shared by the ear (auto_pause)
+     *  and speech (ca_duck) event paths — its {@link MediaActionsImpl} carries both bookkeeping. */
+    private static AapBehaviorController controllerFor(Context ctx, String mac) {
+        return controllers.computeIfAbsent(mac, k ->
+                new AapBehaviorController(new MediaActionsImpl(ctx, mac), System::currentTimeMillis));
+    }
+
+    /**
+     * Conversational Awareness speech-level dispatch (Task 5): gated on the {@code ca_duck} local
+     * behavior toggle, then handed to the per-mac controller's duck/restore bookkeeping. Fail-soft
+     * — this runs off {@link io.github.thelok1s.orchestra.AacpEngine}'s reader thread via the
+     * speech-listener registry, which already try/Throwable-guards the callback, but we guard here
+     * too since this method also does the enable-gate cache/pull query.
+     */
+    private static void onSpeechLevel(Context ctx, String mac, int level) {
+        try {
+            if (!behaviorEnabled(ctx, mac, "ca_duck")) return;
+            controllerFor(ctx, mac).onCaSpeech(level);
+        } catch (Throwable t) {
+            Log.w(TAG, "onSpeechLevel failed for " + mac + " level=" + level + ": " + t);
+        }
+    }
+
     static void publishState(Context ctx, String mac) {
         AapState s = AapState.forMac(mac);
         AapCodec.Battery b = s.getBattery();
         AapCodec.Ear now = s.getEar();
 
         // Auto-pause / resume: compare ear to previous and drive the behavior controller.
-        if (now != null && autoPauseEnabled(ctx, mac)) {
+        if (now != null && behaviorEnabled(ctx, mac, "auto_pause")) {
             AapCodec.Ear prev = lastEar.put(mac, now); // atomic swap; returns old value (null on first call)
-            AapBehaviorController ctrl = controllers.computeIfAbsent(mac, k ->
-                new AapBehaviorController(new AapBehaviorController.MediaActions() {
-                    @Override public void pause() { dispatchKey(ctx, KeyEvent.KEYCODE_MEDIA_PAUSE); }
-                    @Override public void play()  { dispatchKey(ctx, KeyEvent.KEYCODE_MEDIA_PLAY);  }
-                }, System::currentTimeMillis));
-            ctrl.onEar(prev, now);
+            controllerFor(ctx, mac).onEar(prev, now);
         }
 
         AapCodec.Ear e = now; // reuse for the broadcast below

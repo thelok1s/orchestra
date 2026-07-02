@@ -26,8 +26,12 @@ public class AapBehaviorControllerTest {
     private static final class FakeActions implements AapBehaviorController.MediaActions {
         int pauseCount = 0;
         int playCount  = 0;
+        int duckCount    = 0;
+        int restoreCount = 0;
         @Override public void pause() { pauseCount++; }
         @Override public void play()  { playCount++;  }
+        @Override public void duck()    { duckCount++;    }
+        @Override public void restore() { restoreCount++; }
     }
 
     /** Mutable fake clock driven by the test. */
@@ -279,5 +283,117 @@ public class AapBehaviorControllerTest {
         ctrl.onEar(new AapCodec.Ear(IN, IN), new AapCodec.Ear(OUT, OUT));      // pause at t=0
 
         assertEquals("first action must always fire (no prior lastActedAt)", 1, actions.pauseCount);
+    }
+
+    // ---------------------------------------------------------------------------
+    // 6. onCaSpeech: CA speech-level duck/restore bookkeeping
+    //    levels 01/02 -> speech ACTIVE (duck); 08/09 -> speech ENDED (restore);
+    //    03/04/0b -> ignore (intermediate). Repeated same-direction levels are no-ops.
+    // ---------------------------------------------------------------------------
+
+    @Test
+    public void onCaSpeech_level01_ducks() {
+        FakeActions actions = new FakeActions();
+        AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
+
+        ctrl.onCaSpeech(0x01);
+
+        assertEquals("level 01 must duck", 1, actions.duckCount);
+        assertEquals(0, actions.restoreCount);
+    }
+
+    @Test
+    public void onCaSpeech_01then02_ducksOnce() {
+        FakeActions actions = new FakeActions();
+        AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
+
+        ctrl.onCaSpeech(0x01);
+        ctrl.onCaSpeech(0x02);
+
+        assertEquals("01 then 02 must duck exactly once", 1, actions.duckCount);
+        assertEquals(0, actions.restoreCount);
+    }
+
+    @Test
+    public void onCaSpeech_level08_restoresAfterDuck() {
+        FakeActions actions = new FakeActions();
+        AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
+
+        ctrl.onCaSpeech(0x01); // duck
+        ctrl.onCaSpeech(0x08); // restore
+
+        assertEquals(1, actions.duckCount);
+        assertEquals("level 08 must restore", 1, actions.restoreCount);
+    }
+
+    @Test
+    public void onCaSpeech_level09_restoresAfterDuck() {
+        FakeActions actions = new FakeActions();
+        AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
+
+        ctrl.onCaSpeech(0x01); // duck
+        ctrl.onCaSpeech(0x09); // restore
+
+        assertEquals(1, actions.duckCount);
+        assertEquals("level 09 must restore", 1, actions.restoreCount);
+    }
+
+    @Test
+    public void onCaSpeech_restoreNeverFiresWithoutPriorDuck() {
+        FakeActions actions = new FakeActions();
+        AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
+
+        ctrl.onCaSpeech(0x08); // never ducked
+
+        assertEquals(0, actions.duckCount);
+        assertEquals("restore must not fire without a prior duck", 0, actions.restoreCount);
+    }
+
+    @Test
+    public void onCaSpeech_intermediateLevels_ignored() {
+        FakeActions actions = new FakeActions();
+        AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
+
+        ctrl.onCaSpeech(0x03);
+        ctrl.onCaSpeech(0x04);
+        ctrl.onCaSpeech(0x0b);
+
+        assertEquals("03/04/0b must be ignored", 0, actions.duckCount);
+        assertEquals(0, actions.restoreCount);
+    }
+
+    @Test
+    public void onCaSpeech_fullCycle_exactlyOneDuckOneRestore() {
+        FakeActions actions = new FakeActions();
+        AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
+
+        // 01 -> 02 -> 03 -> 0b -> 04 -> 08 -> 09 (spike-observed full episode)
+        ctrl.onCaSpeech(0x01);
+        ctrl.onCaSpeech(0x02);
+        ctrl.onCaSpeech(0x03);
+        ctrl.onCaSpeech(0x0b);
+        ctrl.onCaSpeech(0x04);
+        ctrl.onCaSpeech(0x08);
+        ctrl.onCaSpeech(0x09);
+
+        assertEquals("full episode must duck exactly once", 1, actions.duckCount);
+        assertEquals("full episode must restore exactly once", 1, actions.restoreCount);
+    }
+
+    @Test
+    public void onCaSpeech_duckBetweenEarFrames_doesNotAffectPausePlay() {
+        // A duck occurring between ear-state changes must not alter pause/play behavior.
+        FakeActions actions = new FakeActions();
+        AapBehaviorController ctrl = new AapBehaviorController(actions, clock);
+
+        ctrl.onEar(null, new AapCodec.Ear(IN, IN));                      // baseline: worn
+        ctrl.onCaSpeech(0x01);                                            // duck (unrelated to ear)
+        ctrl.onEar(new AapCodec.Ear(IN, IN), new AapCodec.Ear(OUT, IN)); // pod removed -> pause
+        ctrl.onCaSpeech(0x09);                                            // restore (unrelated to ear)
+
+        assertEquals("ear pause logic must be unaffected by an interleaved duck", 1, actions.pauseCount);
+        assertEquals(0, actions.playCount);
+        assertEquals(1, actions.duckCount);
+        assertEquals(1, actions.restoreCount);
     }
 }

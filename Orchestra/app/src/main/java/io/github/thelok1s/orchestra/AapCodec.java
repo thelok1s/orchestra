@@ -114,4 +114,17 @@ public final class AapCodec {
         for (int i = 0; i < prefix.length; i++) if (frame[i] != prefix[i]) return null;
         return new Ear(frame[6] & 0xff, frame[7] & 0xff);
     }
+
+    /**
+     * Parse a Conversational Awareness speech-level notification
+     * ({@code 04 00 04 00 4b 00 02 00 01 <level>}); returns the level byte (offset 9), or
+     * {@code null} if the frame doesn't match. Per the Task 5 spike: levels 01/02 = speech
+     * active, 08/09 = speech ended, 03/04/0b = intermediate (caller decides how to act).
+     */
+    static Integer parseCaSpeech(byte[] frame, int len) {
+        byte[] prefix = {0x04, 0x00, 0x04, 0x00, 0x4b, 0x00, 0x02, 0x00, 0x01};
+        if (len < prefix.length + 1) return null;
+        for (int i = 0; i < prefix.length; i++) if (frame[i] != prefix[i]) return null;
+        return frame[9] & 0xff;
+    }
 }
