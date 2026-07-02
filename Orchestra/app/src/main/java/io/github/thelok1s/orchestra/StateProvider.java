@@ -7,12 +7,17 @@ import android.database.MatrixCursor;
 import android.net.Uri;
 
 /**
- * Read-only bridge so the privileged Settings-process hook can read AAP battery (which lives in
- * this app process's {@link AapState}) and write it as untethered-battery metadata keys.
+ * Read-only bridge so privileged cross-process readers (the Settings-process hook; the SystemUI
+ * AAP broker) can read app-process state without app SharedPreferences access.
  *   content://io.github.thelok1s.orchestra.state/battery/<MAC>
  * Columns: left,right,case_level (0..100 or -1), left_charging,right_charging,case_charging (1/0).
  * The socket is owned by the SystemUI broker (Plan 6); this provider only returns the
  * broadcast-fed {@link AapState} cache and never opens an L2CAP socket.
+ *
+ *   content://io.github.thelok1s.orchestra.state/behavior/<MAC>/<behaviorId>
+ * Column: enabled (0|1) = {@link DeviceStore#behaviorEnabled}. Task 3: lets the SystemUI AAP
+ * broker pull the per-device auto_pause enable on a cache miss (e.g. after a SystemUI restart),
+ * since it cannot read this app's SharedPreferences directly.
  */
 public class StateProvider extends ContentProvider {
     static final String AUTHORITY = "io.github.thelok1s.orchestra.state";
@@ -24,6 +29,13 @@ public class StateProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] proj, String sel, String[] selArgs, String sort) {
         java.util.List<String> seg = uri.getPathSegments();
+        if (seg.size() == 3 && "behavior".equals(seg.get(0))) {
+            String bmac = seg.get(1).toUpperCase(java.util.Locale.ROOT);
+            String behaviorId = seg.get(2);
+            MatrixCursor bcur = new MatrixCursor(new String[]{"enabled"});
+            bcur.addRow(new Object[]{DeviceStore.behaviorEnabled(bmac, behaviorId) ? 1 : 0});
+            return bcur;
+        }
         if (seg.size() != 2 || !"battery".equals(seg.get(0))) return null;
         String mac = seg.get(1).toUpperCase(java.util.Locale.ROOT);
         // The SystemUI broker owns the socket and pushes state to this process via AAP_STATE

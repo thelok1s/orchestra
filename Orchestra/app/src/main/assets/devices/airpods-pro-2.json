@@ -1,7 +1,7 @@
 {
   "schema_version": 4,
-  "revision": 3,
-  "revision_date": "2026-06-30",
+  "revision": 4,
+  "revision_date": "2026-07-01",
   "id": "airpods-pro-2",
   "name": "AirPods Pro 2",
   "manufacturer": "Apple",
@@ -180,6 +180,28 @@
       },
       "_verified": true,
       "_verified_note": "CA toggle set/state verified live on AirPods Pro 2 (USB-C), 2026-06-30."
+    },
+    {
+      "id": "auto_pause",
+      "type": "toggle",
+      "title": "Automatic ear detection",
+      "title_i18n": {
+        "ru": "Автопауза при снятии"
+      },
+      "summary": "Pause when a pod is removed, resume when re-worn",
+      "capability": "auto_pause",
+      "icon": "anc",
+      "local": true,
+      "_doc": "LOCAL behavior toggle: not an AAP command. The provider persists the per-device enable (DeviceStore) and the SystemUI broker gates auto-pause/resume on it. No set/read frames.",
+      "inject": "auto",
+      "ui": {
+        "setting_id": 1005,
+        "surfaces": [
+          "device_details"
+        ]
+      },
+      "_verified": true,
+      "_verified_note": "Auto-pause/resume verified live on AirPods Pro 2 (USB-C), Pixel 8, 2026-07-01 (Plan 6 Task 2): removing any pod pauses, reinserting resumes, background, no notification."
     }
   ]
 }

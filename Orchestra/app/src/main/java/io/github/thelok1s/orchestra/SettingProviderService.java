@@ -166,6 +166,19 @@ public class SettingProviderService extends Service {
         cacheFor(address).put(settingId, chosenIndex);
         IBinder l = listeners.get(address);
         if (l != null) pushFromCache(def, address, l);
+
+        // auto_pause is a LOCAL behavior toggle, NOT an AAP command: persist the enable to
+        // DeviceStore and push it to the SystemUI broker's cache. It must never reach
+        // ControlEngine.applyToggle/readToggle (the AACP impl rejects any toggle id other than
+        // conversational_awareness).
+        if ("auto_pause".equals(f.id)) {
+            boolean on = chosenIndex == 1;
+            DeviceStore.setBehaviorEnabled(address, "auto_pause", on);
+            AacpClientBridge.sendCommand(address, "autopause", on ? 1 : 0);
+            Log.i(DeviceDef.TAG, "update " + address + " local behavior auto_pause -> " + on);
+            return;
+        }
+
         io.execute(() -> {
             BluetoothAdapter adapter = adapter();
             if (adapter == null) return;
@@ -204,6 +217,13 @@ public class SettingProviderService extends Service {
         ConcurrentHashMap<Integer, Integer> cache = cacheFor(address);
         for (DeviceDef.Func f : injected) {
             if (f.isInfoRow()) continue; // info rows carry no cached index; summary read at push
+            // auto_pause is a LOCAL behavior toggle (no AAP command): read the persisted enable
+            // straight from DeviceStore instead of engine.readToggle, which would reject it (only
+            // conversational_awareness is a real AACP toggle) and always fall back to 0.
+            if ("auto_pause".equals(f.id)) {
+                cache.put(f.settingId, DeviceStore.behaviorEnabled(address, "auto_pause") ? 1 : 0);
+                continue;
+            }
             ControlEngine engine = ControlEngine.forTransport(f.transport);
             if (engine == null) continue;
             int idx;

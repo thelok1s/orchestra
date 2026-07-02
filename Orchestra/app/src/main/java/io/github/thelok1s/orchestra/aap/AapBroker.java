@@ -6,7 +6,9 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.database.Cursor;
 import android.media.AudioManager;
+import android.net.Uri;
 import android.os.ParcelUuid;
 import android.util.Log;
 import android.view.KeyEvent;
@@ -50,6 +52,15 @@ public final class AapBroker {
     /** Per-MAC behavior controller (auto-pause / resume). */
     private static final Map<String, AapBehaviorController> controllers = new ConcurrentHashMap<>();
 
+    /**
+     * Task 3: auto_pause per-device enable cache, keyed by MAC. Populated by the app's push
+     * ({@code AAP_CMD op="autopause"} -> {@link #handleCommand}) and, on a cache miss (e.g. after a
+     * SystemUI restart), by a pull query against the app's {@code StateProvider}
+     * ({@link #autoPauseEnabled}). The broker cannot read the app's SharedPreferences directly
+     * (different uid), hence the push+pull design.
+     */
+    private static final Map<String, Boolean> autoPauseCache = new ConcurrentHashMap<>();
+
     private AapBroker() {}
 
     public static synchronized void start(Context ctx) {
@@ -81,6 +92,14 @@ public final class AapBroker {
     }
 
     static void handleCommand(String mac, String op, int value) {
+        // autopause is a LOCAL cache update (the app process persisted the enable in DeviceStore
+        // and is just pushing it here); it never touches the AAP socket, so handle it before the
+        // adapter lookup.
+        if ("autopause".equals(op)) {
+            autoPauseCache.put(mac.toUpperCase(Locale.ROOT), value == 1);
+            Log.i(TAG, "autopause cache <- " + mac + "=" + (value == 1));
+            return;
+        }
         BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
         if (a == null) return;
         if ("anc".equals(op)) AacpEngine.setAncByte(a, mac, value);
@@ -88,11 +107,33 @@ public final class AapBroker {
     }
 
     /**
-     * Auto-pause enable gate. Always {@code true} for now.
-     * TODO Task 3: replace with a real DeviceStore / per-device preference lookup.
+     * Auto-pause enable gate: cache lookup, falling back to a pull query against the app's
+     * {@code StateProvider} on a miss (e.g. after a SystemUI restart, before any push has arrived).
+     * Any failure (app process dead + can't be started, provider not exported yet, etc.) is treated
+     * as disabled — matches {@code DeviceStore.behaviorEnabled}'s default-off.
      */
-    private static boolean autoPauseEnabled(String mac) {
-        return true;
+    private static boolean autoPauseEnabled(Context ctx, String mac) {
+        String key = mac.toUpperCase(Locale.ROOT);
+        Boolean cached = autoPauseCache.get(key);
+        if (cached != null) return cached;
+        boolean enabled = queryAutoPauseEnabled(ctx, key);
+        autoPauseCache.put(key, enabled);
+        return enabled;
+    }
+
+    private static boolean queryAutoPauseEnabled(Context ctx, String mac) {
+        try {
+            Uri uri = Uri.parse("content://io.github.thelok1s.orchestra.state/behavior/"
+                    + mac + "/auto_pause");
+            try (Cursor cur = ctx.getContentResolver().query(uri, null, null, null, null)) {
+                if (cur != null && cur.moveToFirst()) {
+                    return cur.getInt(cur.getColumnIndexOrThrow("enabled")) == 1;
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "autoPauseEnabled: pull query failed for " + mac + ": " + t);
+        }
+        return false;
     }
 
     /** Dispatches a media key (ACTION_DOWN + ACTION_UP) via AudioManager. Fire-and-forget. */
@@ -113,7 +154,7 @@ public final class AapBroker {
         AapCodec.Ear now = s.getEar();
 
         // Auto-pause / resume: compare ear to previous and drive the behavior controller.
-        if (now != null && autoPauseEnabled(mac)) {
+        if (now != null && autoPauseEnabled(ctx, mac)) {
             AapCodec.Ear prev = lastEar.put(mac, now); // atomic swap; returns old value (null on first call)
             AapBehaviorController ctrl = controllers.computeIfAbsent(mac, k ->
                 new AapBehaviorController(new AapBehaviorController.MediaActions() {
