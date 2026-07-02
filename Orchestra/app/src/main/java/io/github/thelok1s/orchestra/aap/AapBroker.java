@@ -88,6 +88,7 @@ public final class AapBroker {
                     String action = i.getAction();
                     BluetoothDevice device = i.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                     if (action == null || device == null || !isAap(device)) return;
+                    Log.i(TAG, "AAP ACL event " + action + " for " + device.getAddress());
                     final String mac = device.getAddress().toUpperCase(Locale.ROOT);
                     final String act = action;
                     new Thread(() -> {
@@ -152,14 +153,44 @@ public final class AapBroker {
 
     /**
      * Mirrors {@code 1ba33bc}'s ACL_CONNECTED handling: force a fresh session on every connect
-     * (drop then reconnect) so a remote drop can never leave stale battery/ear/ANC behind, and
-     * (re)register the "broker" listener via {@link #registerAndConnect}.
+     * (drop then reconnect) so a remote drop can never leave stale battery/ear/ANC behind.
+     *
+     * <p>Timing (hardware-observed): connecting the AAP channel immediately after ACL_CONNECTED
+     * (~60ms) yields a PARTIAL bring-up dump — the buds ack ANC/CA but never send battery/ear for
+     * the life of the session (their state engines are still initializing while the classic
+     * profiles come up). So we wait before connecting, then verify the dump actually delivered
+     * battery, and retry with a fresh session if it didn't. Runs on the dedicated "aap-acl"
+     * thread — sleeping here blocks nothing else.
      */
+    /** Per-MAC serialization for {@link #onAclConnected} — ACL_CONNECTED can fire once per
+     *  transport (BR/EDR + LE); two concurrent retry loops would tear down each other's fresh
+     *  sessions. The second entrant waits, sees battery already present, and returns fast. */
+    private static final Map<String, Object> RECONNECT_LOCKS = new ConcurrentHashMap<>();
+
     private static void onAclConnected(Context ctx, String mac) {
         BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
         if (a == null) return;
-        AacpEngine.disconnect(mac);
-        registerAndConnect(ctx, a, mac);
+        AacpEngine.registerListener(mac, "broker", () -> publishState(ctx, mac));
+        synchronized (RECONNECT_LOCKS.computeIfAbsent(mac, k -> new Object())) {
+        if (AapState.forMac(mac).getBattery() != null) return; // a concurrent attempt already completed
+        for (int attempt = 1; attempt <= 3; attempt++) {
+            AacpEngine.disconnect(mac); // always a fresh session (never reuse a half-open socket)
+            try { Thread.sleep(2500); } catch (InterruptedException e) { return; }
+            AacpEngine.ensureConnected(a, mac);
+            // Grace period for the bring-up dump, then check it was complete (battery present).
+            long deadline = System.currentTimeMillis() + 2000;
+            while (System.currentTimeMillis() < deadline) {
+                if (AapState.forMac(mac).getBattery() != null) {
+                    Log.i(TAG, "AAP reconnect complete for " + mac + " (attempt " + attempt + ")");
+                    return;
+                }
+                try { Thread.sleep(200); } catch (InterruptedException e) { return; }
+            }
+            Log.w(TAG, "AAP reconnect attempt " + attempt + " for " + mac
+                    + ": bring-up dump incomplete (no battery), retrying");
+        }
+        Log.w(TAG, "AAP reconnect gave up after 3 attempts for " + mac);
+        } // end per-mac lock
     }
 
     /** Explicit disconnect-clear publish for {@link io.github.thelok1s.orchestra.AacpClientBridge}:
