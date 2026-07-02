@@ -1,6 +1,6 @@
 {
   "schema_version": 4,
-  "revision": 7,
+  "revision": 8,
   "revision_date": "2026-07-02",
   "id": "airpods-pro-2",
   "name": "AirPods Pro 2",
@@ -245,8 +245,8 @@
           "app"
         ]
       },
-      "_verified": false,
-      "_verified_note": "Pending hardware verification (Plan 7 Task 4)."
+      "_verified": true,
+      "_verified_note": "Verified live on AirPods Pro 2 (USB-C), Pixel 8, 2026-07-02 (Plan 7 Task 4): 0-100 slider audibly changes Adaptive-mode ambient passthrough, routed through the SystemUI broker, gated to ANC=Adaptive, value persists on reopen."
     }
   ]
 }
