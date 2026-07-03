@@ -146,6 +146,10 @@ public final class AacpEngine {
                     AapCodec.Ear ear = AapCodec.parseEar(buf, n);
                     if (ear != null) { state.setEar(ear); changed = true;
                         Log.i(TAG, "AACP notify ear " + state.earSummary() + " for " + s.mac); }
+                    AapCodec.Ownership own = AapCodec.parseOwnership(buf, n);
+                    if (own != null) { state.setOwnership(own); changed = true;
+                        Log.i(TAG, "AACP notify ownership ownedByOther=" + own.ownedByOther
+                                + " label=" + own.otherLabel + " for " + s.mac); }
                     Integer sp = AapCodec.parseCaSpeech(buf, n);
                     if (sp != null) { Log.i(TAG, "AACP notify CA speech level=" + sp + " for " + s.mac);
                         fireSpeech(s.mac, sp); }
