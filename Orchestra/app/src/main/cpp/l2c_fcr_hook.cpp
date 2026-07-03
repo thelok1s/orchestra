@@ -328,7 +328,16 @@ static uint64_t computeSdpOffset(const char *libname) {
     LOGI("computeSdpOffset called with libname: %s", libname);
 
     std::string path;
-    if (!getLibraryPath(libname, path)) {
+    // Prefer the on-disk apex path: it resolves BEFORE libbluetooth_jni is mmap'd into the process,
+    // so precompute can finish the (slow) decompress early and the later arm-poll just needs the
+    // module base — that's what wins the DI-record-write race. Fall back to /proc/self/maps.
+    const char *apexDirs[] = {"/apex/com.android.bt/lib64/",
+                              "/apex/com.google.android.bluetooth/lib64/"};
+    for (const char *d : apexDirs) {
+        std::string cand = std::string(d) + libname;
+        if (access(cand.c_str(), R_OK) == 0) { path = cand; break; }
+    }
+    if (path.empty() && !getLibraryPath(libname, path)) {
         LOGE("Failed to locate %s", libname);
         return 0;
     }
