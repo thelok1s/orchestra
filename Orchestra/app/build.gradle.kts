@@ -8,6 +8,7 @@ plugins {
 android {
     namespace = "io.github.thelok1s.orchestra"
     compileSdk = 37
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "io.github.thelok1s.orchestra"
@@ -16,6 +17,14 @@ android {
         // versionCode encodes the semver as MMmmpp (1.0.0 -> 1_00_00). Must increase every release.
         versionCode = 10000
         versionName = "1.0.0"
+
+        ndk { abiFilters += "arm64-v8a" }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
     }
 
     signingConfigs {

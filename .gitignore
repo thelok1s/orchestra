@@ -11,6 +11,7 @@ Orchestra/.gradle/
 Orchestra/.kotlin/
 Orchestra/build/
 Orchestra/app/build/
+Orchestra/app/.cxx/
 Orchestra/local.properties
 Orchestra/.idea/
 prebuilts

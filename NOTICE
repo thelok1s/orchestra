@@ -1,0 +1,7 @@
+Orchestra bundles native code derived from LibrePods
+(https://github.com/kavishdevar/librepods), licensed under GPL-3.0.
+
+Files under Orchestra/app/src/main/cpp/ (l2c_fcr_hook.cpp, l2c_fcr_hook.h,
+CMakeLists.txt, and xz/*) originate from LibrePods and retain their original
+GPL-3.0 copyright headers. Per AGPL-3.0 §13, the combined work is distributed
+under the GNU Affero General Public License v3.0.

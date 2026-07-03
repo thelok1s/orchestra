@@ -34,7 +34,7 @@ jobs:
         run: |
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
           sdkmanager --update >/dev/null 2>&1 || true
-          sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;36.0.0"
+          sdkmanager "platform-tools" "platforms;android-37.0" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
           yes | sdkmanager --licenses >/dev/null 2>&1 || true
 
       # Decode the release keystore from a base64 secret. If the secret is unset, the build falls
