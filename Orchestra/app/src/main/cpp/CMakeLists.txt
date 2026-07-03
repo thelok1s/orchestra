@@ -5,6 +5,8 @@ set(CMAKE_CXX_STANDARD 23)
 
 set(XPOSED_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/../../xposed/cpp)
 
+find_package(shadowhook REQUIRED CONFIG)
+
 add_library(l2c_fcr_hook SHARED
         l2c_fcr_hook.cpp
 
@@ -34,4 +36,5 @@ target_compile_definitions(l2c_fcr_hook PRIVATE
 target_link_libraries(l2c_fcr_hook
         android
         log
+        shadowhook::shadowhook
 )

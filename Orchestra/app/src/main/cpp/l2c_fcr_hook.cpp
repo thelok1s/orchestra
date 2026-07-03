@@ -28,6 +28,7 @@
 #include <jni.h>
 
 #include "l2c_fcr_hook.h"
+#include "shadowhook.h"
 
 extern "C" {
 #include "xz.h"
@@ -36,8 +37,6 @@ extern "C" {
 #define LOG_TAG "LibrePodsHook"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, LOG_TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, __VA_ARGS__)
-
-static HookFunType hook_func = nullptr;
 
 static tBTA_STATUS (*original_BTA_DmSetLocalDiRecord)(tSDP_DI_RECORD *, uint32_t *) = nullptr;
 
@@ -294,11 +293,6 @@ static uint64_t findSymbolOffset(const std::vector<uint8_t> &elf, const char *sy
 static bool hookLibrary(const char *libname) {
     LOGI("hookLibrary called with libname: %s", libname);
 
-    if (!hook_func) {
-        LOGE("hook_func not initialized");
-        return false;
-    }
-
     std::string path;
     if (!getLibraryPath(libname, path)) {
         LOGE("Failed to locate %s", libname);
@@ -366,43 +360,26 @@ static bool hookLibrary(const char *libname) {
 
     if (sdp_offset) {
         void *target = reinterpret_cast<void *>(base + sdp_offset);
-        hook_func(target, (void *) fake_BTA_DmSetLocalDiRecord,
-                  (void **) &original_BTA_DmSetLocalDiRecord);
-        LOGI("hooked sdp");
+        void *stub = shadowhook_hook_func_addr(target, (void *) fake_BTA_DmSetLocalDiRecord,
+                                               (void **) &original_BTA_DmSetLocalDiRecord);
+        if (!stub) { LOGE("shadowhook_hook_func_addr failed"); return false; }
+        LOGI("hooked sdp via shadowhook");
     }
-
     return sdp_offset != 0;
 }
 
-static void on_library_loaded(const char *name, void *) {
-    LOGI("on_library_loaded called with name: %s", name);
-
-    if (strstr(name, "libbluetooth_jni.so")) {
-        LOGI("Bluetooth JNI loaded");
-        hookLibrary("libbluetooth_jni.so");
-    }
-
-    if (strstr(name, "libbluetooth_qti.so")) {
-        LOGI("Bluetooth QTI loaded");
-        hookLibrary("libbluetooth_qti.so");
-    }
-}
-
-extern "C" [[gnu::visibility("default")]]
-[[gnu::used]]
-NativeOnModuleLoaded native_init(const NativeAPIEntries *entries) {
-    LOGI("native_init called with entries: %p", entries);
-    hook_func = (HookFunType) entries->hook_func;
-    LOGI("LibrePodsNativeHook initialized, sdp hook enabled: %d",
-         enableSdpHook.load(std::memory_order_relaxed));
-    return on_library_loaded;
-}
-
-extern "C" JNIEXPORT void JNICALL
-Java_io_github_thelok1s_orchestra_NativeBridge_setSdpHook(JNIEnv *, jobject thiz,
-                                                            jboolean enable) {
-    LOGI("setSdpHook called with enable: %d", enable);
+extern "C" JNIEXPORT jboolean JNICALL
+Java_io_github_thelok1s_orchestra_NativeBridge_installDidHook(JNIEnv *, jclass, jboolean enable) {
     enableSdpHook.store(enable, std::memory_order_relaxed);
-
-    LOGI("sdp hook enabled: %d", enable);
+    static std::atomic<bool> installed(false);
+    if (!enable) return JNI_TRUE;              // gate only; nothing to install
+    bool exp = false;
+    if (installed.compare_exchange_strong(exp, true)) {
+        if (shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false) != 0) { LOGE("shadowhook_init failed"); installed.store(false); return JNI_FALSE; }
+        bool ok = hookLibrary("libbluetooth_jni.so");
+        // some builds use libbluetooth_qti.so; try it too if the first missed
+        if (!ok) ok = hookLibrary("libbluetooth_qti.so");
+        if (!ok) { LOGE("installDidHook: hookLibrary failed"); installed.store(false); return JNI_FALSE; }
+    }
+    return JNI_TRUE;
 }
