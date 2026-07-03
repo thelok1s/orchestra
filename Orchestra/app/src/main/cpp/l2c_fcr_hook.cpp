@@ -42,6 +42,16 @@ static tBTA_STATUS (*original_BTA_DmSetLocalDiRecord)(tSDP_DI_RECORD *, uint32_t
 
 static std::atomic<bool> enableSdpHook(false);
 
+// Precomputed (disk-ELF-relative) offset of BTA_DmSetLocalDiRecord within g_sdp_libname, and the
+// hook-install state. Split out so the slow ELF/.gnu_debugdata work (precomputeDidOffset, ~380ms)
+// can run BEFORE the target library is even loaded, and the actual hook install (armDidHook) is
+// then just an add + a shadowhook call — cheap enough to poll every ~1ms and win the race against
+// the Bluetooth stack's own DI-record write.
+static uint64_t g_sdp_offset = 0;          // symbol offset within libbluetooth_jni (disk ELF)
+static std::string g_sdp_libname;          // which lib g_sdp_offset belongs to
+static std::atomic<bool> g_shadowhook_ready(false);
+static std::atomic<bool> g_hooked(false);
+
 tBTA_STATUS fake_BTA_DmSetLocalDiRecord(tSDP_DI_RECORD *p_device_info, uint32_t *p_handle) {
 
     LOGI("fake_BTA_DmSetLocalDiRecord called");
@@ -181,6 +191,24 @@ static uintptr_t getModuleBase(const char *name) {
     return base;
 }
 
+// Same /proc/self/maps scan as getModuleBase, WITHOUT logging: this is polled every ~1ms from
+// armDidHook while waiting for the target library to load, and per-call LOGI/LOGE would flood
+// logcat.
+static uintptr_t getModuleBaseQuiet(const char *name) {
+    FILE *fp = fopen("/proc/self/maps", "r");
+    if (!fp) return 0;
+    char line[1024];
+    uintptr_t base = 0;
+    while (fgets(line, sizeof(line), fp)) {
+        if (strstr(line, name)) {
+            base = strtoull(line, nullptr, 16);
+            break;
+        }
+    }
+    fclose(fp);
+    return base;
+}
+
 static uint64_t
 findSymbolOffsetDynsym(const std::vector<uint8_t> &elf, const char *symbol_substring) {
 
@@ -290,29 +318,35 @@ static uint64_t findSymbolOffset(const std::vector<uint8_t> &elf, const char *sy
     return 0;
 }
 
-static bool hookLibrary(const char *libname) {
-    LOGI("hookLibrary called with libname: %s", libname);
+// Disk-ELF-only: reads libname off disk (via /proc/self/maps, so the module DOES need to be
+// mapped to resolve its path, but NOT necessarily fully relocated/usable yet), decompresses
+// .gnu_debugdata if present and resolves BTA_DmSetLocalDiRecord's file-relative offset. This is the
+// slow part (~380ms, dominated by the xz decompress) and deliberately does NOT call
+// getModuleBase/getModuleBaseQuiet: the returned value is a file offset, valid regardless of
+// whether (or where) the library ends up loaded.
+static uint64_t computeSdpOffset(const char *libname) {
+    LOGI("computeSdpOffset called with libname: %s", libname);
 
     std::string path;
     if (!getLibraryPath(libname, path)) {
         LOGE("Failed to locate %s", libname);
-        return false;
+        return 0;
     }
-    LOGI("hookLibrary: located path: %s", path.c_str());
+    LOGI("computeSdpOffset: located path: %s", path.c_str());
 
     int fd = open(path.c_str(), O_RDONLY);
     if (fd < 0) {
-        LOGE("hookLibrary: open failed");
-        return false;
+        LOGE("computeSdpOffset: open failed");
+        return 0;
     }
 
     struct stat st{};
     if (fstat(fd, &st) != 0) {
-        LOGE("hookLibrary: fstat failed");
+        LOGE("computeSdpOffset: fstat failed");
         close(fd);
-        return false;
+        return 0;
     }
-    LOGI("hookLibrary: opened file, size: %lld", (long long) st.st_size);
+    LOGI("computeSdpOffset: opened file, size: %lld", (long long) st.st_size);
 
     std::vector<uint8_t> file(st.st_size);
     read(fd, file.data(), st.st_size);
@@ -329,7 +363,7 @@ static bool hookLibrary(const char *libname) {
 
     for (int i = 0; i < eh->e_shnum; ++i) {
         if (!strcmp(shstr + shdr[i].sh_name, ".gnu_debugdata")) {
-            LOGI("hookLibrary: found .gnu_debugdata section");
+            LOGI("computeSdpOffset: found .gnu_debugdata section");
 
             std::vector<uint8_t> compressed(file.begin() + shdr[i].sh_offset,
                                             file.begin() + shdr[i].sh_offset + shdr[i].sh_size);
@@ -352,34 +386,57 @@ static bool hookLibrary(const char *libname) {
         sdp_offset = findSymbolOffsetDynsym(file, "BTA_DmSetLocalDiRecord");
     }
 
-    uintptr_t base = getModuleBase(libname);
-    if (!base) {
-        LOGE("hookLibrary: getModuleBase failed");
-        return false;
-    }
-
-    if (sdp_offset) {
-        void *target = reinterpret_cast<void *>(base + sdp_offset);
-        void *stub = shadowhook_hook_func_addr(target, (void *) fake_BTA_DmSetLocalDiRecord,
-                                               (void **) &original_BTA_DmSetLocalDiRecord);
-        if (!stub) { LOGE("shadowhook_hook_func_addr failed"); return false; }
-        LOGI("hooked sdp via shadowhook");
-    }
-    return sdp_offset != 0;
+    return sdp_offset;
 }
 
+// slow (~380ms), safe to call before libbluetooth_jni is loaded; caches the offset. Call once.
 extern "C" JNIEXPORT jboolean JNICALL
-Java_io_github_thelok1s_orchestra_NativeBridge_installDidHook(JNIEnv *, jclass, jboolean enable) {
-    enableSdpHook.store(enable, std::memory_order_relaxed);
-    static std::atomic<bool> installed(false);
-    if (!enable) return JNI_TRUE;              // gate only; nothing to install
-    bool exp = false;
-    if (installed.compare_exchange_strong(exp, true)) {
-        if (shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false) != 0) { LOGE("shadowhook_init failed"); installed.store(false); return JNI_FALSE; }
-        bool ok = hookLibrary("libbluetooth_jni.so");
-        // some builds use libbluetooth_qti.so; try it too if the first missed
-        if (!ok) ok = hookLibrary("libbluetooth_qti.so");
-        if (!ok) { LOGE("installDidHook: hookLibrary failed"); installed.store(false); return JNI_FALSE; }
+Java_io_github_thelok1s_orchestra_NativeBridge_precomputeDidOffset(JNIEnv *, jclass) {
+    if (g_sdp_offset) return JNI_TRUE;
+    for (const char *ln : {"libbluetooth_jni.so", "libbluetooth_qti.so"}) {
+        uint64_t off = computeSdpOffset(ln);
+        if (off) {
+            g_sdp_offset = off;
+            g_sdp_libname = ln;
+            LOGI("precompute %s off=0x%lx", ln, (unsigned long) off);
+            return JNI_TRUE;
+        }
     }
+    LOGE("precompute: BTA_DmSetLocalDiRecord not found");
+    return JNI_FALSE;
+}
+
+// cheap; sets the gate; hooks AT MOST ONCE the instant the module is loaded. Poll from Java until
+// it returns true.
+extern "C" JNIEXPORT jboolean JNICALL
+Java_io_github_thelok1s_orchestra_NativeBridge_armDidHook(JNIEnv *, jclass, jboolean enable) {
+    enableSdpHook.store(enable, std::memory_order_relaxed);
+    if (!enable) return JNI_TRUE;
+    if (g_hooked.load()) return JNI_TRUE;
+    if (!g_sdp_offset) return JNI_FALSE;               // precompute not done
+    uintptr_t base = getModuleBaseQuiet(g_sdp_libname.c_str());
+    if (!base) return JNI_FALSE;                        // module not loaded yet -> caller keeps polling
+    if (!g_shadowhook_ready.load()) {
+        if (shadowhook_init(SHADOWHOOK_MODE_UNIQUE, false) != 0) {
+            LOGE("shadowhook_init failed");
+            return JNI_FALSE;
+        }
+        g_shadowhook_ready.store(true);
+    }
+    void *target = (void *) (base + g_sdp_offset);
+    void *stub = shadowhook_hook_func_addr(target, (void *) fake_BTA_DmSetLocalDiRecord,
+                                           (void **) &original_BTA_DmSetLocalDiRecord);
+    if (!stub) {
+        LOGE("armDidHook: hook failed");
+        return JNI_FALSE;
+    }
+    g_hooked.store(true);
+    LOGI("armDidHook: hooked %s @ base+0x%lx", g_sdp_libname.c_str(), (unsigned long) g_sdp_offset);
     return JNI_TRUE;
+}
+
+// gate-only, for a runtime toggle-off (no re-hook)
+extern "C" JNIEXPORT void JNICALL
+Java_io_github_thelok1s_orchestra_NativeBridge_setDidGate(JNIEnv *, jclass, jboolean enable) {
+    enableSdpHook.store(enable, std::memory_order_relaxed);
 }

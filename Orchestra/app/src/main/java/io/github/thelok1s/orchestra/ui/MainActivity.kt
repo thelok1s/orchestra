@@ -121,6 +121,7 @@ private const val FLAG_STATUSES = "show_statuses"
 private const val FLAG_UNVERIFIED = "show_unverified"
 private const val FLAG_INAPP = "show_inapp"
 private const val FLAG_MAC = "show_mac"
+private const val FLAG_ACT_AS_APPLE = "act_as_apple"
 
 private enum class Dest(val label: String, val icon: ImageVector) {
     STATUS("Status", Icons.Filled.CheckCircle),
@@ -985,6 +986,13 @@ private fun SettingsScreen(onOpenDebug: () -> Unit) {
         SectionHeader("Display", "")
         SettingToggle("Show device statuses", "Battery and connection on each device card",
             DeviceStore.flag(FLAG_STATUSES, true)) { DeviceStore.setFlag(FLAG_STATUSES, it); tick++ }
+
+        SectionHeader("Bluetooth identity", "")
+        SettingToggle("Act as Apple device",
+            "Advertise the phone as Apple so AirPods stay connected to it and other devices at " +
+                "once. Takes effect after Bluetooth is restarted. While on, the phone identifies " +
+                "as Apple to all Bluetooth devices.",
+            DeviceStore.flag(FLAG_ACT_AS_APPLE, false)) { DeviceStore.setFlag(FLAG_ACT_AS_APPLE, it); tick++ }
 
         SectionHeader("Debug", "")
         SettingToggle("Show unverified controls", "Reveal controls whose bytes aren't hardware-confirmed",

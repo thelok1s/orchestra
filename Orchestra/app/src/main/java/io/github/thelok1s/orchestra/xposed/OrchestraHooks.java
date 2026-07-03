@@ -152,9 +152,88 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                     XposedBridge.log("[MX] self-active sentinel set (api " + api + ")");
                 } catch (Throwable t) { XposedBridge.log("[MX] self sentinel failed: " + t); }
                 break;
+            case "com.google.android.bluetooth":
+                // DID spoof: load the ShadowHook-based native lib into the BT stack + install the
+                // BTA_DmSetLocalDiRecord hook (Plan 10 / Path B). Main process only.
+                if (!"com.google.android.bluetooth".equals(lp.processName)) return;
+                XposedBridge.log("[MX] loaded into Bluetooth stack (DID hook)");
+                startDidHook();
+                break;
             default:
                 break;
         }
+    }
+
+    private static volatile boolean didHookStarted = false;
+
+    /** Load the ShadowHook-based DID lib into the Bluetooth stack process, precompute the
+     *  BTA_DmSetLocalDiRecord symbol offset (slow, disk-only, doesn't need the module loaded), then
+     *  — only if the user opted in via the default-off "Act as Apple device" toggle — tight-poll
+     *  {@code armDidHook} so the inline hook installs the INSTANT libbluetooth_jni is mapped,
+     *  before the stack's own DI-record write can run. This wins the race that the old
+     *  precompute-at-hook-time approach lost ~2/3 of the time. Fail-soft: any failure logs and
+     *  leaves the real DID untouched (default-off is a no-op path with zero native calls beyond
+     *  precompute + a single setDidGate(false)). */
+    private void startDidHook() {
+        if (didHookStarted) return;
+        didHookStarted = true;
+        final String mp = modulePath;
+        new Thread(() -> {
+            try {
+                if (mp == null) { XposedBridge.log("[MX] didhook: no modulePath"); return; }
+                String libDir = new java.io.File(mp).getParent() + "/lib/arm64";
+                System.load(libDir + "/libshadowhook.so");
+                System.load(libDir + "/libl2c_fcr_hook.so");
+                XposedBridge.log("[MX] didhook: libs loaded from " + libDir);
+
+                long t0 = System.currentTimeMillis();
+                io.github.thelok1s.orchestra.NativeBridge.precomputeDidOffset();
+                XposedBridge.log("[MX] didhook: precompute done in " + (System.currentTimeMillis() - t0) + "ms");
+
+                boolean enable = readActAsApple();
+                if (!enable) {
+                    io.github.thelok1s.orchestra.NativeBridge.setDidGate(false);
+                    XposedBridge.log("[MX] didhook: act_as_apple OFF (real DID)");
+                    return;
+                }
+
+                boolean armed = false;
+                for (int i = 0; i < 4000 && !armed; i++) { // tight poll: hook the instant the module loads
+                    armed = io.github.thelok1s.orchestra.NativeBridge.armDidHook(true);
+                    if (!armed) { try { Thread.sleep(1); } catch (InterruptedException ie) { return; } }
+                }
+                XposedBridge.log("[MX] didhook: armed=" + armed + " at +" + (System.currentTimeMillis() - t0) + "ms");
+            } catch (Throwable t) {
+                XposedBridge.log("[MX] didhook start failed: " + t);
+            }
+        }, "orchestra-didhook").start();
+    }
+
+    /** Cross-process read of the (default-off) act_as_apple pref via {@code StateProvider}, since
+     *  this hook runs in com.google.android.bluetooth and can't touch the app's SharedPreferences
+     *  directly. Mirrors {@link io.github.thelok1s.orchestra.aap.AapBroker}'s behavior-pull pattern:
+     *  retry for a Context (currentApplication() is null very early), any failure -> false
+     *  (default-off, zero behavior change). */
+    private static boolean readActAsApple() {
+        try {
+            android.app.Application app = null;
+            for (int i = 0; i < 20 && app == null; i++) {
+                app = AndroidAppHelper.currentApplication();
+                if (app == null) { try { Thread.sleep(100); } catch (InterruptedException ignored) { return false; } }
+            }
+            if (app == null) { XposedBridge.log("[MX] didhook: no Context for act_as_apple read"); return false; }
+            android.net.Uri uri = android.net.Uri.parse(
+                    "content://io.github.thelok1s.orchestra.state/flag/act_as_apple");
+            try (android.database.Cursor cur =
+                         app.getContentResolver().query(uri, null, null, null, null)) {
+                if (cur != null && cur.moveToFirst()) {
+                    return cur.getInt(cur.getColumnIndexOrThrow("enabled")) == 1;
+                }
+            }
+        } catch (Throwable t) {
+            XposedBridge.log("[MX] didhook: readActAsApple failed: " + t);
+        }
+        return false;
     }
 
     // ---------------- SystemUI: AAP connection broker (single-owner socket) ----------------
