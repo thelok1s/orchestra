@@ -29,12 +29,20 @@ public class ConnectReceiver extends BroadcastReceiver {
                 BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
                 if (adapter == null) { Log.w(DeviceDef.TAG, "receiver: no adapter"); return; }
 
-                if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(action)) {
+                if (BluetoothDevice.ACTION_ACL_DISCONNECTED.equals(action)) {
+                    // AAP socket lifecycle is owned by the SystemUI broker (single-owner socket,
+                    // Plan 6): AapBroker registers its own ACL_DISCONNECTED receiver and tears the
+                    // session down there (io.github.thelok1s.orchestra.aap.AapBroker). RFCOMM keeps
+                    // no persistent session, so there is nothing to do on disconnect in the app
+                    // process — this branch is an intentional no-op.
+                } else if (BluetoothDevice.ACTION_ACL_CONNECTED.equals(action)) {
                     BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
                     if (device == null) return;
                     String mac = device.getAddress() != null ? device.getAddress().toUpperCase() : null;
                     DeviceDef def = mac != null ? DeviceDef.enabled().get(mac) : null;
                     if (def != null) {
+                        // Re-assert metadata key 25 (Fast Pair clobber guard). AAP (re)connection is
+                        // the broker's job now — the app must not call ensureConnected for AAP.
                         Metadata.assertConfigTags(device, def.id);
                     }
                 } else { // BOOT_COMPLETED or APPLY

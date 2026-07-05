@@ -30,6 +30,11 @@ public final class DeviceStore {
     // When a funcId is absent the DEFAULT applies: verified controls inject by default, unverified
     // ones default OFF (so we never push guessed RFCOMM bytes until the user opts in).
     private static final String KEY_CAPS = "caps_override";
+    // Per-device LOCAL BEHAVIOR enables (distinct from caps_override, which governs whether a
+    // control is injected/shown on the About page). A behavior is something a privileged process
+    // (e.g. the SystemUI AAP broker) gates at runtime rather than an AAP/RFCOMM command — auto-pause
+    // on ear removal is the first one. JSON { "<MAC>": { "auto_pause": true|false } }. Default FALSE.
+    private static final String KEY_BEHAVIORS = "behaviors";
 
     private DeviceStore() {}
 
@@ -208,6 +213,36 @@ public final class DeviceStore {
         }
     }
 
+    // ---- per-device behavior enablement (prefs; cross-process pull target for StateProvider) ----
+
+    /** Whether {@code behaviorId} (e.g. "auto_pause") is enabled for {@code mac}. Default FALSE. */
+    public static boolean behaviorEnabled(String mac, String behaviorId) {
+        if (mac == null || behaviorId == null) return false;
+        try {
+            JSONObject root = new JSONObject(prefs().getString(KEY_BEHAVIORS, "{}"));
+            JSONObject dev = root.optJSONObject(mac.toUpperCase(Locale.ROOT));
+            if (dev != null) return dev.optBoolean(behaviorId, false);
+        } catch (Exception e) {
+            Log.w(DeviceDef.TAG, "behaviorEnabled failed: " + e);
+        }
+        return false;
+    }
+
+    public static void setBehaviorEnabled(String mac, String behaviorId, boolean enabled) {
+        if (mac == null || behaviorId == null) return;
+        try {
+            String key = mac.toUpperCase(Locale.ROOT);
+            JSONObject root = new JSONObject(prefs().getString(KEY_BEHAVIORS, "{}"));
+            JSONObject dev = root.optJSONObject(key);
+            if (dev == null) dev = new JSONObject();
+            dev.put(behaviorId, enabled);
+            root.put(key, dev);
+            prefs().edit().putString(KEY_BEHAVIORS, root.toString()).apply();
+        } catch (Exception e) {
+            Log.w(DeviceDef.TAG, "setBehaviorEnabled failed: " + e);
+        }
+    }
+
     // ---- UI bridge: capability listing for a hooked device ----
 
     /**
@@ -248,8 +283,11 @@ public final class DeviceStore {
             else status = "AVAILABLE";
             String reason = f.injectReason != null ? f.injectReason : "";
             if (conflicted) reason = "Conflicts with another enabled control.";
-            // Toggle is meaningful for anything that could be injected (implemented or pending).
-            boolean toggleable = f.injectable && (f.implemented || "PENDING".equals(status));
+            // Toggle is meaningful for anything that could be injected (implemented or pending), and
+            // also for app-surfaced controls that will never be injectable (e.g. sliders/lists) —
+            // those still need a Devices-tab opt-in gate before DeviceControlsScreen shows them.
+            boolean toggleable = (f.injectable && (f.implemented || "PENDING".equals(status)))
+                    || (!f.injectable && f.surfaces.contains("app"));
             out.add(new Capability(f.id, f.title, f.type, status, reason, toggleable, enabled,
                     f.verified));
         }

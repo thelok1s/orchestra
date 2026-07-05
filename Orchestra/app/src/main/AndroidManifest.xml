@@ -6,6 +6,25 @@
      replacing the KSU priv-app. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- Signature permission guarding the battery-change broadcast receiver registered in the
+         Settings process. Only the Orchestra app (same signer) can deliver to that receiver;
+         com.android.settings (platform-signed) is a different signer and cannot hold this. -->
+    <permission android:name="io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST"
+                android:protectionLevel="signature" />
+    <!-- The app must REQUEST its own signature permission to actually HOLD it (declaring a
+         <permission> does not self-grant). Without this the app's sendBroadcast does not satisfy
+         the receiver's broadcastPermission gate, so the live-battery broadcast never arrives. -->
+    <uses-permission android:name="io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST" />
+
+    <!-- Signature permission for the AAP state broadcast (SystemUI broker -> app). DECLARED +
+         requested so the guarded-receiver option is available, but the app's AAP_STATE receiver is
+         currently registered with NO permission: SystemUI is a different signer and cannot hold
+         this, so a guarded receiver would reject its broadcast (Plan 5 T3 asymmetry). The payload
+         is non-sensitive device state. Final guard choice pending hardware confirmation. -->
+    <permission android:name="io.github.thelok1s.orchestra.permission.AAP_STATE"
+                android:protectionLevel="signature" />
+    <uses-permission android:name="io.github.thelok1s.orchestra.permission.AAP_STATE" />
+
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
@@ -68,6 +87,7 @@
         <receiver android:name=".ConnectReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="io.github.thelok1s.orchestra.APPLY" />
             </intent-filter>
@@ -80,11 +100,24 @@
             </intent-filter>
         </receiver>
 
-        <!-- Debug: send an arbitrary RFCOMM cmd+payload to probe control sequences. -->
-        <receiver android:name=".DebugSendReceiver" android:exported="true">
+        <!-- Debug: send an arbitrary RFCOMM cmd+payload to probe control sequences. Not exported —
+             root/adb shell can still reach it via `am broadcast -n` with the component named, so
+             the debug workflow is unaffected. -->
+        <receiver android:name=".DebugSendReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="io.github.thelok1s.orchestra.DEBUG_SEND" />
+                <action android:name="io.github.thelok1s.orchestra.AACP_TEST" />
+                <action android:name="io.github.thelok1s.orchestra.AACP_MF" />
             </intent-filter>
         </receiver>
+
+        <!-- Battery state bridge: the privileged Settings-process hook queries this to read
+             per-bud battery from the app process and write untethered-battery metadata keys. -->
+        <provider
+            android:name=".StateProvider"
+            android:authorities="io.github.thelok1s.orchestra.state"
+            android:exported="true"
+            android:readPermission="android.permission.BLUETOOTH_PRIVILEGED"
+            android:writePermission="android.permission.BLUETOOTH_PRIVILEGED" />
     </application>
 </manifest>

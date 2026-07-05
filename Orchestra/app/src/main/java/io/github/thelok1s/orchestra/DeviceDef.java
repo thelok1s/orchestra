@@ -23,11 +23,11 @@ import java.util.Map;
  * {@link #injectedFuncs} (implemented + user-enabled + conflict-resolved); the UI lists everything
  * and greys out the rest with {@link Func#injectReason}.
  */
-final class DeviceDef {
+public final class DeviceDef {
     static final String TAG = "Orchestra";
 
     static final int SUPPORTED_SCHEMA_MIN = 3;
-    static final int SUPPORTED_SCHEMA_MAX = 3;
+    static final int SUPPORTED_SCHEMA_MAX = 4;
 
     final String id;
     final String name;
@@ -45,7 +45,7 @@ final class DeviceDef {
     final List<Func> functions;
     final Func soundMode;
 
-    /** A named transport+protocol bundle. Today only rfcomm is driven; others parse but degrade. */
+    /** A named transport+protocol bundle. Today rfcomm + aacp are driven; others parse but degrade. */
     static final class Channel {
         final String id;
         final String transport;             // rfcomm | ble_gatt | aacp
@@ -78,10 +78,19 @@ final class DeviceDef {
         this.soundMode = anc != null ? anc : first;
     }
 
+    /** Device display name (public: read from the Kotlin {@code ui} subpackage). */
+    public String getName() { return name; }
+
     /** Look up a function by its device-setting id (for routing updates). */
     Func funcBySettingId(int settingId) {
         for (Func f : functions) if (f.settingId == settingId) return f;
         return null;
+    }
+
+    /** True if any channel uses the AAP transport, i.e. an {@link AacpEngine} session applies. */
+    boolean usesAacp() {
+        for (Channel c : channels.values()) if ("aacp".equals(c.transport)) return true;
+        return false;
     }
 
     /** Look up a function by its slug id. */
@@ -114,6 +123,21 @@ final class DeviceDef {
         return false;
     }
 
+    /**
+     * Functions this device declares for the in-app surface (ui.surfaces contains "app"), gated by
+     * the same per-capability opt-in as {@link #injectedFuncs}: verified functions default-enabled,
+     * unverified ones default-off until the user flips them on in the Devices tab.
+     */
+    public java.util.List<Func> appFunctions(String address) {
+        java.util.List<Func> out = new java.util.ArrayList<>();
+        for (Func f : functions) {
+            if (!f.surfaces.contains("app")) continue;
+            if (!DeviceStore.isCapabilityEnabled(address, f.id, f.verified)) continue;
+            out.add(f);
+        }
+        return out;
+    }
+
     /** True if an earlier-declared, enabled capability conflicts with {@code f} (so f yields). */
     boolean conflictSuppressed(String address, Func f) {
         for (Func other : functions) {
@@ -125,7 +149,7 @@ final class DeviceDef {
     }
 
     /** A single capability + its UI mapping + injectability metadata. */
-    static final class Func {
+    public static final class Func {
         final String id;
         final String type;                                  // multitoggle|toggle|list|slider|info
         final String title;                                 // already localized
@@ -149,6 +173,9 @@ final class DeviceDef {
         // ui
         final int settingId;
         final List<String> surfaces = new ArrayList<>();
+        // type:"level" only (e.g. AirPods adaptive-audio strength, AAP feature 0x2E)
+        int featureByte = -1;   // AAP feature byte for type:"level"; -1 if unset
+        int min = 0, max = 100, step = 1;
         // relations + injectability (assigned during parse)
         final List<String> conflictsWith = new ArrayList<>();
         final Map<String, String> requires = new LinkedHashMap<>();
@@ -158,6 +185,8 @@ final class DeviceDef {
         boolean implemented;    // the current provider can actually render it (today: multitoggle)
         String injectReason;    // shown in UI when not injectable
         boolean verified;       // set/read bytes confirmed on hardware
+        boolean local;          // LOCAL behavior toggle (e.g. auto_pause, ca_duck): not an AAP/RFCOMM
+                                 // command; a privileged process (SystemUI broker) gates it at runtime
 
         Func(String id, String type, String title, String capability, String setCommand,
              String payloadTemplate, String readCommand, int stateByteIndex, int settingId) {
@@ -174,6 +203,19 @@ final class DeviceDef {
 
         boolean isMultitoggle() { return "multitoggle".equals(type); }
         boolean isToggle() { return "toggle".equals(type); }
+        boolean isInfo() { return "info".equals(type); }
+        boolean isBattery() { return "battery".equals(type); }
+        public boolean isInfoRow() { return isInfo() || isBattery(); } // read-only display rows
+        public boolean isLevel() { return "level".equals(type); }
+        public boolean isText() { return "text".equals(type); }
+
+        // ---- public accessors (package-private fields are invisible to the Kotlin `ui` subpackage) ----
+        public String getId() { return id; }
+        public String getTitle() { return title; }
+        public int getFeatureByte() { return featureByte; }
+        public int getMin() { return min; }
+        public int getMax() { return max; }
+        public int getStep() { return step; }
 
         int indexOfOption(String optId) {
             for (int i = 0; i < options.size(); i++) {
@@ -202,7 +244,7 @@ final class DeviceDef {
     // ---- loading ----
 
     /** Returns the def for an enabled device address, or null if not enabled / unknown. */
-    static DeviceDef forAddress(String address) {
+    public static DeviceDef forAddress(String address) {
         if (address == null) return null;
         return loadById(DeviceStore.enabledId(address));
     }
@@ -269,6 +311,12 @@ final class DeviceDef {
                 platforms, functions);
     }
 
+    /** Test seam: exposes the private {@link #parseFunc} parse path to unit tests (no channels
+     *  needed for the fields exercised there), which can't otherwise reach it from src/test. */
+    static Func parseFuncForTest(JSONObject fn) throws Exception {
+        return parseFunc(fn, new LinkedHashMap<>(), null);
+    }
+
     private static Func parseFunc(JSONObject fn, Map<String, Channel> channels, String defaultChannel) throws Exception {
         String type = fn.optString("type", "multitoggle");
         JSONObject set = fn.optJSONObject("set");
@@ -288,11 +336,23 @@ final class DeviceDef {
                 fn.optString("capability", ""),
                 setCmd, payload, readCmd, stateByteIndex, settingId);
         func.verified = fn.optBoolean("_verified", false);
+        func.local = fn.optBoolean("local", false);
         func.iconName = fn.optString("icon", null);
         func.channelId = fn.optString("channel", defaultChannel);
         Channel ch = channels.get(func.channelId);
         func.transport = ch != null ? ch.transport : null;
         if (fn.has("summary") || fn.has("summary_i18n")) func.summary = localized(fn, "summary", "");
+
+        if ("level".equals(type)) {
+            String feat = fn.optString("feature", null);
+            if (feat != null) {
+                try { func.featureByte = Integer.parseInt(feat, 16); }
+                catch (NumberFormatException e) { func.featureByte = -1; }
+            }
+            func.min = fn.optInt("min", 0);
+            func.max = fn.optInt("max", 100);
+            func.step = fn.optInt("step", 1);
+        }
 
         // options (multitoggle/list)
         JSONArray opts = fn.optJSONArray("options");
@@ -358,10 +418,22 @@ final class DeviceDef {
                 autoInjectable = false;
                 autoReason = "Slider unsupported on the About page — in-app only.";
                 break;
+            case "level":
+                autoInjectable = false;
+                autoReason = "No native slider control on the About page — in-app only.";
+                break;
+            case "text":
+                autoInjectable = false;
+                autoReason = "No native text input on the About page — in-app only.";
+                break;
             case "info":
+            case "battery":
+                autoInjectable = true; // read-only info row (ActionSwitchPreference, no switch)
+                autoReason = "Read-only."; // shown if a definition opts out via inject:false
+                break;
             default:
                 autoInjectable = false;
-                autoReason = "Read-only.";
+                autoReason = "Unsupported control type.";
                 break;
         }
         // `inject` may be a JSON boolean or the string "auto".
@@ -378,15 +450,18 @@ final class DeviceDef {
             func.injectable = autoInjectable;
             if (!autoInjectable) func.injectReason = !overrideReason.isEmpty() ? overrideReason : autoReason;
         }
-        // The provider renders MultiTogglePreference (segmented) and ActionSwitchPreference (switch).
-        // list/slider/info are injectable=false; anything else injectable stays catalog-only.
-        func.implemented = func.injectable && (func.isMultitoggle() || func.isToggle());
+        // The provider renders MultiTogglePreference (segmented), ActionSwitchPreference (switch),
+        // and ActionSwitchPreference (no switch) for info/battery read-only rows.
+        // list/slider stay catalog-only; anything else injectable stays catalog-only.
+        func.implemented = func.injectable
+                && (func.isMultitoggle() || func.isToggle() || func.isInfoRow());
         if (func.injectable && !func.implemented && func.injectReason == null) {
             func.injectReason = "Not yet renderable on the About page.";
         }
-        // Graceful degrade: the running app can only drive rfcomm today. A function on an
+        // Graceful degrade: the running app drives rfcomm + aacp today. A function on an
         // unknown/unsupported transport is kept in the catalog but never injected.
-        if (func.injectable && !"rfcomm".equals(func.transport)) {
+        boolean drivenTransport = "rfcomm".equals(func.transport) || "aacp".equals(func.transport);
+        if (func.injectable && !drivenTransport) {
             func.injectable = false;
             func.implemented = false;
             func.injectReason = func.transport == null
