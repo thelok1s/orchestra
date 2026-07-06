@@ -1,6 +1,6 @@
 {
   "index_schema": 1,
-  "generated": "2026-07-02T16:39:58.979Z",
+  "generated": "2026-07-06T22:45:12.919Z",
   "repo": "orchestra-manifests",
   "manufacturers": [
     {
@@ -12,7 +12,6 @@
           "name": "Soundcore Liberty 4 Pro",
           "schema_version": 3,
           "revision": 1,
-          "name_regex": "(?i)soundcore Liberty 4 Pro",
           "match": {
             "name_regex": "(?i)soundcore Liberty 4 Pro",
             "service_uuids_any": [
@@ -38,7 +37,6 @@
           "name": "Soundcore Space One Pro",
           "schema_version": 3,
           "revision": 1,
-          "name_regex": "(?i)soundcore Space One Pro",
           "match": {
             "name_regex": "(?i)soundcore Space One Pro",
             "service_uuids_any": [
@@ -71,7 +69,6 @@
           "name": "AirPods Pro 2",
           "schema_version": 4,
           "revision": 9,
-          "name_regex": "(?i)airpods pro",
           "match": {
             "name_regex": "(?i)airpods pro",
             "service_uuids_any": [
@@ -89,6 +86,39 @@
           },
           "url": "manifests/apple/airpods-pro-2.json",
           "sha256": "a5922fdb668fbf491a789f5519f236739e3e5575073ff3e00668bae2c5c2024b"
+        }
+      ]
+    },
+    {
+      "slug": "shokz",
+      "name": "Shokz",
+      "devices": [
+        {
+          "id": "shokz-openswim-pro",
+          "name": "Shokz OpenSwim Pro",
+          "schema_version": 3,
+          "revision": 2,
+          "match": {
+            "name_regex": "(?i)(OpenSwim Pro|Shokz.OpenSwim.Pro)",
+            "service_uuids_any": [
+              "00001101-0000-1000-8000-00805f9b34fb"
+            ],
+            "manufacturer_id": "0x0cac"
+          },
+          "transports": [
+            "rfcomm",
+            "aacp"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 11,
+            "injectable": 3,
+            "verified": 11
+          },
+          "url": "manifests/shokz/shokz-openswim-pro.json",
+          "sha256": "67b851e57888f18322472a2bc6799753714a3da1a2f2e47e57771ed5e6741772"
         }
       ]
     }

@@ -27,6 +27,11 @@ prebuilts
 *.keystore
 keystore.properties
 
+# reverse-engineering capture artifacts (raw; distilled refs live in docs/devices/)
+*.pcapng
+shoks.txt
+shokz_openswim_pro_protocol.md
+
 # --- docs split ---
 # PUBLISHED (committed): docs/ARCHITECTURE.md (framework/API design) + docs/devices/ (device RE).
 # INTERNAL / dev-only (NOT published): everything else under docs/, plus the repo map.

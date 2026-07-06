@@ -1,0 +1,570 @@
+{
+  "schema_version": 3,
+  "revision": 2,
+  "revision_date": "2026-07-07",
+  "id": "shokz-openswim-pro",
+  "name": "Shokz OpenSwim Pro",
+  "manufacturer": "Shokz",
+  "model_code": "S180",
+  "_capture_note": "All commands verified live 2026-07-06 via btsnoop HCI capture (btsnoop.pcapng). Phone: Pixel 8 Pro Max Ultra+ (MAC c8:17:ec:7b:33:5c). Headphone: OpenSwim Pro by Shokz (MAC a0:0c:e2:49:22:05, Company ID 0x0cac). Control channel: L2CAP over RFCOMM (PSM 0x0003), custom shokz_v1 protocol. Two packet formats: A (53 ff ... 2d) for persistent settings writes; B (53 ef ... 31) for immediate action commands.",
+  "match": {
+    "name_regex": "(?i)(OpenSwim Pro|Shokz.OpenSwim.Pro)",
+    "service_uuids_any": [
+      "00001101-0000-1000-8000-00805f9b34fb"
+    ],
+    "manufacturer_id": "0x0cac"
+  },
+  "channels": {
+    "rfcomm-control": {
+      "transport": "rfcomm",
+      "uuid": "00001101-0000-1000-8000-00805f9b34fb",
+      "secure": false,
+      "protocol": {
+        "framing": "shokz_v1",
+        "_doc": "Two packet formats share the same RFCOMM channel. FORMAT A (persistent settings): host->device 53 ff [seq:1] 01 a5 5a [inner_len:2LE] 01 00 00 00 [data_size:4LE] 02 00 00 00 04 00 00 00 01 00 00 00 03 00 00 00 04 00 00 00 [cmd_id:4LE] 04 00 00 00 [value_size:4LE] [value:4LE] 00 00 00 00 2d. FORMAT B (immediate action): host->device 53 ef [seq:1] a5 5a [inner_len:2LE] 01 00 00 00 [data_size:4LE] 02 00 00 00 04 00 00 00 01 00 00 00 03 00 00 00 04 00 00 00 [cmd_id:4LE] 04 00 00 00 [value:4LE] 31. Device ACK for FORMAT A: 51 ff 01 02 2d. Sequence byte increments per session. All multi-byte fields are u32 LE.",
+        "format_a_prefix": "53ff",
+        "format_a_magic": "01a55a",
+        "format_a_tail": "2d",
+        "format_b_prefix": "53ef",
+        "format_b_magic": "a55a",
+        "format_b_tail": "31",
+        "cmd_id_size": 4,
+        "value_size": 4,
+        "endian": "little"
+      }
+    },
+    "avrcp": {
+      "transport": "aacp",
+      "_doc": "Standard AVRCP over L2CAP PSM 0x0017 (AVCTP). Used for standard media controls via AVRCP PassThrough. Orchestra does NOT drive this channel. The headphone also supports playback controls via shokz_v1 in MP3 mode.",
+      "_verified": true,
+      "_note": "Observed AVRCP PassThrough opcode 0x17 on CID 0x0076 in btsnoop capture."
+    }
+  },
+  "default_channel": "rfcomm-control",
+  "platforms": {
+    "pixelos": {
+      "detect": {
+        "manufacturer": "Google",
+        "system_prop": {
+          "ro.product.brand": "google"
+        }
+      },
+      "requires": [
+        "root",
+        "lsposed",
+        "pkg:com.android.systemui",
+        "pkg:com.android.settings"
+      ],
+      "inject": {
+        "settings_pkg": "com.android.settings",
+        "systemui_pkg": "com.android.systemui",
+        "about_fragment": "com.android.settings.bluetooth.BluetoothDetailsConfigurableFragment",
+        "surfaces": [
+          "device_details",
+          "volume_panel"
+        ],
+        "reserved_ids": {}
+      }
+    }
+  },
+  "_protocol_reference": {
+    "format_a_example_eq_vocal": "53ff7901a55a3400010000003000820d010000002800000002000000040000000100000003000000040000000e000000040000000800000002000000000000002d",
+    "format_b_example_play": "53ef69a55a2c00010000002800438b0100000020000000020000000400000001000000030000000400000003000000040000000000000031",
+    "_cmd_id_location_format_a": "bytes 44-47 (u32 LE)",
+    "_value_location_format_a": "bytes 56-59 (u32 LE)",
+    "_cmd_id_location_format_b": "bytes 43-46 (u32 LE)",
+    "_value_location_format_b": "bytes 51-54 (u32 LE)"
+  },
+  "functions": [
+    {
+      "id": "eq_preset",
+      "type": "multitoggle",
+      "title": "Equalizer",
+      "title_i18n": {
+        "ru": "Эквалайзер"
+      },
+      "capability": "equalizer",
+      "options": [
+        {
+          "id": "standard",
+          "label": "Standard",
+          "icon": "tune",
+          "label_i18n": {
+            "ru": "Стандартный"
+          }
+        },
+        {
+          "id": "vocal",
+          "label": "Vocal",
+          "icon": "mic",
+          "label_i18n": {
+            "ru": "Голосовой"
+          }
+        },
+        {
+          "id": "swimming",
+          "label": "Swimming",
+          "icon": "ear",
+          "label_i18n": {
+            "ru": "Плавание"
+          },
+          "_note": "Available in both BT and MP3 mode."
+        }
+      ],
+      "set": {
+        "_format": "A",
+        "cmd_id": "0x0000000e",
+        "option_values": {
+          "standard": "0x00000001",
+          "vocal": "0x00000002",
+          "swimming": "0x00000007"
+        },
+        "_raw_standard": "53ff7901a55a3400010000003000c218010000002800000002000000040000000100000003000000040000000e000000040000000800000001000000000000002d",
+        "_raw_vocal": "53ff7901a55a3400010000003000820d010000002800000002000000040000000100000003000000040000000e000000040000000800000002000000000000002d",
+        "_raw_swimming": "53ff7901a55a34000100000030004232010000002800000002000000040000000100000003000000040000000e000000040000000800000007000000000000002d",
+        "frames": {
+          "standard": "53ff7901a55a3400010000003000c218010000002800000002000000040000000100000003000000040000000e000000040000000800000001000000000000002d",
+          "vocal": "53ff7901a55a3400010000003000820d010000002800000002000000040000000100000003000000040000000e000000040000000800000002000000000000002d",
+          "swimming": "53ff7901a55a34000100000030004232010000002800000002000000040000000100000003000000040000000e000000040000000800000007000000000000002d"
+        }
+      },
+      "read": {
+        "command": null,
+        "response_command": null,
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": "auto",
+      "ui": {
+        "setting_id": 3001,
+        "surfaces": [
+          "device_details",
+          "volume_panel"
+        ]
+      },
+      "_verified": true,
+      "_verified_note": "All 3 EQ values confirmed live. Vocal(2) frames 3878-3910, Standard(1) frames 5849-5875, Swimming(7) frames 20632-20647."
+    },
+    {
+      "id": "multipoint",
+      "type": "toggle",
+      "title": "Dual connection (Multipoint)",
+      "title_i18n": {
+        "ru": "Двойное подключение (Мультиточка)"
+      },
+      "capability": "dual_connections",
+      "set": {
+        "_note": "Enable: FORMAT B-like, cmd_id=0x11, val=0x00. Disable: FORMAT A, cmd_id=0x10, val=0x06, plus 6 bytes of host MAC (LE) before tail 0x2d.",
+        "cmd_id_on": "0x00000011",
+        "cmd_id_off": "0x00000010",
+        "value_on": "0x00000000",
+        "value_off": "0x00000006",
+        "_raw_enable": "53ef69a55a2c000100000028007bb30100000020000000020000000400000001000000030000000400000011000000040000000000000031",
+        "_raw_disable": "53ff7501a55a3200010000002e007b9301000000260000000200000004000000010000000300000004000000100000000400000006000000{host_mac_le_6b}2d",
+        "_disable_extra": "Append 6 bytes = host Bluetooth MAC in little-endian order (reversed). Example: MAC c8:17:ec:7b:33:5c -> bytes c8 17 ec 7b 33 5c appended before 0x2d.",
+        "frames": {
+          "on": "53ef69a55a2c000100000028007bb30100000020000000020000000400000001000000030000000400000011000000040000000000000031",
+          "off": "53ff7501a55a3200010000002e007b93010000002600000002000000040000000100000003000000040000001000000004000000060000000000000000002d"
+        },
+        "host_mac_offset_off": 56
+      },
+      "read": {
+        "command": null,
+        "response_command": null,
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": "auto",
+      "ui": {
+        "setting_id": 3002,
+        "surfaces": [
+          "device_details"
+        ]
+      },
+      "_verified": true,
+      "_verified_note": "Enable(cmd=0x11) frames 14768-14794. Disable(cmd=0x10, val=6) frames 9625-9680. Disable includes host MAC bytes c8:17:ec:7b:33:5c confirmed."
+    },
+    {
+      "id": "playback_mode",
+      "type": "toggle",
+      "title": "Playback mode: MP3 or Bluetooth",
+      "title_i18n": {
+        "ru": "Режим воспроизведения: MP3 или Bluetooth"
+      },
+      "capability": "custom_mode_switch",
+      "_summary": "Toggles between the headphone's internal MP3 player mode and standard Bluetooth audio mode.",
+      "set": {
+        "_note": "MP3 mode: FORMAT A, cmd_id=0x25, val=0x01. Bluetooth mode: FORMAT B, cmd_id=0x25, val=0x00. Same cmd_id but different packet format (A vs B).",
+        "cmd_id": "0x00000025",
+        "state_values": {
+          "on": "0x00000001",
+          "off": "0x00000000"
+        },
+        "_format_on": "A",
+        "_format_off": "B",
+        "_raw_to_mp3": "53ff7101a55a3000010000002c00b1da01000000240000000200000004000000010000000300000004000000250000000400000004000000010000002d",
+        "_raw_to_bt": "53ef71a55a3000010000002c00b026010000002400000002000000040000000100000003000000040000002500000004000000040000000000000031",
+        "frames": {
+          "on": "53ff7101a55a3000010000002c00b1da01000000240000000200000004000000010000000300000004000000250000000400000004000000010000002d",
+          "off": "53ef71a55a3000010000002c00b026010000002400000002000000040000000100000003000000040000002500000004000000040000000000000031"
+        }
+      },
+      "read": {
+        "command": null,
+        "response_command": null,
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": "auto",
+      "ui": {
+        "setting_id": 3003,
+        "surfaces": [
+          "device_details"
+        ]
+      },
+      "_verified": true,
+      "_verified_note": "To-MP3(FORMAT A, val=1) frames 19808-19859. To-BT(FORMAT B, val=0) frames 19982-20007."
+    },
+    {
+      "id": "mp3_shuffle",
+      "type": "list",
+      "title": "MP3 shuffle mode",
+      "title_i18n": {
+        "ru": "Режим перемешивания MP3"
+      },
+      "capability": "custom_mp3_shuffle",
+      "options": [
+        {
+          "id": "order",
+          "label": "In order",
+          "label_i18n": {
+            "ru": "По порядку"
+          }
+        },
+        {
+          "id": "shuffle",
+          "label": "Shuffle",
+          "label_i18n": {
+            "ru": "Перемешать"
+          }
+        },
+        {
+          "id": "repeat",
+          "label": "Repeat all",
+          "label_i18n": {
+            "ru": "Повтор"
+          }
+        }
+      ],
+      "set": {
+        "_format": "A",
+        "cmd_id": "0x00000026",
+        "option_values": {
+          "order": "0x00000000",
+          "shuffle": "0x00000001",
+          "repeat": "0x00000002"
+        },
+        "_raw_order": "53ff7101a55a3000010000002c00f0d701000000240000000200000004000000010000000300000004000000260000000400000004000000000000002d",
+        "_raw_shuffle": "53ff7101a55a3000010000002c00f12b01000000240000000200000004000000010000000300000004000000260000000400000004000000010000002d",
+        "_raw_repeat": "53ff7101a55a3000010000002c00f16f01000000240000000200000004000000010000000300000004000000260000000400000004000000020000002d",
+        "frames": {
+          "order": "53ff7101a55a3000010000002c00f0d701000000240000000200000004000000010000000300000004000000260000000400000004000000000000002d",
+          "shuffle": "53ff7101a55a3000010000002c00f12b01000000240000000200000004000000010000000300000004000000260000000400000004000000010000002d",
+          "repeat": "53ff7101a55a3000010000002c00f16f01000000240000000200000004000000010000000300000004000000260000000400000004000000020000002d"
+        }
+      },
+      "read": {
+        "command": null,
+        "response_command": null,
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": "auto",
+      "ui": {
+        "setting_id": 3004,
+        "surfaces": [
+          "device_details"
+        ]
+      },
+      "_verified": true,
+      "_verified_note": "order(0) frames 21126-21129, shuffle(1) frames 21597-21601, repeat(2) frames 21733-21737."
+    },
+    {
+      "id": "button_action",
+      "type": "list",
+      "title": "Universal button action",
+      "title_i18n": {
+        "ru": "Действие универсальной кнопки"
+      },
+      "capability": "button_configuration",
+      "options": [
+        {
+          "id": "voice_assistant",
+          "label": "Voice assistant",
+          "label_i18n": {
+            "ru": "Голосовой помощник"
+          }
+        },
+        {
+          "id": "switch_mode",
+          "label": "Switch mode (MP3/BT)",
+          "label_i18n": {
+            "ru": "Переключить режим MP3/BT"
+          }
+        }
+      ],
+      "set": {
+        "_format": "A",
+        "cmd_id": "0x00000024",
+        "option_values": {
+          "voice_assistant": "0x00000001",
+          "switch_mode": "0x00000003"
+        },
+        "_raw_voice_asst": "53ff7101a55a3000010000002c00704a01000000240000000200000004000000010000000300000004000000240000000400000004000000010000002d",
+        "_raw_switch_mode": "53ff7101a55a3000010000002c0071f201000000240000000200000004000000010000000300000004000000240000000400000004000000030000002d",
+        "frames": {
+          "voice_assistant": "53ff7101a55a3000010000002c00704a01000000240000000200000004000000010000000300000004000000240000000400000004000000010000002d",
+          "switch_mode": "53ff7101a55a3000010000002c0071f201000000240000000200000004000000010000000300000004000000240000000400000004000000030000002d"
+        }
+      },
+      "read": {
+        "command": null,
+        "response_command": null,
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": "auto",
+      "ui": {
+        "setting_id": 3005,
+        "surfaces": [
+          "device_details"
+        ]
+      },
+      "_verified": true,
+      "_verified_note": "cmd_id=0x24: voice_assistant(1) frames 22606-22614, switch_mode(3) frames 22440-22444."
+    },
+    {
+      "id": "volume_long_press_action",
+      "type": "list",
+      "title": "Volume long-press action",
+      "title_i18n": {
+        "ru": "Долгое нажатие кнопки громкости"
+      },
+      "capability": "button_configuration",
+      "_note": "Shares cmd_id=0x24 with button_action. Values observed: 0x01=switch_mode, 0x04=voice_assistant.",
+      "options": [
+        {
+          "id": "switch_mode",
+          "label": "Switch mode (MP3/BT)",
+          "label_i18n": {
+            "ru": "Переключить режим MP3/BT"
+          }
+        },
+        {
+          "id": "voice_assistant",
+          "label": "Voice assistant",
+          "label_i18n": {
+            "ru": "Голосовой помощник"
+          }
+        }
+      ],
+      "set": {
+        "_format": "A",
+        "cmd_id": "0x00000024",
+        "option_values": {
+          "switch_mode": "0x00000001",
+          "voice_assistant": "0x00000004"
+        },
+        "_raw_switch_mode": "53ff7101a55a3000010000002c00704a01000000240000000200000004000000010000000300000004000000240000000400000004000000010000002d",
+        "_raw_voice_asst": "53ff7101a55a3000010000002c00708601000000240000000200000004000000010000000300000004000000240000000400000004000000040000002d",
+        "frames": {
+          "switch_mode": "53ff7101a55a3000010000002c00704a01000000240000000200000004000000010000000300000004000000240000000400000004000000010000002d",
+          "voice_assistant": "53ff7101a55a3000010000002c00708601000000240000000200000004000000010000000300000004000000240000000400000004000000040000002d"
+        }
+      },
+      "read": {
+        "command": null,
+        "response_command": null,
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": "auto",
+      "ui": {
+        "setting_id": 3006,
+        "surfaces": [
+          "device_details"
+        ]
+      },
+      "_verified": true,
+      "_verified_note": "cmd_id=0x24: switch_mode(1) frames 23010-23022, voice_assistant(4) frames 22817-22820."
+    },
+    {
+      "id": "mp3_play",
+      "type": "info",
+      "title": "MP3 Play",
+      "title_i18n": {
+        "ru": "Воспроизведение MP3"
+      },
+      "capability": "custom_mp3_playback",
+      "set": {
+        "_format": "B",
+        "cmd_id": "0x00000003",
+        "value": "0x00000000",
+        "_raw": "53ef69a55a2c00010000002800438b0100000020000000020000000400000001000000030000000400000003000000040000000000000031",
+        "frames": {
+          "action": "53ef69a55a2c00010000002800438b0100000020000000020000000400000001000000030000000400000003000000040000000000000031"
+        }
+      },
+      "read": {
+        "command": null,
+        "response_command": null,
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": false,
+      "inject_reason": "Action command — triggered programmatically, no persistent UI toggle.",
+      "ui": {
+        "setting_id": 3010,
+        "surfaces": []
+      },
+      "_verified": true,
+      "_verified_note": "cmd_id=0x03 confirmed frames 23515-23526."
+    },
+    {
+      "id": "mp3_pause",
+      "type": "info",
+      "title": "MP3 Pause",
+      "title_i18n": {
+        "ru": "Пауза MP3"
+      },
+      "capability": "custom_mp3_playback",
+      "set": {
+        "_format": "B",
+        "cmd_id": "0x00000004",
+        "value": "0x00000000",
+        "_raw": "53ef69a55a2c00010000002800b6400100000020000000020000000400000001000000030000000400000004000000040000000000000031",
+        "frames": {
+          "action": "53ef69a55a2c00010000002800b6400100000020000000020000000400000001000000030000000400000004000000040000000000000031"
+        }
+      },
+      "read": {
+        "command": null,
+        "response_command": null,
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": false,
+      "inject_reason": "Action command.",
+      "ui": {
+        "setting_id": 3011,
+        "surfaces": []
+      },
+      "_verified": true,
+      "_verified_note": "cmd_id=0x04 confirmed frames 23634-23641."
+    },
+    {
+      "id": "mp3_previous",
+      "type": "info",
+      "title": "MP3 Previous track",
+      "title_i18n": {
+        "ru": "Предыдущий трек MP3"
+      },
+      "capability": "custom_mp3_playback",
+      "set": {
+        "_format": "B",
+        "cmd_id": "0x00000007",
+        "value": "0x00000000",
+        "_raw": "53ef69a55a2c00010000002800b2440100000020000000020000000400000001000000030000000400000007000000040000000000000031",
+        "frames": {
+          "action": "53ef69a55a2c00010000002800b2440100000020000000020000000400000001000000030000000400000007000000040000000000000031"
+        }
+      },
+      "read": {
+        "command": null,
+        "response_command": null,
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": false,
+      "inject_reason": "Action command.",
+      "ui": {
+        "setting_id": 3012,
+        "surfaces": []
+      },
+      "_verified": true,
+      "_verified_note": "cmd_id=0x07 confirmed frames 23774-23788."
+    },
+    {
+      "id": "mp3_next",
+      "type": "info",
+      "title": "MP3 Next track",
+      "title_i18n": {
+        "ru": "Следующий трек MP3"
+      },
+      "capability": "custom_mp3_playback",
+      "set": {
+        "_format": "B",
+        "cmd_id": "0x00000008",
+        "value": "0x00000000",
+        "_raw": "53ef69a55a2c00010000002800a6500100000020000000020000000400000001000000030000000400000008000000040000000000000031",
+        "frames": {
+          "action": "53ef69a55a2c00010000002800a6500100000020000000020000000400000001000000030000000400000008000000040000000000000031"
+        }
+      },
+      "read": {
+        "command": null,
+        "response_command": null,
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": false,
+      "inject_reason": "Action command.",
+      "ui": {
+        "setting_id": 3013,
+        "surfaces": []
+      },
+      "_verified": true,
+      "_verified_note": "cmd_id=0x08 confirmed frames 23897-23913."
+    },
+    {
+      "id": "mp3_volume",
+      "type": "slider",
+      "title": "MP3 volume",
+      "title_i18n": {
+        "ru": "Громкость MP3"
+      },
+      "capability": "custom_mp3_volume",
+      "_note": "FORMAT B. cmd_id=0x0a. Volume is 0x00 (muted/min) to 0x10=16 (max). 16 discrete steps.",
+      "range": {
+        "min": 0,
+        "max": 16,
+        "step": 1,
+        "unit": "step"
+      },
+      "set": {
+        "_format": "B",
+        "cmd_id": "0x0000000a",
+        "_raw_vol_0": "53ef71a55a3000010000002c00ec0a010000002400000002000000040000000100000003000000040000000a00000004000000040000000000000031",
+        "_raw_vol_16": "53ef71a55a3000010000002c00e8ca010000002400000002000000040000000100000003000000040000000a00000004000000040000001000000031",
+        "frame_template": "53ef71a55a3000010000002c00ec0a010000002400000002000000040000000100000003000000040000000a00000004000000040000000000000031",
+        "value_offset": 55,
+        "value_size": 4
+      },
+      "read": {
+        "command": null,
+        "response_command": null,
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": false,
+      "inject_reason": "no-native-slider",
+      "ui": {
+        "setting_id": 3014,
+        "surfaces": []
+      },
+      "_verified": true,
+      "_verified_note": "cmd_id=0x0a: vol=0(min) frames 24102-24108, vol=16/0x10(max) frames 24302-24308."
+    }
+  ],
+  "_notes": "Shokz OpenSwim Pro (bone-conduction, waterproof, open-ear), MAC a0:0c:e2:49:22:05, Company ID 0x0cac (Shenzhen Shokz Co.,Ltd.). Dual-mode device: Bluetooth audio + internal MP3 player (storage). Mode switch via cmd_id=0x25. Control protocol: proprietary binary TLV (shokz_v1) over RFCOMM SPP (UUID 00001101). Observed L2CAP: CID 0x0050 host->device, CID 0x0057 device->host, CID 0x0076 AVRCP PassThrough. Two top-level packet formats: FORMAT A = persistent settings (prefix 53ff, tail 2d); FORMAT B = immediate actions (prefix 53ef, tail 31). The sequence byte at offset 2 appears to be a rolling 8-bit counter per RFCOMM session. The 2-byte field at offsets 14-15 in FORMAT A (or 13-14 in FORMAT B) is a per-command checksum or timestamp that varies per packet. AVRCP (PSM 0x0017, CID 0x0076) is also used for standard BT media control — handled natively by Android."
+}

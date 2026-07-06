@@ -109,7 +109,7 @@ public class SettingProviderService extends Service {
         // Live-push: when the buds send a notification (stem press, pod in/out, battery, CA),
         // re-read + push the full list so the page updates without user interaction.
         for (DeviceDef.Func f : defInjectedSafe(address)) {
-            ControlEngine engine = ControlEngine.forTransport(f.transport);
+            ControlEngine engine = ControlEngine.forFunc(f);
             if (engine != null) {
                 engine.registerListener(address, "provider", () -> io.execute(() -> {
                     IBinder l = listeners.get(address);
@@ -129,7 +129,7 @@ public class SettingProviderService extends Service {
     /** Unconditionally drop the engine listener for this device across all transports. Safe to call
      *  even if none was registered (RFCOMM is a no-op); does not depend on the device still resolving. */
     private void unregisterEngineListener(String address) {
-        for (String transport : new String[]{"aacp", "rfcomm"}) {
+        for (String transport : new String[]{"aacp", "rfcomm", "shokz_v1"}) {
             ControlEngine engine = ControlEngine.forTransport(transport);
             if (engine != null) engine.unregisterListener(address, "provider");
         }
@@ -182,7 +182,7 @@ public class SettingProviderService extends Service {
         io.execute(() -> {
             BluetoothAdapter adapter = adapter();
             if (adapter == null) return;
-            ControlEngine engine = ControlEngine.forTransport(f.transport);
+            ControlEngine engine = ControlEngine.forFunc(f);
             if (engine == null) { Log.w(DeviceDef.TAG, "no engine for transport " + f.transport); return; }
             int idx;
             if (f.isToggle()) {
@@ -224,7 +224,7 @@ public class SettingProviderService extends Service {
                 cache.put(f.settingId, DeviceStore.behaviorEnabled(address, f.id) ? 1 : 0);
                 continue;
             }
-            ControlEngine engine = ControlEngine.forTransport(f.transport);
+            ControlEngine engine = ControlEngine.forFunc(f);
             if (engine == null) continue;
             int idx;
             if (f.isToggle()) {
@@ -248,7 +248,7 @@ public class SettingProviderService extends Service {
         List<DeviceSetting> list = new ArrayList<>();
         for (DeviceDef.Func f : def.injectedFuncs(address)) {
             if (f.isInfoRow()) {
-                ControlEngine engine = ControlEngine.forTransport(f.transport);
+                ControlEngine engine = ControlEngine.forFunc(f);
                 String summary = engine != null
                         ? engine.readInfo(adapter(), address, def, f) : null;
                 list.add(buildSetting(f, 0, summary));
