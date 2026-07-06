@@ -34,10 +34,10 @@ public interface ControlEngine {
             return null; // RFCOMM has no info/push functions today
         }
         @Override public boolean applyLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, int value) {
-            return false; // RFCOMM has no level/push channel today
+            return RfcommEngine.applyLevel(a, mac, def, f, value); // single-value level/slider over soundcore_v1
         }
         @Override public Integer readLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
-            return null;
+            return RfcommEngine.readLevel(a, mac, def, f);
         }
         @Override public void registerListener(String mac, String key, Runnable onChange) { /* no push channel */ }
         @Override public void unregisterListener(String mac, String key) { /* no-op */ }
@@ -110,5 +110,14 @@ public interface ControlEngine {
         if ("rfcomm".equals(transport)) return RFCOMM;
         if ("aacp".equals(transport)) return AACP;
         return null;
+    }
+
+    /**
+     * Resolve the engine for a specific function (its channel's transport). The single entry point
+     * the provider + in-app screen should use, so control routing stays device-agnostic instead of
+     * hard-coding one engine.
+     */
+    static ControlEngine forFunc(DeviceDef.Func f) {
+        return f == null ? null : forTransport(f.transport);
     }
 }

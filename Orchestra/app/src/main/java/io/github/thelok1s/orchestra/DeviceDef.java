@@ -88,7 +88,7 @@ public final class DeviceDef {
     }
 
     /** True if any channel uses the AAP transport, i.e. an {@link AacpEngine} session applies. */
-    boolean usesAacp() {
+    public boolean usesAacp() {
         for (Channel c : channels.values()) if ("aacp".equals(c.transport)) return true;
         return false;
     }
@@ -207,6 +207,7 @@ public final class DeviceDef {
         boolean isBattery() { return "battery".equals(type); }
         public boolean isInfoRow() { return isInfo() || isBattery(); } // read-only display rows
         public boolean isLevel() { return "level".equals(type); }
+        public boolean isSlider() { return "slider".equals(type); }
         public boolean isText() { return "text".equals(type); }
 
         // ---- public accessors (package-private fields are invisible to the Kotlin `ui` subpackage) ----
@@ -343,15 +344,18 @@ public final class DeviceDef {
         func.transport = ch != null ? ch.transport : null;
         if (fn.has("summary") || fn.has("summary_i18n")) func.summary = localized(fn, "summary", "");
 
-        if ("level".equals(type)) {
+        if ("level".equals(type) || "slider".equals(type)) {
             String feat = fn.optString("feature", null);
             if (feat != null) {
                 try { func.featureByte = Integer.parseInt(feat, 16); }
                 catch (NumberFormatException e) { func.featureByte = -1; }
             }
-            func.min = fn.optInt("min", 0);
-            func.max = fn.optInt("max", 100);
-            func.step = fn.optInt("step", 1);
+            // "level" carries min/max/step at the top level; "slider" nests them in `range`.
+            JSONObject range = fn.optJSONObject("range");
+            JSONObject src = range != null ? range : fn;
+            func.min = src.optInt("min", 0);
+            func.max = src.optInt("max", 100);
+            func.step = src.optInt("step", 1);
         }
 
         // options (multitoggle/list)

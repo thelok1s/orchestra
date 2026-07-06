@@ -16,13 +16,15 @@ import io.github.thelok1s.orchestra.DeviceDef
 @Composable
 fun DeviceControlsScreen(mac: String, onBack: () -> Unit) {
     val def = remember(mac) { DeviceDef.forAddress(mac) }
-    // Live battery/ear rows: the app process never owns the AAP socket (the SystemUI broker
-    // does), so just subscribe to the app-side listener registry the same way HookedDeviceCard
-    // does — AacpEngine fires it on every AAP notification, we bump liveTick, rows recompose.
+    // Live battery/ear rows update only for AAP devices: the app never owns the AAP socket (the
+    // SystemUI broker does), so it subscribes to the app-side AACP listener registry and bumps
+    // liveTick on each push. Soundcore/RFCOMM has no push channel, so its rows stay optimistic and
+    // we skip the (AAP-specific) listener entirely.
     var liveTick by remember(mac) { mutableStateOf(0) }
-    DisposableEffect(mac) {
-        io.github.thelok1s.orchestra.AacpEngine.registerListener(mac, "controls-screen") { liveTick++ }
-        onDispose { io.github.thelok1s.orchestra.AacpEngine.unregisterListener(mac, "controls-screen") }
+    val isAap = remember(mac) { def?.usesAacp() == true }
+    DisposableEffect(mac, isAap) {
+        if (isAap) io.github.thelok1s.orchestra.AacpEngine.registerListener(mac, "controls-screen") { liveTick++ }
+        onDispose { if (isAap) io.github.thelok1s.orchestra.AacpEngine.unregisterListener(mac, "controls-screen") }
     }
     Scaffold(topBar = {
         TopAppBar(
@@ -49,47 +51,49 @@ fun DeviceControlsScreen(mac: String, onBack: () -> Unit) {
 
 @Composable
 private fun DeviceControlRow(mac: String, f: DeviceDef.Func, liveTick: Int) {
-    // Read-only rows for battery/ear; Task 5 adds the rename field.
+    // The engine is resolved per-function from its transport (RFCOMM / AACP / …), so this screen is
+    // device-agnostic — it drives Soundcore level/slider controls exactly like AirPods ones.
+    val def = remember(mac) { DeviceDef.forAddress(mac) }
+    val adapter = remember { android.bluetooth.BluetoothAdapter.getDefaultAdapter() }
+    val engine = remember(f.id) { io.github.thelok1s.orchestra.ControlEngine.forFunc(f) }
     when {
         f.isInfoRow -> {
+            // Read-only rows (battery / ear detection). readInfo is engine-specific; RFCOMM returns
+            // null today (no info rows) so those show "—".
             val summary = remember(mac, f.id, liveTick) {
-                when (f.id) {
-                    "battery" -> AapState.forMac(mac).batterySummary()
-                    "ear_detection" -> AapState.forMac(mac).earSummary()
-                    else -> null
-                } ?: "—"
+                engine?.readInfo(adapter, mac, def, f) ?: "—"
             }
             ListItem(headlineContent = { Text(f.title) }, supportingContent = { Text(summary) })
         }
-        f.isLevel -> {
-            val engine = remember { io.github.thelok1s.orchestra.ControlEngine.AACP }
-            val adapter = remember { android.bluetooth.BluetoothAdapter.getDefaultAdapter() }
-            val def = remember(mac) { DeviceDef.forAddress(mac) }
-            // Adaptive strength only applies while ANC = Adaptive (mode 4). liveTick isn't read
-            // directly here, but the caller reads it before invoking this row, so this composable
-            // already recomposes on every AACP change (DeviceDef.Func is Compose-unstable).
-            val ancMode = AapState.forMac(mac).ancMode
-            if (f.id == "adaptive_strength" && ancMode != 4) {
-                ListItem(headlineContent = { Text(f.title) },
-                    supportingContent = { Text("Set Noise Control to Adaptive to use this") })
-            } else {
-                var pos by remember(mac, f.id) {
-                    mutableStateOf((engine.readLevel(adapter, mac, def, f) ?: f.min).toFloat())
-                }
-                Column {
-                    Text(f.title, style = MaterialTheme.typography.titleMedium)
-                    Slider(
-                        value = pos,
-                        onValueChange = { pos = it },
-                        onValueChangeFinished = {
-                            engine.applyLevel(adapter, mac, def, f, pos.toInt())
-                        },
-                        valueRange = f.min.toFloat()..f.max.toFloat(),
-                        // A sideloaded manifest bypasses schema checks, so f.step may be 0/negative;
-                        // fall back to a plain continuous slider instead of dividing by zero.
-                        steps = if (f.step <= 0) 0 else ((f.max - f.min) / f.step - 1).coerceAtLeast(0)
-                    )
-                    Text("${pos.toInt()}")
+        f.isLevel || f.isSlider -> {
+            // AAP adaptive strength only applies while ANC = Adaptive (mode 4); AAP-specific guard.
+            val ancMode = if (f.id == "adaptive_strength") AapState.forMac(mac).ancMode else null
+            when {
+                engine == null ->
+                    ListItem(headlineContent = { Text(f.title) },
+                        supportingContent = { Text("Unavailable on this device") })
+                f.id == "adaptive_strength" && ancMode != 4 ->
+                    ListItem(headlineContent = { Text(f.title) },
+                        supportingContent = { Text("Set Noise Control to Adaptive to use this") })
+                else -> {
+                    var pos by remember(mac, f.id) {
+                        mutableStateOf((engine.readLevel(adapter, mac, def, f) ?: f.min).toFloat())
+                    }
+                    Column {
+                        Text(f.title, style = MaterialTheme.typography.titleMedium)
+                        Slider(
+                            value = pos,
+                            onValueChange = { pos = it },
+                            onValueChangeFinished = {
+                                engine.applyLevel(adapter, mac, def, f, pos.toInt())
+                            },
+                            valueRange = f.min.toFloat()..f.max.toFloat(),
+                            // A sideloaded manifest bypasses schema checks, so f.step may be 0/negative;
+                            // fall back to a plain continuous slider instead of dividing by zero.
+                            steps = if (f.step <= 0) 0 else ((f.max - f.min) / f.step - 1).coerceAtLeast(0)
+                        )
+                        Text("${pos.toInt()}")
+                    }
                 }
             }
         }
@@ -103,7 +107,6 @@ private fun DeviceControlRow(mac: String, f: DeviceDef.Func, liveTick: Int) {
             // local. The broker applies the rename asynchronously with no ack path back to the
             // app, so the button is optimistic: it fires the broadcast and reports "Renamed"
             // immediately rather than waiting on (or claiming) success/failure.
-            val adapter = remember { android.bluetooth.BluetoothAdapter.getDefaultAdapter() }
             var text by remember(mac) {
                 mutableStateOf(
                     try {

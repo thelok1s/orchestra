@@ -277,6 +277,82 @@ final class RfcommEngine {
         });
     }
 
+    // ---- set / read (level / slider) ----
+
+    /**
+     * Set a single-value level/slider control: substitute the integer {@code value} (as one hex
+     * byte) into the function's {@code payload_template} ({@code {value}} placeholder; if there is
+     * no template the value byte is the whole payload) and send it framed.
+     *
+     * <p>Handles SINGLE-VALUE controls only (a plain 0..N level). Composite Soundcore sliders — an
+     * 8-band EQ ({@code {value}} carrying 8 gains), or an ANC level that is one byte inside the
+     * shared {@code sound_mode} packet — are not single integers and are intentionally not driven
+     * here; those need their own per-control encoding. Returns false if there is no set command.
+     */
+    static boolean applyLevel(BluetoothAdapter adapter, String mac, DeviceDef def,
+                              DeviceDef.Func f, int value) {
+        final byte[] frame = levelFrame(f, value);
+        if (frame == null) return false;
+        return Boolean.TRUE.equals(withSession(adapter, mac, def, Boolean.FALSE, (in, out) -> {
+            Log.i(TAG, "TX level " + f.id + "=" + value + ": " + hex(frame));
+            Logbook.add("level " + f.id + " → " + value + "  (" + hex(frame) + ")");
+            out.write(frame);
+            out.flush();
+            try { Thread.sleep(300); } catch (InterruptedException ignored) {}
+            drain(in);
+            return Boolean.TRUE;
+        }));
+    }
+
+    /**
+     * Build the soundcore_v1 frame for a single-value level set (value as one hex byte substituted
+     * into {@code payload_template}'s {@code {value}} placeholder). Package-private for tests.
+     * Returns null if the function has no set command.
+     */
+    static byte[] levelFrame(DeviceDef.Func f, int value) {
+        if (f == null || f.setCommand == null) return null;
+        String valueHex = String.format("%02x", value & 0xff);
+        String template = f.payloadTemplate != null ? f.payloadTemplate : "{value}";
+        String payload = template.replace("{value}", valueHex);
+        return buildFrame(f.setCommand, payload);
+    }
+
+    /**
+     * Read a single-value level/slider control's current value (the state byte at
+     * {@code stateByteIndex}), or null if it can't be determined. Mirrors {@link #readMode}'s framing.
+     */
+    static Integer readLevel(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f) {
+        if (f == null || f.readCommand == null || f.stateByteIndex < 0) return null;
+        final byte[] frame = buildFrame(f.readCommand, null);
+        return withSession(adapter, mac, def, null, (in, out) -> {
+            drain(in);
+            out.write(frame);
+            out.flush();
+            byte[] acc = new byte[1024];
+            int len = 0;
+            long deadline = System.currentTimeMillis() + 2000;
+            byte[] buf = new byte[512];
+            while (System.currentTimeMillis() < deadline && len < acc.length) {
+                if (in.available() > 0) {
+                    int n = in.read(buf);
+                    if (n < 0) break;
+                    int copy = Math.min(n, acc.length - len);
+                    System.arraycopy(buf, 0, acc, len, copy);
+                    len += copy;
+                    int s = findResponseStart(acc, len, f.readCommand);
+                    if (s >= 0 && s + f.stateByteIndex < len) break;
+                } else {
+                    try { Thread.sleep(50); } catch (InterruptedException ignored) {}
+                }
+            }
+            int s = findResponseStart(acc, len, f.readCommand);
+            if (s < 0) return null;
+            int idx = s + f.stateByteIndex;
+            if (idx >= len) return null;
+            return acc[idx] & 0xff;
+        });
+    }
+
     // ---- set / read (toggle) ----
 
     /** Send a boolean toggle for a SPECIFIC switch function (uses state_values on/off + {state}). */
