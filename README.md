@@ -167,6 +167,18 @@ The app uses that repo at runtime:
   AirPods Pro 2's Adaptive Audio strength slider and Rename field, plus live battery/ear rows. A
   control shipped `_verified: false` still needs the Devices-tab opt-in before it appears here.
   `list` / composite controls (EQ bands…) aren't covered by this screen yet.
+- **"Act as Apple device" (AirPods, Devices tab — default off) trades media buttons for handoff, by
+  design.** When on, Orchestra spoofs the AirPods' Bluetooth Device-ID as Apple's, so the buds treat the
+  Pixel as an Apple device — enabling Apple-style **stay-multipoint** and **seamless audio handoff** (e.g.
+  Mac ↔ Pixel, the "Move to iPhone"-style switch). The catch is a **firmware tradeoff, not an Orchestra
+  bug**: while spoofing, the buds route stem presses through Apple's protocol, so the Pixel's **play /
+  pause / next / previous stop working**. Recovering them means telling the buds to hand their presses to
+  the Pixel (a "takeover"), which makes the firmware treat the Pixel as its *sole* host and **drop
+  multipoint entirely** — hardware-confirmed down to even a single-press takeover, and LibrePods hits the
+  same wall (it, too, leaves default media presses to the standard path rather than taking them over). So
+  it's one or the other: **on** → handoff + multipoint, no media buttons; **off** → media buttons +
+  standard multipoint, no Apple handoff. (Long-press to cycle ANC keeps working either way — it's
+  bud-native.)
 - Only **2 devices** are fully verified; several per-device opcodes remain `_verified: false`.
 - The module currently uses the **legacy Xposed API**; a dual legacy + **modern libxposed** engine
   (works across `<100` and `≥101` framework API levels) is on the roadmap.
