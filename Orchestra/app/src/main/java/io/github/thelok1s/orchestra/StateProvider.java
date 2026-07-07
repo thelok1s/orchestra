@@ -29,6 +29,15 @@ public class StateProvider extends ContentProvider {
     @Override
     public Cursor query(Uri uri, String[] proj, String sel, String[] selArgs, String sort) {
         java.util.List<String> seg = uri.getPathSegments();
+        // content://…/enabled/<MAC> -> column enabled(0|1): is this device "hooked" (has a def)?
+        // Lets the Settings-process metadata writer keep key 25 aligned with what we actually serve,
+        // so SystemUI never memoizes an empty device-settings layout for an un-hooked device.
+        if (seg.size() == 2 && "enabled".equals(seg.get(0))) {
+            String emac = seg.get(1).toUpperCase(java.util.Locale.ROOT);
+            MatrixCursor ec = new MatrixCursor(new String[]{"enabled"});
+            ec.addRow(new Object[]{DeviceStore.enabledId(emac) != null ? 1 : 0});
+            return ec;
+        }
         if (seg.size() == 3 && "behavior".equals(seg.get(0))) {
             String bmac = seg.get(1).toUpperCase(java.util.Locale.ROOT);
             String behaviorId = seg.get(2);

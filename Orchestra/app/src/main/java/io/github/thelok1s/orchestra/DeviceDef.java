@@ -51,8 +51,10 @@ public final class DeviceDef {
         final String transport;             // rfcomm | ble_gatt | aacp
         final String uuid;                  // rfcomm
         final boolean secure;
-        Channel(String id, String transport, String uuid, boolean secure) {
-            this.id = id; this.transport = transport; this.uuid = uuid; this.secure = secure;
+        final String framing;               // protocol.framing, e.g. "shokz_v1"; null = transport-default
+        Channel(String id, String transport, String uuid, boolean secure, String framing) {
+            this.id = id; this.transport = transport; this.uuid = uuid;
+            this.secure = secure; this.framing = framing;
         }
     }
 
@@ -162,6 +164,15 @@ public final class DeviceDef {
         final String payloadTemplate;                       // e.g. "{mode}5000000005"
         final Map<String, String> optionValues = new LinkedHashMap<>(); // optId -> hex (multitoggle/list)
         final Map<String, String> stateValues = new LinkedHashMap<>();  // on/off -> hex (toggle)
+        // Verbatim protocol frames (framing="shokz_v1"): the full RFCOMM frame captured live per
+        // option / state. optId (multitoggle/list) or "on"/"off" (toggle) or "action" (info) -> hex.
+        // The engine replays these as-is (the framing is a complex multi-variant TLV that is not
+        // reconstructed byte-for-byte; the captured frame is the source of truth).
+        final Map<String, String> frames = new LinkedHashMap<>();
+        String frameTemplate;    // slider (framing="shokz_v1"): base frame; value patched in at frameValueOffset
+        int frameValueOffset = -1;   // byte offset of the u32-LE value to patch (slider)
+        int frameValueSize = 0;      // value width in bytes (slider)
+        int hostMacOffsetOff = -1;   // toggle "off" frame: byte offset where 6 host-MAC LE bytes go (-1=none)
         // read
         final String readCommand;                           // hex, e.g. "0101"
         final int stateByteIndex;                           // -1 if unknown
@@ -181,6 +192,7 @@ public final class DeviceDef {
         final Map<String, String> requires = new LinkedHashMap<>();
         String channelId;       // which channel this function uses (defaults to defaultChannel)
         String transport;       // resolved from the channel (rfcomm | ble_gatt | aacp)
+        String framing;         // channel protocol.framing (e.g. "shokz_v1"); selects a codec over transport
         boolean injectable;     // could render natively on the About page (per schema rules)
         boolean implemented;    // the current provider can actually render it (today: multitoggle)
         String injectReason;    // shown in UI when not injectable
@@ -289,8 +301,10 @@ public final class DeviceDef {
         for (java.util.Iterator<String> it = chs.keys(); it.hasNext(); ) {
             String cid = it.next();
             JSONObject c = chs.getJSONObject(cid);
+            JSONObject proto = c.optJSONObject("protocol");
+            String framing = proto != null ? proto.optString("framing", null) : null;
             channels.put(cid, new Channel(cid, c.getString("transport"),
-                    c.optString("uuid", null), c.optBoolean("secure", false)));
+                    c.optString("uuid", null), c.optBoolean("secure", false), framing));
         }
         String defaultChannel = root.optString("default_channel",
                 channels.isEmpty() ? null : channels.keySet().iterator().next());
@@ -342,6 +356,7 @@ public final class DeviceDef {
         func.channelId = fn.optString("channel", defaultChannel);
         Channel ch = channels.get(func.channelId);
         func.transport = ch != null ? ch.transport : null;
+        func.framing = ch != null ? ch.framing : null;
         if (fn.has("summary") || fn.has("summary_i18n")) func.summary = localized(fn, "summary", "");
 
         if ("level".equals(type) || "slider".equals(type)) {
@@ -371,6 +386,12 @@ public final class DeviceDef {
         if (set != null) {
             putAll(func.optionValues, set.optJSONObject("option_values"), false);
             putAll(func.stateValues, set.optJSONObject("state_values"), false);
+            // shokz_v1 verbatim frames (optId / on-off / "action" -> hex)
+            putAll(func.frames, set.optJSONObject("frames"), false);
+            func.frameTemplate = set.optString("frame_template", null);
+            func.frameValueOffset = set.optInt("value_offset", -1);
+            func.frameValueSize = set.optInt("value_size", 0);
+            func.hostMacOffsetOff = set.optInt("host_mac_offset_off", -1);
         }
         if (read != null) putAll(func.valueMap, read.optJSONObject("value_map"), true);
         if (read != null) {
@@ -462,9 +483,9 @@ public final class DeviceDef {
         if (func.injectable && !func.implemented && func.injectReason == null) {
             func.injectReason = "Not yet renderable on the About page.";
         }
-        // Graceful degrade: the running app drives rfcomm + aacp today. A function on an
-        // unknown/unsupported transport is kept in the catalog but never injected.
-        boolean drivenTransport = "rfcomm".equals(func.transport) || "aacp".equals(func.transport);
+        // Graceful degrade: the running app drives rfcomm + aacp + shokz_v1. A function whose
+        // framing/transport has no engine in this build is kept in the catalog but never injected.
+        boolean drivenTransport = ControlEngine.forFunc(func) != null;
         if (func.injectable && !drivenTransport) {
             func.injectable = false;
             func.implemented = false;

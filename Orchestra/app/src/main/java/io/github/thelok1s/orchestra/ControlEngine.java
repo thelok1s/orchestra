@@ -105,19 +105,57 @@ public interface ControlEngine {
         }
     };
 
-    /** @return the engine for a transport, or null if this app build can't drive it. */
+    /**
+     * Shokz shokz_v1 engine: two-format binary TLV over RFCOMM SPP (confirmed on OpenSwim Pro).
+     * Functions declare their framing via setCommand="shokz_A|B:0xCMD_ID:valSz:readCmdId".
+     */
+    ControlEngine SHOKZ = new ControlEngine() {
+        public boolean applyMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, String optId) {
+            return ShokzEngine.applyMode(a, mac, def, f, optId);
+        }
+        public String readMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return ShokzEngine.readMode(a, mac, def, f);
+        }
+        public boolean applyToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, boolean on) {
+            return ShokzEngine.applyToggle(a, mac, def, f, on);
+        }
+        public Boolean readToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return ShokzEngine.readToggle(a, mac, def, f);
+        }
+        @Override public String readInfo(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return ShokzEngine.readInfo(a, mac, def, f);
+        }
+        @Override public boolean applyLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, int value) {
+            return ShokzEngine.applyLevel(a, mac, def, f, value); // mp3_volume slider (frame_template patch)
+        }
+        @Override public Integer readLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return ShokzEngine.readLevel(a, mac, def, f);
+        }
+        @Override public void registerListener(String mac, String key, Runnable onChange) { /* no push channel */ }
+        @Override public void unregisterListener(String mac, String key) { /* no-op */ }
+    };
+
+    /** @return the engine for a transport/framing key, or null if this app build can't drive it. */
     static ControlEngine forTransport(String transport) {
         if ("rfcomm".equals(transport)) return RFCOMM;
         if ("aacp".equals(transport)) return AACP;
+        if ("shokz_v1".equals(transport)) return SHOKZ;
         return null;
     }
 
     /**
-     * Resolve the engine for a specific function (its channel's transport). The single entry point
-     * the provider + in-app screen should use, so control routing stays device-agnostic instead of
-     * hard-coding one engine.
+     * Resolve the engine for a function. A channel's {@code protocol.framing} names a codec that
+     * overrides the raw transport (e.g. Shokz runs a "shokz_v1" codec over an rfcomm SPP socket, so
+     * it must route to {@link #SHOKZ}, not the Soundcore {@link #RFCOMM} engine). Falls back to the
+     * transport when no framing-specific engine exists. The single entry point the provider +
+     * in-app screen use, so control routing stays device-agnostic instead of hard-coding one engine.
      */
     static ControlEngine forFunc(DeviceDef.Func f) {
-        return f == null ? null : forTransport(f.transport);
+        if (f == null) return null;
+        if (f.framing != null) {
+            ControlEngine byFraming = forTransport(f.framing);
+            if (byFraming != null) return byFraming;
+        }
+        return forTransport(f.transport);
     }
 }

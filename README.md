@@ -42,7 +42,7 @@ which devices are supported is defined entirely by **manifests** (see *Supported
 
 | Axis | Supported | Notes |
 |---|---|---|
-| **Android version** | **Android 16–17** (API 36–37). `minSdk` 31 (Android 12). | About-device controls verified on **Android 17**. The **volume-panel ANC tile is currently broken on Android 17** (Google reworked that System-UI path) — the About-device page is unaffected. |
+| **Android version** | **Android 16–17** (API 36–37). `minSdk` 31 (Android 12). | About-device controls **and** the volume-panel Noise-Control tile both verified on **Android 17** (the tile requires a supported headphone as the active audio output). After updating the app you must restart System UI for the new hooks to load. |
 | **ROM** | **PixelOS** (Google's Pixel build) — the only verified target. | Injection bindings ship for `pixelos` only. The manifest schema has an embedded per-ROM `platforms` slot so other **root + LSPosed-capable** ROMs (e.g. LineageOS) can be added later — none are implemented/verified yet. Non-Pixel OEM skins (One UI, MIUI/HyperOS, ColorOS…) are **not** supported. |
 | **Xposed framework** | **LSPosed** and the newer **"Vector"** framework (legacy Xposed bridge, verified at **API 101**). `xposedminversion` 82. | Uses the **legacy** Xposed API today. A dual legacy + **modern libxposed** engine (covering `<100` and `≥101` API levels) is on the roadmap. **Root required** (LSPosed needs it); no separate KSU/Magisk module. |
 
@@ -78,6 +78,7 @@ Currently shipped + hardware-verified:
 |---|---|---|
 | **Soundcore Space One Pro** | A3062 | 4-mode ANC (Noise Cancelling / Off / Adaptive / Transparency) + Dolby Audio, Surrounding sounds, Side tone, Multipoint, Low-battery prompt switches |
 | **Soundcore Liberty 4 Pro** | A3957 | 3-mode ANC (Noise Cancelling / Off / Transparency) + native TWS battery (L / Case / R) |
+| **Shokz OpenSwim Pro** | S180 | Equalizer (Standard / Vocal / Swimming), Multipoint, MP3↔Bluetooth mode, MP3 shuffle, universal-button & volume-long-press actions (MP3 transport + volume are in-app). Bone-conduction; `shokz_v1` framing over RFCOMM. State is write-only/optimistic. |
 | **AirPods Pro 2** | A3048 | 4-mode Noise Control (Off / ANC / Transparency / Adaptive), Conversational Awareness toggle, live per-bud + case battery on the native header, ear detection (in-app), background auto-pause on ear removal, CA volume-duck (gradual fade), Adaptive Audio strength (in-app 0–100 slider, active while Noise Control = Adaptive), Rename (in-app, sets the local Bluetooth alias) |
 
 Both render correctly on the Android 17 **About-device** page. Each manifest also catalogues further
@@ -99,10 +100,11 @@ Buds use):
   the system at Orchestra's **config provider service**.
 - **Provider services** (`ConfigProviderService` / `SettingProviderService`) return the About-page
   layout and serve/handle each control, with optimistic UI and a persistent control socket.
-- A transport-abstraction registry (`ControlEngine`) selects the per-device engine: **`RfcommEngine`**
-  frames and exchanges the Soundcore protocol (`soundcore_v1`) over RFCOMM; **`AacpEngine`** speaks
-  Apple's Accessory Protocol over an L2CAP socket (PSM 4097) for AirPods. `ble_gatt` is the remaining
-  reserved slot.
+- A transport-abstraction registry (`ControlEngine`) selects the per-device engine — by a channel's
+  `protocol.framing` when set, else its transport: **`RfcommEngine`** frames the Soundcore protocol
+  (`soundcore_v1`) over RFCOMM; **`ShokzEngine`** replays the Shokz `shokz_v1` binary-TLV frames over
+  the same RFCOMM/SPP socket; **`AacpEngine`** speaks Apple's Accessory Protocol over an L2CAP socket
+  (PSM 4097) for AirPods. `ble_gatt` is the remaining reserved slot.
 - An **LSPosed hook in System UI** gates the volume-panel ANC tile (see *Known limitations*).
 
 Deeper design lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
@@ -160,8 +162,10 @@ The app uses that repo at runtime:
 
 ## Known limitations & roadmap
 
-- **Volume-panel ANC tile is broken on Android 17** (the About-device page is unaffected). Google
-  reworked that System-UI chain; the fix is tracked for the modern-libxposed engine rework.
+- **Volume-panel Noise-Control tile** works on Android 17, but only while a supported headphone is
+  the **active audio output**, and — like every Xposed hook — only after System UI has been
+  (re)started since the app was last updated. Its install status is logged to logcat
+  (`adb logcat -s OrchestraMX`) for diagnosis.
 - A per-device **in-app control screen** (tap an AirPods device card in the Devices tab) renders
   `slider`/`level` and `text` functions that can't be injected into the native About page — e.g.
   AirPods Pro 2's Adaptive Audio strength slider and Rename field, plus live battery/ear rows. A

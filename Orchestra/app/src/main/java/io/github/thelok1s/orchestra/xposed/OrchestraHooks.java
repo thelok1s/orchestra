@@ -47,6 +47,18 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
 
     private static final String TAG = "Orchestra";
 
+    /**
+     * Diagnostic log that reaches BOTH the Xposed/Vector module log AND logcat. On Vector,
+     * {@link XposedBridge#log} is routed to a root-only store, so an {@code android.util.Log} call
+     * (emitted from the host process's uid) is the only line we can read back over adb
+     * ({@code adb logcat -s OrchestraMX}). Used to trace whether the volume-panel hooks install and
+     * fire at runtime.
+     */
+    private static void mx(String s) {
+        XposedBridge.log("[MX] " + s);
+        android.util.Log.i("OrchestraMX", s);
+    }
+
     private static final String PIXEL_DEVICE_INTERACTOR =
             "com.google.android.systemui.volume.panel.domain.interactor.PixelDeviceInteractor";
     private static final String ANC_GOOGLE_CRITERIA =
@@ -121,7 +133,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                     XposedBridge.log("[MX] skipping SystemUI helper process " + lp.processName);
                     return;
                 }
-                XposedBridge.log("[MX] loaded into SystemUI");
+                mx("loaded into SystemUI (proc=" + lp.processName + ")");
                 hookPixelDevice(lp.classLoader);
                 forceAncAvailable(lp.classLoader);
                 hookToggleApply(lp.classLoader);
@@ -191,23 +203,27 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
     private void hookPixelDevice(ClassLoader cl) {
         try {
             Class<?> c = XposedHelpers.findClass(PIXEL_DEVICE_INTERACTOR, cl);
+            int n = 0;
             for (Method m : c.getDeclaredMethods()) {
                 if (m.getName().toLowerCase().contains("ispixeldevice")
                         && (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class)) {
                     XposedBridge.hookMethod(m, new XC_MethodHook() {
                         @Override protected void afterHookedMethod(MethodHookParam p) { p.setResult(Boolean.TRUE); }
                     });
+                    n++;
                 }
             }
-            XposedBridge.log("[MX] pixelDevice forced true");
-        } catch (Throwable t) { XposedBridge.log("[MX] pixelDevice hook failed: " + t); }
+            mx("pixelDevice: hooked " + n + " method(s) on " + c.getName());
+        } catch (Throwable t) { mx("pixelDevice hook FAILED: " + t); }
     }
 
     private void forceAncAvailable(ClassLoader cl) {
         try {
             Class<?> flowKt = XposedHelpers.findClass("kotlinx.coroutines.flow.FlowKt", cl);
             final Method flowOf1 = singleFlowOf(flowKt);
+            if (flowOf1 == null) mx("forceAncAvailable: flowOf(Object) NOT found on FlowKt");
             Class<?> crit = XposedHelpers.findClass(ANC_GOOGLE_CRITERIA, cl);
+            int n = 0;
             for (Method m : crit.getDeclaredMethods()) {
                 if (m.getName().equals("isAvailable") && m.getParameterCount() == 0) {
                     XposedBridge.hookMethod(m, new XC_MethodHook() {
@@ -215,15 +231,17 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                             if (flowOf1 != null) p.setResult(flowOf1.invoke(null, Boolean.TRUE));
                         }
                     });
+                    n++;
                 }
             }
-            XposedBridge.log("[MX] AncGoogleCriteria.isAvailable forced true");
-        } catch (Throwable t) { XposedBridge.log("[MX] forceAncAvailable failed: " + t); }
+            mx("AncGoogleCriteria.isAvailable: hooked " + n + " method(s) on " + crit.getName());
+        } catch (Throwable t) { mx("forceAncAvailable FAILED: " + t); }
     }
 
     private void hookToggleApply(ClassLoader cl) {
         try {
             Class<?> c = XposedHelpers.findClass(TOGGLE_CLICK_LAMBDA, cl);
+            int hooked = 0;
             for (Method m : c.getDeclaredMethods()) {
                 if (m.getName().equals("invoke")) {
                     XposedBridge.hookMethod(m, new XC_MethodHook() {
@@ -245,10 +263,11 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                             }
                         }
                     });
+                    hooked++;
                 }
             }
-            XposedBridge.log("[MX] hooked popup toggle click (Lambda7)");
-        } catch (Throwable t) { XposedBridge.log("[MX] hookToggleApply failed: " + t); }
+            mx("hooked popup toggle click (Lambda7): " + hooked + " method(s)");
+        } catch (Throwable t) { mx("hookToggleApply FAILED (class not found is expected if popup lazy): " + t); }
     }
 
     private static Method singleFlowOf(Class<?> flowKt) {
@@ -390,8 +409,18 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
             for (BluetoothDevice d : bonded) {
                 String name = safeName(d);
                 if (!nameSupported(name)) continue;
-                assertConfigTags(d);
-                if (isAapDevice(d)) writeBattery(d);
+                // FAILSAFE: only advertise our device-settings provider (key 25) for devices we
+                // actually SERVE (hooked). SystemUI's volume panel fetches the device-settings
+                // layout ONCE per device per session and memoizes it; if it fetches for a device we
+                // don't serve, it caches an EMPTY layout and the ANC tile stays gone until a SystemUI
+                // restart — even after the user hooks the device. Keeping key 25 aligned with the
+                // hooked-state (write our tags when hooked, strip them when not) prevents that.
+                if (isDeviceHooked(d.getAddress())) {
+                    assertConfigTags(d);
+                    if (isAapDevice(d)) writeBattery(d);
+                } else {
+                    clearConfigTags(d);
+                }
             }
         } catch (Throwable t) {
             XposedBridge.log("[MX] assertTags failed: " + t);
@@ -418,10 +447,55 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
             Method set = BluetoothDevice.class.getMethod("setMetadata", int.class, byte[].class);
             Object res = set.invoke(device, KEY25, updated.getBytes(StandardCharsets.UTF_8));
             boolean ok = !(res instanceof Boolean) || (Boolean) res;
-            XposedBridge.log("[MX] key25 write " + (ok ? "ok" : "FAILED") + " for " + device.getAddress());
+            mx("key25 write " + (ok ? "ok" : "FAILED") + " (hooked) for " + device.getAddress());
         } catch (Throwable t) {
             Throwable c = t.getCause() != null ? t.getCause() : t;
             XposedBridge.log("[MX] setMetadata failed: " + c);
+        }
+    }
+
+    /**
+     * Is {@code mac} currently "hooked" (has a served def) in the app? Read cross-process from the
+     * app's {@link StateProvider} ({@code content://…/enabled/<MAC>}), like the battery reader.
+     * Fails OPEN (assume hooked) on any error, so a transient query failure never strips a working
+     * device's config.
+     */
+    private boolean isDeviceHooked(String mac) {
+        if (mac == null) return false;
+        try {
+            android.app.Application app = AndroidAppHelper.currentApplication();
+            if (app == null) return true;
+            android.net.Uri uri = android.net.Uri.parse(
+                    "content://io.github.thelok1s.orchestra.state/enabled/" + mac);
+            try (android.database.Cursor c =
+                         app.getContentResolver().query(uri, null, null, null, null)) {
+                if (c != null && c.moveToFirst()) {
+                    return c.getInt(c.getColumnIndexOrThrow("enabled")) == 1;
+                }
+                return false; // provider reachable but no row -> definitively not hooked
+            }
+        } catch (Throwable t) {
+            XposedBridge.log("[MX] isDeviceHooked query failed, assuming hooked: " + t);
+            return true; // fail-open
+        }
+    }
+
+    /** Remove our DEVICE_SETTINGS_CONFIG_* tags from key 25 for an un-hooked device, so SystemUI
+     *  stops binding our (empty) provider for it (no poisoned/empty layout cache). No-op if absent. */
+    private void clearConfigTags(BluetoothDevice device) {
+        try {
+            String existing = readKey25(device);
+            if (existing == null || existing.isEmpty()) return;
+            String updated = existing
+                    .replaceAll("<DEVICE_SETTINGS_CONFIG_PACKAGE_NAME>.*?</DEVICE_SETTINGS_CONFIG_PACKAGE_NAME>", "")
+                    .replaceAll("<DEVICE_SETTINGS_CONFIG_CLASS>.*?</DEVICE_SETTINGS_CONFIG_CLASS>", "")
+                    .replaceAll("<DEVICE_SETTINGS_CONFIG_ACTION>.*?</DEVICE_SETTINGS_CONFIG_ACTION>", "");
+            if (updated.equals(existing)) return; // our tags weren't present
+            Method set = BluetoothDevice.class.getMethod("setMetadata", int.class, byte[].class);
+            set.invoke(device, KEY25, updated.getBytes(StandardCharsets.UTF_8));
+            mx("key25 cleared (un-hooked) for " + device.getAddress());
+        } catch (Throwable t) {
+            XposedBridge.log("[MX] clearConfigTags failed: " + t);
         }
     }
 
