@@ -47,6 +47,18 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
 
     private static final String TAG = "Orchestra";
 
+    /**
+     * Diagnostic log that reaches BOTH the Xposed/Vector module log AND logcat. On Vector,
+     * {@link XposedBridge#log} is routed to a root-only store, so an {@code android.util.Log} call
+     * (emitted from the host process's uid) is the only line we can read back over adb
+     * ({@code adb logcat -s OrchestraMX}). Used to trace whether the volume-panel hooks install and
+     * fire at runtime.
+     */
+    private static void mx(String s) {
+        XposedBridge.log("[MX] " + s);
+        android.util.Log.i("OrchestraMX", s);
+    }
+
     private static final String PIXEL_DEVICE_INTERACTOR =
             "com.google.android.systemui.volume.panel.domain.interactor.PixelDeviceInteractor";
     private static final String ANC_GOOGLE_CRITERIA =
@@ -121,7 +133,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                     XposedBridge.log("[MX] skipping SystemUI helper process " + lp.processName);
                     return;
                 }
-                XposedBridge.log("[MX] loaded into SystemUI");
+                mx("loaded into SystemUI (proc=" + lp.processName + ")");
                 hookPixelDevice(lp.classLoader);
                 forceAncAvailable(lp.classLoader);
                 hookToggleApply(lp.classLoader);
@@ -191,23 +203,27 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
     private void hookPixelDevice(ClassLoader cl) {
         try {
             Class<?> c = XposedHelpers.findClass(PIXEL_DEVICE_INTERACTOR, cl);
+            int n = 0;
             for (Method m : c.getDeclaredMethods()) {
                 if (m.getName().toLowerCase().contains("ispixeldevice")
                         && (m.getReturnType() == boolean.class || m.getReturnType() == Boolean.class)) {
                     XposedBridge.hookMethod(m, new XC_MethodHook() {
                         @Override protected void afterHookedMethod(MethodHookParam p) { p.setResult(Boolean.TRUE); }
                     });
+                    n++;
                 }
             }
-            XposedBridge.log("[MX] pixelDevice forced true");
-        } catch (Throwable t) { XposedBridge.log("[MX] pixelDevice hook failed: " + t); }
+            mx("pixelDevice: hooked " + n + " method(s) on " + c.getName());
+        } catch (Throwable t) { mx("pixelDevice hook FAILED: " + t); }
     }
 
     private void forceAncAvailable(ClassLoader cl) {
         try {
             Class<?> flowKt = XposedHelpers.findClass("kotlinx.coroutines.flow.FlowKt", cl);
             final Method flowOf1 = singleFlowOf(flowKt);
+            if (flowOf1 == null) mx("forceAncAvailable: flowOf(Object) NOT found on FlowKt");
             Class<?> crit = XposedHelpers.findClass(ANC_GOOGLE_CRITERIA, cl);
+            int n = 0;
             for (Method m : crit.getDeclaredMethods()) {
                 if (m.getName().equals("isAvailable") && m.getParameterCount() == 0) {
                     XposedBridge.hookMethod(m, new XC_MethodHook() {
@@ -215,15 +231,17 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                             if (flowOf1 != null) p.setResult(flowOf1.invoke(null, Boolean.TRUE));
                         }
                     });
+                    n++;
                 }
             }
-            XposedBridge.log("[MX] AncGoogleCriteria.isAvailable forced true");
-        } catch (Throwable t) { XposedBridge.log("[MX] forceAncAvailable failed: " + t); }
+            mx("AncGoogleCriteria.isAvailable: hooked " + n + " method(s) on " + crit.getName());
+        } catch (Throwable t) { mx("forceAncAvailable FAILED: " + t); }
     }
 
     private void hookToggleApply(ClassLoader cl) {
         try {
             Class<?> c = XposedHelpers.findClass(TOGGLE_CLICK_LAMBDA, cl);
+            int hooked = 0;
             for (Method m : c.getDeclaredMethods()) {
                 if (m.getName().equals("invoke")) {
                     XposedBridge.hookMethod(m, new XC_MethodHook() {
@@ -245,10 +263,11 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                             }
                         }
                     });
+                    hooked++;
                 }
             }
-            XposedBridge.log("[MX] hooked popup toggle click (Lambda7)");
-        } catch (Throwable t) { XposedBridge.log("[MX] hookToggleApply failed: " + t); }
+            mx("hooked popup toggle click (Lambda7): " + hooked + " method(s)");
+        } catch (Throwable t) { mx("hookToggleApply FAILED (class not found is expected if popup lazy): " + t); }
     }
 
     private static Method singleFlowOf(Class<?> flowKt) {

@@ -42,7 +42,7 @@ which devices are supported is defined entirely by **manifests** (see *Supported
 
 | Axis | Supported | Notes |
 |---|---|---|
-| **Android version** | **Android 16–17** (API 36–37). `minSdk` 31 (Android 12). | About-device controls verified on **Android 17**. The **volume-panel ANC tile is currently broken on Android 17** (Google reworked that System-UI path) — the About-device page is unaffected. |
+| **Android version** | **Android 16–17** (API 36–37). `minSdk` 31 (Android 12). | About-device controls **and** the volume-panel Noise-Control tile both verified on **Android 17** (the tile requires a supported headphone as the active audio output). After updating the app you must restart System UI for the new hooks to load. |
 | **ROM** | **PixelOS** (Google's Pixel build) — the only verified target. | Injection bindings ship for `pixelos` only. The manifest schema has an embedded per-ROM `platforms` slot so other **root + LSPosed-capable** ROMs (e.g. LineageOS) can be added later — none are implemented/verified yet. Non-Pixel OEM skins (One UI, MIUI/HyperOS, ColorOS…) are **not** supported. |
 | **Xposed framework** | **LSPosed** and the newer **"Vector"** framework (legacy Xposed bridge, verified at **API 101**). `xposedminversion` 82. | Uses the **legacy** Xposed API today. A dual legacy + **modern libxposed** engine (covering `<100` and `≥101` API levels) is on the roadmap. **Root required** (LSPosed needs it); no separate KSU/Magisk module. |
 
@@ -162,8 +162,10 @@ The app uses that repo at runtime:
 
 ## Known limitations & roadmap
 
-- **Volume-panel ANC tile is broken on Android 17** (the About-device page is unaffected). Google
-  reworked that System-UI chain; the fix is tracked for the modern-libxposed engine rework.
+- **Volume-panel Noise-Control tile** works on Android 17, but only while a supported headphone is
+  the **active audio output**, and — like every Xposed hook — only after System UI has been
+  (re)started since the app was last updated. Its install status is logged to logcat
+  (`adb logcat -s OrchestraMX`) for diagnosis.
 - A per-device **in-app control screen** (tap an AirPods device card in the Devices tab) renders
   `slider`/`level` and `text` functions that can't be injected into the native About page — e.g.
   AirPods Pro 2's Adaptive Audio strength slider and Rename field, plus live battery/ear rows. A
