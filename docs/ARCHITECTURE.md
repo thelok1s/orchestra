@@ -365,14 +365,11 @@ place and tweak arbitrary controls on **both** the sound panel and the settings 
   bt_config UUID injection works and is reconnect‑durable.
 * ✅ ANC slice binds and is structurally valid (`onBindSlice OK (3 cells)`, both compact + grid variants); LSPosed
   module loads and fires all hooks (`isPixelDevice`→true, ANC availability combine→true, `isAvailable()`→flowOf(true)).
-* ❌ **Volume‑panel Noise‑Control tile still does not render.** With the Pixel gate cleared, ANC availability fully
-  forced (no crash), and the slice binding OK for both `is_collapsed` variants, the tile never appears — only Spatial
-  Audio. The crash that briefly occurred when forcing availability (`ClassCastException: Object[] cannot be cast to
-  Boolean` in `ComponentsInteractorImpl`, my malformed `flowOf` — now fixed) proved the ANC component **is** pulled
-  into the pipeline when available. So the remaining blocker is the **UI layer**: SystemUI's ANC Compose component
-  renders `AncViewModel.buttonSlice` via a SliceView and produces nothing visible for our third‑party slice (Spatial,
-  a native Compose tile with no slice dependency, renders fine). Next: capture a **real Pixel Buds ANC slice** to
-  replicate its exact structure, or hook the ANC Compose render path directly.
+* ✅ **Volume‑panel Noise‑Control tile renders** (this bullet's original "does not render" was
+  **resolved 2026‑07‑08 — see the update after §12**). The `ClassCastException` from a malformed
+  `flowOf` had left availability ineffective; with `isAvailable()` correctly returning a real
+  `flowOf(TRUE)` `Flow`, `isPixelDevice`→true, and the device‑settings layout served by our provider,
+  the inline ANC tile appears alongside Spatial Audio for the active‑output headphone.
 * Testing friction: each SystemUI restart (needed to clear its slice‑bind cache for a fresh bind) re‑engages the
   device PIN lock, which blocks scripted UI capture until a manual unlock.
 
@@ -394,6 +391,17 @@ binds our provider during a panel open), we took the **clean, fragility‑free r
 Net surfaces delivered: **About‑device page = full inline Noise Control** (primary surface); **volume panel = one‑tap
 "Device settings" button → that page**. The Pixel‑style inline volume tile + Spatial Audio remain available *only*
 via the Pixel‑spoof (UUID/LSPosed) path documented above, which is a fragile, deep‑RE option, not the shipped default.
+
+> **Update (2026‑07‑08) — supersedes §11–12's volume‑panel conclusion.** The LSPosed/Pixel‑spoof path
+> **is** now the shipped default (the module is required for the About page anyway), and the **inline
+> volume‑panel Noise‑Control tile renders on Android 16–17** — verified on‑device for Soundcore. Three
+> things must line up: the hooks must be loaded (restart System UI after an app update); the headphone
+> must be the **active audio output**; and our device‑settings provider must serve the ANC layout on
+> SystemUI's **one‑shot, memoized** per‑device fetch. That last point is the only remaining trap — if the
+> single fetch returns an empty layout it is cached for the whole SystemUI session — so the Settings hook
+> now keeps metadata **key 25 aligned with hooked‑state** (advertise our provider only for devices we
+> serve), preventing an empty layout from ever being memoized. Hook install + bind are logcat‑visible via
+> `adb logcat -s OrchestraMX Orchestra`.
 
 See also the memory notes: `volume-panel-anc-pixel-uuid-gate`, `maestro-devicesettings-arch`, `soundcore-proxy-project`.
 

@@ -105,7 +105,8 @@ Buds use):
   (`soundcore_v1`) over RFCOMM; **`ShokzEngine`** replays the Shokz `shokz_v1` binary-TLV frames over
   the same RFCOMM/SPP socket; **`AacpEngine`** speaks Apple's Accessory Protocol over an L2CAP socket
   (PSM 4097) for AirPods. `ble_gatt` is the remaining reserved slot.
-- An **LSPosed hook in System UI** gates the volume-panel ANC tile (see *Known limitations*).
+- An **LSPosed hook in System UI** forces the volume-panel Noise-Control tile available and routes its
+  taps to our provider, so the ANC tile renders there too (for the active-output headphone).
 
 Deeper design lives in [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 

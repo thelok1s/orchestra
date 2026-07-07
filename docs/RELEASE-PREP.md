@@ -41,17 +41,16 @@ Legend: **P0** = blocker · **P1** = should-have · **P2** = nice-to-have · �
 - [ ] **Known-limitations / roadmap section** (in README or `docs/`): no in-app screen yet for
   slider/list/composite controls (they show as "in-app only"); Liberty 4 Pro discrete ANC mapping
   unconfirmed; only 2 devices verified; several per-device opcodes still `_verified:false`.
-- **Android 17 — volume-panel ANC tile BROKEN (known limitation, deferred post-v1).** On Android 17
-  + the "Vector" LSPosed framework (API 101), the **About-device pages work fully** for both devices
-  (4-mode + 3-mode ANC, switches, TWS battery — verified on-device 2026-06-29), but the **SystemUI
-  volume-panel ANC tile does not render**. The SystemUI hook loads + installs correctly (boot `[MX]`
-  logs confirm); the failure is Google reworking the A17 volume-panel ANC component chain
-  (StateFlow-based Pixel gating + a module **double-load** on two classloaders + lazily-loaded panel
-  classes). Forcing `isPixelDevice`/`isAvailable`/`getUuids` true was insufficient — the gate is
-  deeper (ANC component/view-model, not yet RE'd). To be fixed during the **modern-libxposed engine
-  rework** (which solves the double-load + correct-classloader/lazy hooking foundation). Full
-  diagnosis in agent memory `android17-vector-ondevice.md`; engine plan in
-  `docs/superpowers/plans/2026-06-29-dual-lsposed-api-engine.md`.
+- **Android 17 — volume-panel ANC tile WORKS (RESOLVED 2026-07-08).** Both the About-device pages AND
+  the SystemUI volume-panel Noise-Control tile render on A17 + "Vector" (API 101). The 2026-06-29
+  "doesn't render / gate is deeper / double-load" conclusion was wrong — the hooks install + fire fine;
+  `forceAncAvailable` returning the Flow-typed `flowOf(TRUE)` is what makes the tile available, and the
+  content is served by our device-settings provider (same path as the About page). Requirements:
+  restart System UI after an app update (Xposed loads hooks on process start); headphone must be the
+  **active audio output**; and — the one trap — SystemUI memoizes the per-device settings layout on a
+  **one-shot** fetch, so key 25 is now kept aligned with hooked-state (see the `enabled/<MAC>` endpoint
+  + gated writer) to prevent an empty layout being cached. Diagnosis in memory
+  `android17-vector-ondevice.md`; committed on `main` (merge `8b1f23c`).
 - [x] **Catalog/device-def distribution** — DONE (2026-06-24). Built the dedicated **`orchestra-manifests`**
   repo (schema v3: versioning + named transport channels + embedded per-ROM `platforms`), divided by
   manufacturer, with a CI-generated `index.json` (freshness-gated). The app now bundles a **seed** of the
