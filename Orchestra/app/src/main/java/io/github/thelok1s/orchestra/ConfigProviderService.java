@@ -137,6 +137,9 @@ public class ConfigProviderService extends Service {
 
     @Override
     public IBinder onBind(Intent intent) {
+        // DIAGNOSTIC: which process binds us (system uid 1000 = SystemUI/Settings device-settings fw)
+        android.util.Log.i(DeviceDef.TAG, "ConfigProvider onBind by uid=" + android.os.Binder.getCallingUid()
+                + " intent=" + (intent != null ? intent.getAction() : "null"));
         return binder;
     }
 }
