@@ -1,0 +1,171 @@
+{
+  "schema_version": 3,
+  "revision": 1,
+  "revision_date": "2026-07-08",
+  "id": "soundcore-life-q35",
+  "name": "Soundcore Life Q35",
+  "manufacturer": "Anker / Soundcore",
+  "model_code": "3027",
+  "re_model": "A3027",
+  "match": {
+    "name_regex": "(?i)soundcore (Life )?Q35",
+    "service_uuids_any": [
+      "0cf12d31-fac3-4553-bd80-d6832e7b3027"
+    ]
+  },
+  "channels": {
+    "rfcomm-main": {
+      "transport": "rfcomm",
+      "uuid": "0cf12d31-fac3-4553-bd80-d6832e7b3027",
+      "secure": false,
+      "protocol": {
+        "framing": "soundcore_v1",
+        "_doc": "host->device: 08 ee 00 00 00 <cmd:2> <len:2 LE total> <payload..> <crc(sum8)>. device->host: 09 ff 00 00 01 <cmd:2> <len:2 LE> <payload..> <crc>. Command bytes = OpenSCQ30 Command([hi,lo]).",
+        "cmd_prefix": "08ee000000",
+        "resp_prefix": "09ff000001",
+        "checksum": "sum8"
+      }
+    }
+  },
+  "default_channel": "rfcomm-main",
+  "platforms": {
+    "pixelos": {
+      "detect": {
+        "manufacturer": "Google",
+        "system_prop": {
+          "ro.product.brand": "google"
+        }
+      },
+      "requires": [
+        "root",
+        "lsposed",
+        "pkg:com.android.systemui",
+        "pkg:com.android.settings"
+      ],
+      "inject": {
+        "settings_pkg": "com.android.settings",
+        "systemui_pkg": "com.android.systemui",
+        "about_fragment": "com.android.settings.bluetooth.BluetoothDetailsConfigurableFragment",
+        "surfaces": [
+          "device_details",
+          "volume_panel"
+        ],
+        "reserved_ids": {
+          "anc": 1001
+        }
+      }
+    }
+  },
+  "_capabilities_source": "Composed 2026-07-08 from OpenSCQ30 (github.com/oppzippy/OpenSCQ30, soundcore/a3027.rs) + Orchestra's hardware-verified Space One Pro / Liberty 4 Pro templates (same soundcore_v1 framing). Over-ear ANC (A3027). OpenSCQ30: 3 ambient modes + NC sub-modes, EQ, wearing detection, single battery. ALL functions ship _verified:false: command bytes are OpenSCQ30-/cousin-derived, not tested on this exact model — opt in per control in the Devices tab and confirm before trusting. Only the ANC 'sound_mode' (settingId 1001) and the feature toggles inject natively; EQ/button/battery are catalog-only for now. IMPORTANT: the RFCOMM control UUID (…d6832e7b3027) is derived from the model code and is a BEST GUESS — the socket won't open if it's wrong (cf. Liberty 4 Pro, whose UUID uses 3954 though the model is A3957). Confirm the vendor service UUID from an sdp/btsnoop dump before relying on this device.",
+  "functions": [
+    {
+      "id": "sound_mode",
+      "type": "multitoggle",
+      "title": "Noise control",
+      "title_i18n": {
+        "ru": "Управление шумом"
+      },
+      "capability": "sound_modes",
+      "options": [
+        {
+          "id": "anc",
+          "label": "Noise Cancelling",
+          "icon": "anc",
+          "label_i18n": {
+            "ru": "Шумоподавление"
+          }
+        },
+        {
+          "id": "off",
+          "label": "Off",
+          "icon": "off",
+          "label_i18n": {
+            "ru": "Выкл."
+          }
+        },
+        {
+          "id": "transparency",
+          "label": "Transparency",
+          "icon": "transparency",
+          "label_i18n": {
+            "ru": "Прозрачность"
+          }
+        }
+      ],
+      "set": {
+        "command": "0681",
+        "payload_template": "{mode}",
+        "option_values": {
+          "anc": "00000000",
+          "off": "02000000",
+          "transparency": "01000000"
+        }
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {
+          "00": "anc",
+          "02": "off",
+          "01": "transparency"
+        }
+      },
+      "inject": "auto",
+      "ui": {
+        "setting_id": 1001,
+        "surfaces": [
+          "device_details",
+          "volume_panel"
+        ]
+      },
+      "_verified": false,
+      "_verified_note": "Sound-mode command 0681 + mode mapping from OpenSCQ30; the exact payload (esp. the noise-canceling sub-mode / adaptive bytes and the discrete off/transparency mapping) is UNVERIFIED on this model — opt in via the Devices tab and confirm on-device before flipping _verified:true."
+    },
+    {
+      "id": "wearing_detection",
+      "type": "toggle",
+      "title": "In-ear detection (auto-pause)",
+      "capability": "wearing_detection",
+      "set": {
+        "command": "0181",
+        "payload_template": "{state}",
+        "state_values": {
+          "on": "01",
+          "off": "00"
+        }
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
+      "inject": "auto",
+      "ui": {
+        "setting_id": 2001,
+        "surfaces": [
+          "device_details"
+        ]
+      },
+      "_verified": false
+    },
+    {
+      "id": "battery",
+      "type": "info",
+      "title": "Battery",
+      "capability": "single_battery",
+      "read": {
+        "command": "0103",
+        "response_command": "0103",
+        "state_byte_index": null
+      },
+      "inject": false,
+      "ui": {
+        "setting_id": 2040,
+        "surfaces": []
+      },
+      "_verified": false
+    }
+  ]
+}
