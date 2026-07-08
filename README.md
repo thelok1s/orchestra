@@ -88,7 +88,7 @@ device list is the catalog index in the manifests repo.
 
 AirPods Pro 2 still needs **root + LSPosed** like every other device here — it is not a special case,
 despite talking a different (Apple AAP) protocol under the hood. Its manifest ships in the app's
-**bundled seed** at revision 6.
+**bundled seed** at revision 9.
 
 ## How it works
 
