@@ -328,39 +328,13 @@ public final class AacpEngine {
 
     // ---- ControlEngine surface (manifest-driven; exercised from Plan 3 onward) ----
 
-    /** Task 4: generalized off the manifest feature byte (was hardcoded to ANC's 0x0D via
-     *  {@link #setAncByte}). Guards {@code featureByte<0} so a manifest that hasn't been given a
-     *  {@code feature} byte yet (e.g. ANC/sound_mode pre-Task-6) is correctly inert rather than
-     *  sending a frame built from feature -1. */
     static boolean applyMode(BluetoothAdapter adapter, String mac, DeviceDef def,
                              DeviceDef.Func f, String optId) {
-        if (f == null || f.getFeatureByte() < 0) {
-            Log.w(TAG, "AACP applyMode: no feature byte for " + (f != null ? f.id : "null"));
-            return false;
-        }
+        if (f == null) return false;
         String valueHex = f.optionValues.get(optId);
         if (valueHex == null) { Log.w(TAG, "AACP no option_value for " + optId); return false; }
-        ensureConnected(adapter, mac, def);
-        Session s = SESSIONS.get(mac.toUpperCase(Locale.ROOT));
-        if (s == null) return false;
-        synchronized (s.lock) {
-            if (s.out == null) return false;
-            try {
-                int value = Integer.parseInt(valueHex, 16);
-                byte[] frame = AapCodec.featureSet(f.getFeatureByte(), value);
-                Log.i(TAG, "AACP TX set mode " + f.id + "=" + optId + " (feature="
-                        + Integer.toHexString(f.getFeatureByte()) + "): " + HexUtil.hex(frame));
-                Logbook.add("AACP set mode " + f.id + "=" + optId);
-                s.out.write(frame);
-                s.out.flush();
-                AapState.forMac(s.mac).setValue(f.id, value); // optimistic (Task 5 cache); reader reconciles
-                return true;
-            } catch (Exception e) {
-                Log.w(TAG, "AACP mode set failed: " + e);
-                close(s);
-                return false;
-            }
-        }
+        ensureConnected(adapter, mac, def); // latch def; setAncByte's own ensureConnected is then a no-op
+        return setAncByte(adapter, mac, Integer.parseInt(valueHex, 16));
     }
 
     /** Returns the cached mode option id (mapped via the manifest value_map), or null if unknown. */
@@ -372,21 +346,10 @@ public final class AacpEngine {
         return f.valueMap.get(String.format("%02x", mode & 0xff));
     }
 
-    /** Task 4: generalized off the manifest feature byte + {@code option_values{on,off}} (was
-     *  id-locked to {@code conversational_awareness} via {@link #setCa}). Guards
-     *  {@code featureByte<0} so a toggle whose manifest hasn't been given a {@code feature} byte
-     *  yet (e.g. CA pre-Task-6) is correctly inert rather than sending a frame built from feature
-     *  -1. */
     static boolean applyToggle(BluetoothAdapter adapter, String mac, DeviceDef def,
                                DeviceDef.Func f, boolean on) {
-        if (f == null || f.getFeatureByte() < 0) {
-            Log.w(TAG, "AACP applyToggle: no feature byte for " + (f != null ? f.id : "null"));
-            return false;
-        }
-        String optId = on ? "on" : "off";
-        String valueHex = f.optionValues.get(optId);
-        if (valueHex == null) {
-            Log.w(TAG, "AACP applyToggle: no option_value " + optId + " for " + f.id);
+        if (f == null || !"conversational_awareness".equals(f.id)) {
+            Log.w(TAG, "AACP applyToggle: unsupported toggle " + (f != null ? f.id : "null"));
             return false;
         }
         ensureConnected(adapter, mac, def);
@@ -395,17 +358,13 @@ public final class AacpEngine {
         synchronized (s.lock) {
             if (s.out == null) return false;
             try {
-                int value = Integer.parseInt(valueHex, 16);
-                byte[] frame = AapCodec.featureSet(f.getFeatureByte(), value);
-                Log.i(TAG, "AACP TX set toggle " + f.id + "=" + on + " (feature="
-                        + Integer.toHexString(f.getFeatureByte()) + "): " + HexUtil.hex(frame));
-                Logbook.add("AACP set toggle " + f.id + "=" + on);
-                s.out.write(frame);
-                s.out.flush();
-                AapState.forMac(s.mac).setValue(f.id, value); // optimistic (Task 5 cache); reader reconciles
+                byte[] frame = AapCodec.caSet(on);
+                Log.i(TAG, "AACP TX set CA on=" + on + ": " + HexUtil.hex(frame));
+                s.out.write(frame); s.out.flush();
+                AapState.forMac(s.mac).setCaEnabled(on); // optimistic; reader reconciles
                 return true;
             } catch (Exception e) {
-                Log.w(TAG, "AACP toggle set failed: " + e);
+                Log.w(TAG, "AACP CA set failed: " + e);
                 close(s);
                 return false;
             }
@@ -416,43 +375,6 @@ public final class AacpEngine {
         if (f == null || !"conversational_awareness".equals(f.id)) return null;
         ensureConnected(adapter, mac, def);
         return AapState.forMac(mac).getCaEnabled();
-    }
-
-    /** Task 4: manifest-driven "level" write, generalizing {@link #setFeature}'s hardcoded 0x2E
-     *  case off the function's own {@code feature} byte. Clamps to the function's declared
-     *  min/max (mirrors {@code ControlEngine.AACP.applyLevel}'s clamp) and guards
-     *  {@code featureByte<0}. Optimistic update goes only to the generic {@link AapState} cache —
-     *  callers that still read the dedicated {@code adaptiveStrength} field (pre-Task-5) are
-     *  unaffected since this path is not yet wired to any caller. */
-    static boolean setLevel(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f, int value) {
-        if (f == null || f.getFeatureByte() < 0) {
-            Log.w(TAG, "AACP setLevel: no feature byte for " + (f != null ? f.id : "null"));
-            return false;
-        }
-        int v = Math.max(f.getMin(), Math.min(f.getMax(), value));
-        ensureConnected(adapter, mac, def);
-        Session s = SESSIONS.get(mac.toUpperCase(Locale.ROOT));
-        if (s == null) return false;
-        synchronized (s.lock) {
-            if (s.out == null) return false;
-            try {
-                byte[] frame = AapCodec.featureSet(f.getFeatureByte(), v);
-                Log.i(TAG, "AACP TX set level " + f.id + "=" + v + " (feature="
-                        + Integer.toHexString(f.getFeatureByte()) + "): " + HexUtil.hex(frame));
-                Logbook.add("AACP set level " + f.id + "=" + v);
-                s.out.write(frame);
-                s.out.flush();
-                // optimistic (Task 5 cache); some features (e.g. 0x2E) aren't echoed on write, so
-                // this is load-bearing rather than a mere UI-latency shortcut, exactly like the
-                // dedicated-cache equivalents in setAncByte/setFeature/setCa above.
-                AapState.forMac(s.mac).setValue(f.id, v);
-                return true;
-            } catch (Exception e) {
-                Log.w(TAG, "AACP set level failed: " + e);
-                close(s);
-                return false;
-            }
-        }
     }
 
     /** Live display string for an info/battery function ("battery" or "ear_detection"), or null. */
