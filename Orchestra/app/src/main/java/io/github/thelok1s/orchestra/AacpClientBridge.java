@@ -22,7 +22,11 @@ import io.github.thelok1s.orchestra.aap.AapBroker;
  */
 public final class AacpClientBridge {
     private static volatile boolean started = false;
-    private static volatile Context appCtx;
+    private static volatile java.lang.ref.WeakReference<Context> appCtxRef;
+
+    private static Context getContext() {
+        return appCtxRef != null ? appCtxRef.get() : null;
+    }
 
     private AacpClientBridge() {}
 
@@ -30,17 +34,20 @@ public final class AacpClientBridge {
     public static synchronized void init(Context ctx) {
         if (started) return;
         started = true;
-        appCtx = ctx.getApplicationContext();
-        BroadcastReceiver state = new BroadcastReceiver() {
-            @Override public void onReceive(Context c, Intent i) { applyState(i); }
-        };
-        // EXPORTED, no permission: the sender is the SystemUI broker (a different signer).
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
-            appCtx.registerReceiver(state, new IntentFilter(AapBroker.ACTION_STATE), Context.RECEIVER_EXPORTED);
-        } else {
-            appCtx.registerReceiver(state, new IntentFilter(AapBroker.ACTION_STATE));
+        appCtxRef = new java.lang.ref.WeakReference<>(ctx.getApplicationContext());
+        Context context = getContext();
+        if (context != null) {
+            BroadcastReceiver state = new BroadcastReceiver() {
+                @Override public void onReceive(Context c, Intent i) { applyState(i); }
+            };
+            // EXPORTED, no permission: the sender is the SystemUI broker (a different signer).
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                context.registerReceiver(state, new IntentFilter(AapBroker.ACTION_STATE), Context.RECEIVER_EXPORTED);
+            } else {
+                context.registerReceiver(state, new IntentFilter(AapBroker.ACTION_STATE));
+            }
+            Log.i(DeviceDef.TAG, "AacpClientBridge: AAP_STATE receiver registered");
         }
-        Log.i(DeviceDef.TAG, "AacpClientBridge: AAP_STATE receiver registered");
     }
 
     private static void applyState(Intent i) {
@@ -53,7 +60,7 @@ public final class AacpClientBridge {
             // extra closes that gap.
             AapState.clear(mac);
             try {
-                Context ctx = appCtx != null ? appCtx : App.context();
+                Context ctx = getContext() != null ? getContext() : App.context();
                 if (ctx != null) {
                     ctx.sendBroadcast(new Intent("io.github.thelok1s.orchestra.BATTERY_CHANGED")
                             .putExtra("mac", mac));
@@ -78,7 +85,7 @@ public final class AacpClientBridge {
         // non-null here; AacpEngine.broadcastBattery is a no-op in SystemUI where App never ran).
         if (hasBattery) {
             try {
-                Context ctx = appCtx != null ? appCtx : App.context();
+                Context ctx = getContext() != null ? getContext() : App.context();
                 if (ctx != null) {
                     ctx.sendBroadcast(new Intent("io.github.thelok1s.orchestra.BATTERY_CHANGED")
                             .putExtra("mac", mac));
@@ -113,7 +120,7 @@ public final class AacpClientBridge {
 
     /** Send a control command to the broker. op is {@code "anc"} (value 1..4) or {@code "ca"} (0/1). */
     public static void sendCommand(String mac, String op, int value) {
-        Context ctx = appCtx != null ? appCtx : App.context();
+        Context ctx = getContext() != null ? getContext() : App.context();
         if (ctx == null) { Log.w(DeviceDef.TAG, "AacpClientBridge.sendCommand: no context"); return; }
         Intent i = new Intent(AapBroker.ACTION_CMD)
                 .putExtra("mac", mac).putExtra("op", op).putExtra("value", value);
@@ -123,7 +130,7 @@ public final class AacpClientBridge {
 
     /** Send a generic AAP feature-set command to the broker (op="feature"): feature byte + value. */
     public static void sendFeature(String mac, int feature, int value) {
-        Context ctx = appCtx != null ? appCtx : App.context();
+        Context ctx = getContext() != null ? getContext() : App.context();
         if (ctx == null) { Log.w(DeviceDef.TAG, "AacpClientBridge.sendFeature: no context"); return; }
         Intent i = new Intent(AapBroker.ACTION_CMD)
                 .putExtra("mac", mac).putExtra("op", "feature")
@@ -140,7 +147,7 @@ public final class AacpClientBridge {
      * so rename is routed through the broker the same way anc/ca/feature are.
      */
     public static void sendRename(String mac, String name) {
-        Context ctx = appCtx != null ? appCtx : App.context();
+        Context ctx = getContext() != null ? getContext() : App.context();
         if (ctx == null) { Log.w(DeviceDef.TAG, "AacpClientBridge.sendRename: no context"); return; }
         Intent i = new Intent(AapBroker.ACTION_CMD)
                 .putExtra("mac", mac).putExtra("op", "rename").putExtra("name", name);
