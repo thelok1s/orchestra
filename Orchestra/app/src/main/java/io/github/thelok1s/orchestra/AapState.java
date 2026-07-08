@@ -39,6 +39,15 @@ public final class AapState {
     void setAdaptiveStrength(int v) { this.adaptiveStrength = v; }
     public Integer getAdaptiveStrength() { return adaptiveStrength; }
 
+    /** Task 4: generic manifest-function-id -> last-written-byte cache, keyed by {@code Func.id}.
+     *  Populated optimistically by {@link AacpEngine}'s generalized Lane-A writes
+     *  ({@code applyToggle}/{@code applyMode}/{@code setLevel}) so any function can round-trip its
+     *  own value without a dedicated field like {@link #ancMode}/{@link #caEnabled}/
+     *  {@link #adaptiveStrength} above. Task 5 wires the generic reader to consume this same map. */
+    private final java.util.Map<String,Integer> values = new java.util.concurrent.ConcurrentHashMap<>();
+    void setValue(String id, int b) { values.put(id, b); }
+    public Integer getValue(String id) { return values.get(id); }
+
     private volatile AapCodec.Ownership ownership;
     void setOwnership(AapCodec.Ownership o) { this.ownership = o; }
     public AapCodec.Ownership getOwnership() { return ownership; }
