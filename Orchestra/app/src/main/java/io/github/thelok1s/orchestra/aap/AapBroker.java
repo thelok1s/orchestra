@@ -543,6 +543,9 @@ public final class AapBroker {
             .putExtra("ep",  e == null ? -1 : e.primary)
             .putExtra("es",  e == null ? -1 : e.secondary)
             .putExtra("as",  as == null ? -1 : as);
+        AapCodec.Ownership own = s.getOwnership();
+        i.putExtra("own", own == null ? -1 : (own.ownedByOther ? 1 : 0));
+        if (own != null && own.otherLabel != null) i.putExtra("ownl", own.otherLabel);
         ctx.sendBroadcast(i); // plain; the app receiver is EXPORTED (different-signer asymmetry)
     }
 

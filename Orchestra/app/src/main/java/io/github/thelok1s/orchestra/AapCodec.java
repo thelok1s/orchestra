@@ -132,4 +132,31 @@ public final class AapCodec {
         for (int i = 0; i < prefix.length; i++) if (frame[i] != prefix[i]) return null;
         return frame[9] & 0xff;
     }
+
+    /** Current-peer / ownership state parsed from opcode 0x0e (Plan 9 spike). */
+    public static final class Ownership {
+        public final boolean ownedByOther;
+        public final String otherLabel; // peer MAC "AA:BB:CC:DD:EE:FF" big-endian, or null when none
+        public Ownership(boolean ownedByOther, String otherLabel) {
+            this.ownedByOther = ownedByOther; this.otherLabel = otherLabel;
+        }
+    }
+
+    /** Parse the current-peer notification (04 00 04 00 0e 00 <6-byte peer MAC little-endian>
+     *  <state>). An all-zero MAC means no other device (owned by this phone). Returns null if the
+     *  frame isn't this opcode. Opcode + layout from the Plan 9 spike findings. */
+    static Ownership parseOwnership(byte[] frame, int len) {
+        byte[] prefix = {0x04, 0x00, 0x04, 0x00, 0x0e, 0x00};
+        if (len < prefix.length + 6 + 1) return null;      // prefix + MAC + state
+        for (int i = 0; i < prefix.length; i++) if (frame[i] != prefix[i]) return null;
+        boolean allZero = true;
+        for (int i = 6; i < 12; i++) if (frame[i] != 0) { allZero = false; break; }
+        if (allZero) return new Ownership(false, null);
+        StringBuilder mac = new StringBuilder(17);         // little-endian in frame -> big-endian label
+        for (int i = 11; i >= 6; i--) {
+            if (mac.length() > 0) mac.append(':');
+            mac.append(String.format("%02X", frame[i] & 0xff));
+        }
+        return new Ownership(true, mac.toString());
+    }
 }

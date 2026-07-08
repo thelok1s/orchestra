@@ -18,6 +18,11 @@ import android.net.Uri;
  * Column: enabled (0|1) = {@link DeviceStore#behaviorEnabled}. Task 3: lets the SystemUI AAP
  * broker pull the per-device auto_pause enable on a cache miss (e.g. after a SystemUI restart),
  * since it cannot read this app's SharedPreferences directly.
+ *
+ *   content://io.github.thelok1s.orchestra.state/flag/<key>
+ * Column: enabled (0|1) = {@link DeviceStore#flag} (default false). Task 4B: lets the
+ * com.google.android.bluetooth-process hook read the (default-off) act_as_apple toggle without
+ * app SharedPreferences access.
  */
 public class StateProvider extends ContentProvider {
     static final String AUTHORITY = "io.github.thelok1s.orchestra.state";
@@ -44,6 +49,11 @@ public class StateProvider extends ContentProvider {
             MatrixCursor bcur = new MatrixCursor(new String[]{"enabled"});
             bcur.addRow(new Object[]{DeviceStore.behaviorEnabled(bmac, behaviorId) ? 1 : 0});
             return bcur;
+        }
+        if (seg.size() == 2 && "flag".equals(seg.get(0))) {
+            MatrixCursor fc = new MatrixCursor(new String[]{"enabled"});
+            fc.addRow(new Object[]{DeviceStore.flag(seg.get(1), false) ? 1 : 0});
+            return fc;
         }
         if (seg.size() != 2 || !"battery".equals(seg.get(0))) return null;
         String mac = seg.get(1).toUpperCase(java.util.Locale.ROOT);

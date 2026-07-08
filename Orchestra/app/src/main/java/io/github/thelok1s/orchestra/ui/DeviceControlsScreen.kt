@@ -39,6 +39,12 @@ fun DeviceControlsScreen(mac: String, onBack: () -> Unit) {
             Modifier.padding(pad).padding(16.dp).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            val ownership = remember(mac, liveTick) { AapState.forMac(mac).ownershipSummary() }
+            if (ownership != null) {
+                ListItem(
+                    headlineContent = { Text("Ownership") },
+                    supportingContent = { Text(ownership) })
+            }
             val funcs = def?.appFunctions(mac) ?: emptyList()
             if (funcs.isEmpty()) {
                 Text("No in-app controls for this device.")

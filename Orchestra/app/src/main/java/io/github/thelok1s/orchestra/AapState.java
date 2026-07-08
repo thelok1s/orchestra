@@ -39,6 +39,17 @@ public final class AapState {
     void setAdaptiveStrength(int v) { this.adaptiveStrength = v; }
     public Integer getAdaptiveStrength() { return adaptiveStrength; }
 
+    private volatile AapCodec.Ownership ownership;
+    void setOwnership(AapCodec.Ownership o) { this.ownership = o; }
+    public AapCodec.Ownership getOwnership() { return ownership; }
+    /** "Also connected to <label>" / "Only this phone" / null if unknown. */
+    public String ownershipSummary() {
+        AapCodec.Ownership o = ownership;
+        if (o == null) return null;
+        if (!o.ownedByOther) return "Only this phone";
+        return "Also connected to " + (o.otherLabel != null ? o.otherLabel : "another device");
+    }
+
     void setBattery(AapCodec.Battery b) { this.battery = b; }
     public AapCodec.Battery getBattery() { return battery; }
     /** "L 100% · R 99% · Case 17%" over known components, or null if none known. */

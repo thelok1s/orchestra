@@ -1,0 +1,11 @@
+Orchestra bundles native code derived from LibrePods
+(https://github.com/kavishdevar/librepods), licensed under GPL-3.0.
+
+Files under Orchestra/app/src/main/cpp/ (l2c_fcr_hook.cpp, l2c_fcr_hook.h,
+CMakeLists.txt, and xz/*) originate from LibrePods and retain their original
+GPL-3.0 copyright headers. Per AGPL-3.0 §13, the combined work is distributed
+under the GNU Affero General Public License v3.0.
+
+Orchestra links ShadowHook (https://github.com/bytedance/android-inline-hook),
+Copyright (c) 2021-2026 ByteDance Inc., licensed under the MIT License, as the
+inline-hook engine used to self-install the DID hook (libl2c_fcr_hook.so).

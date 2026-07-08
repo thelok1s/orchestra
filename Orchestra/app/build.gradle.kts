@@ -8,6 +8,7 @@ plugins {
 android {
     namespace = "io.github.thelok1s.orchestra"
     compileSdk = 37
+    ndkVersion = "28.2.13676358"
 
     defaultConfig {
         applicationId = "io.github.thelok1s.orchestra"
@@ -16,6 +17,14 @@ android {
         // versionCode encodes the semver as MMmmpp (1.0.0 -> 1_00_00). Must increase every release.
         versionCode = 10000
         versionName = "1.0.0"
+
+        ndk { abiFilters += "arm64-v8a" }
+    }
+
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+        }
     }
 
     signingConfigs {
@@ -52,6 +61,16 @@ android {
     buildFeatures {
         compose = true
         buildConfig = true
+        prefab = true
+    }
+
+    // Extract native libs to the app's nativeLibraryDir on install, so the SystemUI/Bluetooth
+    // hook processes can System.load() them by absolute path (a foreign process can't load an
+    // uncompressed lib straight out of our APK). Needed for the DID hook (loaded into the BT stack).
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
     }
 
     compileOptions {
@@ -76,6 +95,12 @@ tasks.named("preBuild") { dependsOn("syncManifests") }
 dependencies {
     // Xposed API — compileOnly: LSPosed provides it at runtime, must NOT be bundled.
     compileOnly("de.robv.android.xposed:api:82")
+    // ShadowHook (BSD) — self-installing inline hook engine for the DID hook (see NativeBridge).
+    // Ships prebuilt libshadowhook.so + a CMake/prefab package; consumed from
+    // app/src/main/cpp/CMakeLists.txt via find_package(shadowhook REQUIRED CONFIG).
+    // 1.0.10, NOT 1.1.1: 1.1.1 inline-hooks the linker during init and always fails with
+    // errno 12 (INIT_LINKER) in the Bluetooth system process (bytedance/android-inline-hook#91).
+    implementation("com.bytedance.android:shadowhook:1.0.10")
 
     implementation("androidx.core:core-ktx:1.16.0")
     implementation("androidx.activity:activity-compose:1.10.1")
