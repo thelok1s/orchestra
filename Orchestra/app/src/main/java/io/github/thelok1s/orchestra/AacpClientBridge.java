@@ -60,7 +60,8 @@ public final class AacpClientBridge {
             // extra closes that gap.
             AapState.clear(mac);
             try {
-                Context ctx = getContext() != null ? getContext() : App.context();
+                Context c = getContext();
+                Context ctx = c != null ? c : App.context();
                 if (ctx != null) {
                     ctx.sendBroadcast(new Intent("io.github.thelok1s.orchestra.BATTERY_CHANGED")
                             .putExtra("mac", mac));
@@ -85,7 +86,8 @@ public final class AacpClientBridge {
         // non-null here; AacpEngine.broadcastBattery is a no-op in SystemUI where App never ran).
         if (hasBattery) {
             try {
-                Context ctx = getContext() != null ? getContext() : App.context();
+                Context c = getContext();
+                Context ctx = c != null ? c : App.context();
                 if (ctx != null) {
                     ctx.sendBroadcast(new Intent("io.github.thelok1s.orchestra.BATTERY_CHANGED")
                             .putExtra("mac", mac));
@@ -120,7 +122,8 @@ public final class AacpClientBridge {
 
     /** Send a control command to the broker. op is {@code "anc"} (value 1..4) or {@code "ca"} (0/1). */
     public static void sendCommand(String mac, String op, int value) {
-        Context ctx = getContext() != null ? getContext() : App.context();
+        Context c = getContext();
+        Context ctx = c != null ? c : App.context();
         if (ctx == null) { Log.w(DeviceDef.TAG, "AacpClientBridge.sendCommand: no context"); return; }
         Intent i = new Intent(AapBroker.ACTION_CMD)
                 .putExtra("mac", mac).putExtra("op", op).putExtra("value", value);
@@ -130,7 +133,8 @@ public final class AacpClientBridge {
 
     /** Send a generic AAP feature-set command to the broker (op="feature"): feature byte + value. */
     public static void sendFeature(String mac, int feature, int value) {
-        Context ctx = getContext() != null ? getContext() : App.context();
+        Context c = getContext();
+        Context ctx = c != null ? c : App.context();
         if (ctx == null) { Log.w(DeviceDef.TAG, "AacpClientBridge.sendFeature: no context"); return; }
         Intent i = new Intent(AapBroker.ACTION_CMD)
                 .putExtra("mac", mac).putExtra("op", "feature")
@@ -147,7 +151,8 @@ public final class AacpClientBridge {
      * so rename is routed through the broker the same way anc/ca/feature are.
      */
     public static void sendRename(String mac, String name) {
-        Context ctx = getContext() != null ? getContext() : App.context();
+        Context c = getContext();
+        Context ctx = c != null ? c : App.context();
         if (ctx == null) { Log.w(DeviceDef.TAG, "AacpClientBridge.sendRename: no context"); return; }
         Intent i = new Intent(AapBroker.ACTION_CMD)
                 .putExtra("mac", mac).putExtra("op", "rename").putExtra("name", name);
