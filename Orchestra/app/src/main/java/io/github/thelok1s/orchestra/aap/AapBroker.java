@@ -576,6 +576,12 @@ public final class AapBroker {
         AapCodec.Ownership own = s.getOwnership();
         i.putExtra("own", own == null ? -1 : (own.ownedByOther ? 1 : 0));
         if (own != null && own.otherLabel != null) i.putExtra("ownl", own.otherLabel);
+        StringBuilder gv = new StringBuilder();
+        for (Map.Entry<String, Integer> e2 : s.valuesSnapshot().entrySet()) {
+            if (gv.length() > 0) gv.append(';');
+            gv.append(e2.getKey()).append('=').append(e2.getValue());
+        }
+        if (gv.length() > 0) i.putExtra("gv", gv.toString());
         ctx.sendBroadcast(i); // plain; the app receiver is EXPORTED (different-signer asymmetry)
     }
 

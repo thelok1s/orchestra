@@ -91,6 +91,16 @@ public final class AacpClientBridge {
             String ownl = i.getStringExtra("ownl");
             AapState.forMac(mac).setOwnership(new AapCodec.Ownership(own == 1, ownl));
         }
+        String gv = i.getStringExtra("gv");
+        if (gv != null && !gv.isEmpty()) {
+            for (String kvp : gv.split(";")) {
+                int eq = kvp.indexOf('=');
+                if (eq > 0) {
+                    try { s.setValue(kvp.substring(0, eq), Integer.parseInt(kvp.substring(eq + 1))); }
+                    catch (NumberFormatException ignored) {}
+                }
+            }
+        }
         // Refresh the device-settings provider + any Devices-tab UI subscribed via the app-side
         // keyed listener registry (the broker's own "broker" key lives in the SystemUI process).
         AacpEngine.fireListener(mac);
