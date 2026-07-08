@@ -457,8 +457,13 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                     new android.content.IntentFilter("io.github.thelok1s.orchestra.BATTERY_CHANGED");
             // broadcastPermission: only Orchestra (same signer, self-holds it) can deliver.
             // RECEIVER_EXPORTED: allow delivery from a different uid (Orchestra app process).
-            app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
-                    null, Context.RECEIVER_EXPORTED);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
+                        null, Context.RECEIVER_EXPORTED);
+            } else {
+                app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
+                        null, 0);
+            }
             batteryReceiverRegistered = true;
             XposedBridge.log("[MX] battery-changed receiver registered");
         } catch (Throwable t) {

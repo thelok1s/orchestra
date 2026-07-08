@@ -35,8 +35,11 @@ public final class AacpClientBridge {
             @Override public void onReceive(Context c, Intent i) { applyState(i); }
         };
         // EXPORTED, no permission: the sender is the SystemUI broker (a different signer).
-        appCtx.registerReceiver(state, new IntentFilter(AapBroker.ACTION_STATE),
-                Context.RECEIVER_EXPORTED);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            appCtx.registerReceiver(state, new IntentFilter(AapBroker.ACTION_STATE), Context.RECEIVER_EXPORTED);
+        } else {
+            appCtx.registerReceiver(state, new IntentFilter(AapBroker.ACTION_STATE));
+        }
         Log.i(DeviceDef.TAG, "AacpClientBridge: AAP_STATE receiver registered");
     }
 

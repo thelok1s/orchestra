@@ -121,7 +121,11 @@ public final class AapBroker {
                 }
             }
         };
-        ctx.registerReceiver(cmd, new IntentFilter(ACTION_CMD), Context.RECEIVER_EXPORTED);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            ctx.registerReceiver(cmd, new IntentFilter(ACTION_CMD), Context.RECEIVER_EXPORTED);
+        } else {
+            ctx.registerReceiver(cmd, new IntentFilter(ACTION_CMD));
+        }
         Log.i(TAG, "AapBroker started (AAP_CMD receiver registered)");
 
         BroadcastReceiver acl = new BroadcastReceiver() {
@@ -152,7 +156,11 @@ public final class AapBroker {
         IntentFilter aclFilter = new IntentFilter();
         aclFilter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
         aclFilter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
-        ctx.registerReceiver(acl, aclFilter, Context.RECEIVER_EXPORTED);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            ctx.registerReceiver(acl, aclFilter, Context.RECEIVER_EXPORTED);
+        } else {
+            ctx.registerReceiver(acl, aclFilter);
+        }
         Log.i(TAG, "AapBroker started (ACL receiver registered)");
 
         connectKnown(ctx);
