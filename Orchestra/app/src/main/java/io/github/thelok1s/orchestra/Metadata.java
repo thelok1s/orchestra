@@ -67,7 +67,7 @@ final class Metadata {
 
     private static String readKey25(BluetoothDevice device) {
         try {
-            Method get = BluetoothDevice.class.getMethod("getMetadata", int.class);
+            Method get = (Method) org.lsposed.hiddenapibypass.HiddenApiBypass.getDeclaredMethod(BluetoothDevice.class, "getMetadata", int.class);
             Object res = get.invoke(device, KEY_FAST_PAIR_CUSTOMIZED_FIELDS);
             if (res instanceof byte[]) {
                 return new String((byte[]) res, StandardCharsets.UTF_8);
@@ -81,7 +81,7 @@ final class Metadata {
 
     private static boolean writeKey25(BluetoothDevice device, String value) {
         try {
-            Method set = BluetoothDevice.class.getMethod("setMetadata", int.class, byte[].class);
+            Method set = (Method) org.lsposed.hiddenapibypass.HiddenApiBypass.getDeclaredMethod(BluetoothDevice.class, "setMetadata", int.class, byte[].class);
             Object res = set.invoke(device, KEY_FAST_PAIR_CUSTOMIZED_FIELDS,
                     value.getBytes(StandardCharsets.UTF_8));
             return !(res instanceof Boolean) || (Boolean) res;

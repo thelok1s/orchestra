@@ -1,12 +1,37 @@
 {
   "index_schema": 1,
-  "generated": "2026-07-08T17:17:31.707Z",
+  "generated": "2026-07-07T23:37:54.964Z",
   "repo": "orchestra-manifests",
   "manufacturers": [
     {
       "slug": "anker-soundcore",
       "name": "Anker / Soundcore",
       "devices": [
+        {
+          "id": "soundcore-liberty-3-pro",
+          "name": "Soundcore Liberty 3 Pro",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)soundcore Liberty 3 Pro",
+            "service_uuids_any": [
+              "0cf12d31-fac3-4553-bd80-d6832e7b3952"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 4,
+            "injectable": 3,
+            "verified": 0
+          },
+          "url": "manifests/anker-soundcore/soundcore-liberty-3-pro.json",
+          "sha256": "e4fee704eecbda0df0c61ff94cb23fd93b1142850ca993fc9920b9dacf6bf5e4"
+        },
         {
           "id": "soundcore-liberty-4-pro",
           "name": "Soundcore Liberty 4 Pro",
@@ -33,6 +58,81 @@
           "sha256": "403009f9946d601b712fe4b3d97b3d74b41811a9ae263ea643ee6bd33807e1ca"
         },
         {
+          "id": "soundcore-life-q30",
+          "name": "Soundcore Life Q30",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)soundcore (Life )?Q30",
+            "service_uuids_any": [
+              "0cf12d31-fac3-4553-bd80-d6832e7b3028"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 2,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/anker-soundcore/soundcore-life-q30.json",
+          "sha256": "7b4e5484ddb8543340b99f7362f3fd679d996c0b726f393c95fdd42d6bd70769"
+        },
+        {
+          "id": "soundcore-life-q35",
+          "name": "Soundcore Life Q35",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)soundcore (Life )?Q35",
+            "service_uuids_any": [
+              "0cf12d31-fac3-4553-bd80-d6832e7b3027"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 3,
+            "injectable": 2,
+            "verified": 0
+          },
+          "url": "manifests/anker-soundcore/soundcore-life-q35.json",
+          "sha256": "965a90b32a84a9479af2f7d62bfb9fda2e27770238b3b655965e93b5dc78fc08"
+        },
+        {
+          "id": "soundcore-space-a40",
+          "name": "Soundcore Space A40",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)soundcore Space A40",
+            "service_uuids_any": [
+              "0cf12d31-fac3-4553-bd80-d6832e7b3936"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 5,
+            "injectable": 4,
+            "verified": 0
+          },
+          "url": "manifests/anker-soundcore/soundcore-space-a40.json",
+          "sha256": "88f93719adbf446c9edb9c332fde9c69b4aa7ef5af5f5c1366cfb9eff1bf88d9"
+        },
+        {
           "id": "soundcore-space-one-pro",
           "name": "Soundcore Space One Pro",
           "schema_version": 3,
@@ -57,6 +157,31 @@
           },
           "url": "manifests/anker-soundcore/soundcore-space-one-pro.json",
           "sha256": "07b163e86c3900825cab41a5408679de40b142b20183d624a1ce96bec03e15a9"
+        },
+        {
+          "id": "soundcore-space-q45",
+          "name": "Soundcore Space Q45",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)soundcore Space Q45",
+            "service_uuids_any": [
+              "0cf12d31-fac3-4553-bd80-d6832e7b3040"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 4,
+            "injectable": 3,
+            "verified": 0
+          },
+          "url": "manifests/anker-soundcore/soundcore-space-q45.json",
+          "sha256": "804531ec66a3bb4e8bc51ae42e82c0a75777f4589cd3babc00205e6086a5ece9"
         }
       ]
     },
@@ -68,7 +193,7 @@
           "id": "airpods-pro-2",
           "name": "AirPods Pro 2",
           "schema_version": 4,
-          "revision": 10,
+          "revision": 9,
           "match": {
             "name_regex": "(?i)airpods pro",
             "service_uuids_any": [
@@ -85,7 +210,7 @@
             "verified": 8
           },
           "url": "manifests/apple/airpods-pro-2.json",
-          "sha256": "b0063d5db620da5ac30c36a5b489efe258e0c82e8971cf9c323f7d6d1e00fab1"
+          "sha256": "a5922fdb668fbf491a789f5519f236739e3e5575073ff3e00668bae2c5c2024b"
         }
       ]
     },
