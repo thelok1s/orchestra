@@ -462,7 +462,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                         null, Context.RECEIVER_EXPORTED);
             } else {
                 app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
-                        null, 0);
+                        null);
             }
             batteryReceiverRegistered = true;
             XposedBridge.log("[MX] battery-changed receiver registered");
