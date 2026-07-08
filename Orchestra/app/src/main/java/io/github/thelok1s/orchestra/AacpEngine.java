@@ -154,7 +154,7 @@ public final class AacpEngine {
                     Integer adapt = AapCodec.parseAdaptiveStrength(buf, n);
                     if (adapt != null) { state.setAdaptiveStrength(adapt); changed = true;
                         Log.i(TAG, "AACP notify adaptive strength=" + adapt + " for " + s.mac); }
-                    AapCodec.Battery bat = AapCodec.parseBattery(buf, n);
+                    AapCodec.Battery bat = AapCodec.parseBattery(buf, n, batteryLayoutOf(s.def));
                     if (bat != null) { state.setBattery(bat); changed = true;
                         Log.i(TAG, "AACP notify battery " + state.batterySummary() + " for " + s.mac);
                         broadcastBattery(s.mac); }
@@ -168,6 +168,17 @@ public final class AacpEngine {
                     Integer sp = AapCodec.parseCaSpeech(buf, n);
                     if (sp != null) { Log.i(TAG, "AACP notify CA speech level=" + sp + " for " + s.mac);
                         fireSpeech(s.mac, sp); }
+                    // Task 5: generic Lane-A cache, dual-populated alongside the typed parsers
+                    // above (which stay intact and still drive behaviors + the AAP_STATE broadcast).
+                    // Nothing consumes `values` yet; Task 6 broadcasts it to the app process.
+                    DeviceDef def = s.def;
+                    if (def != null) {
+                        for (DeviceDef.Func f : def.funcs()) {
+                            if (f.getFeatureByte() < 0) continue; // pre-rev10 funcs skipped -> generic stays empty
+                            Integer v = AapCodec.parseFeature(buf, n, f.getFeatureByte());
+                            if (v != null) { state.setValue(f.id, v); changed = true; }
+                        }
+                    }
                     if (changed) fireListener(s.mac);
                 }
             } catch (Exception e) {
@@ -176,6 +187,15 @@ public final class AacpEngine {
         }, "aacp-reader-" + s.mac);
         s.reader.setDaemon(true);
         s.reader.start();
+    }
+
+    /** Task 5: the manifest's battery layout (if the device's "battery" func declares one), else
+     *  null so {@link AapCodec#parseBattery(byte[], int, Map)} falls back to its default mapping
+     *  (today's exact behavior, verified in Task 2). Pure/context-free — safe in the broker. */
+    private static Map<Integer, String> batteryLayoutOf(DeviceDef def) {
+        if (def == null) return null;
+        for (DeviceDef.Func f : def.funcs()) if ("battery".equals(f.id)) return f.batteryLayout;
+        return null;
     }
 
     /** Reflected L2CAP BluetoothSocket constructor (no public API). Tries known signatures. */
