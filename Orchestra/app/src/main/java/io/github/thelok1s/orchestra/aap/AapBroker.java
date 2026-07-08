@@ -169,8 +169,15 @@ public final class AapBroker {
     static void connectKnown(Context ctx) {
         BluetoothManager bm = (BluetoothManager) ctx.getSystemService(Context.BLUETOOTH_SERVICE);
         BluetoothAdapter a = bm != null ? bm.getAdapter() : null;
-        if (a == null || a.getBondedDevices() == null) return;
-        for (BluetoothDevice d : a.getBondedDevices()) {
+        if (a == null) return;
+        java.util.Set<BluetoothDevice> bonded = null;
+        try {
+            bonded = a.getBondedDevices();
+        } catch (SecurityException e) {
+            Log.e(TAG, "Missing Bluetooth permission for getBondedDevices", e);
+        }
+        if (bonded == null) return;
+        for (BluetoothDevice d : bonded) {
             if (!isAap(d)) continue;
             registerAndConnect(ctx, a, d.getAddress().toUpperCase(Locale.ROOT));
         }
@@ -314,7 +321,13 @@ public final class AapBroker {
                 Log.w(TAG, "handleCommand: invalid MAC " + mac + ": " + e);
                 return;
             }
-            if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
+            int bondState = BluetoothDevice.BOND_NONE;
+            try {
+                bondState = device.getBondState();
+            } catch (SecurityException e) {
+                Log.e(TAG, "Missing Bluetooth permission for getBondState", e);
+            }
+            if (bondState != BluetoothDevice.BOND_BONDED) {
                 Log.w(TAG, "handleCommand: " + mac + " not bonded, dropping op=" + op);
                 return;
             }
@@ -361,7 +374,13 @@ public final class AapBroker {
                 Log.w(TAG, "handleRename: invalid MAC " + mac + ": " + e);
                 return;
             }
-            if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
+            int renameBondState = BluetoothDevice.BOND_NONE;
+            try {
+                renameBondState = device.getBondState();
+            } catch (SecurityException e) {
+                Log.e(TAG, "Missing Bluetooth permission for getBondState", e);
+            }
+            if (renameBondState != BluetoothDevice.BOND_BONDED) {
                 Log.w(TAG, "handleRename: " + mac + " not bonded, dropping");
                 return;
             }

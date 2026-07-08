@@ -72,9 +72,20 @@ public class DebugSendReceiver extends BroadcastReceiver {
                 if (DeviceStore.enabledId(address) == null) {
                     android.bluetooth.BluetoothDevice dev = adapter.getRemoteDevice(address);
                     java.util.List<String> uuids = new java.util.ArrayList<>();
-                    android.os.ParcelUuid[] pu = dev.getUuids();
+                    android.os.ParcelUuid[] pu = null;
+                    try {
+                        pu = dev.getUuids();
+                    } catch (SecurityException e) {
+                        Log.e(DeviceDef.TAG, "Missing Bluetooth permission for getUuids()", e);
+                    }
                     if (pu != null) for (android.os.ParcelUuid p : pu) uuids.add(p.getUuid().toString());
-                    String id = DeviceStore.idForBonded(dev.getName(), uuids, null);
+                    String name = null;
+                    try {
+                        name = dev.getName();
+                    } catch (SecurityException e) {
+                        Log.e(DeviceDef.TAG, "Missing Bluetooth permission for getName()", e);
+                    }
+                    String id = DeviceStore.idForBonded(name, uuids, null);
                     if (id == null) { Log.w(DeviceDef.TAG, "AACP_MF: no manifest matches " + address); return; }
                     DeviceStore.setEnabled(address, id, true);
                     Log.i(DeviceDef.TAG, "AACP_MF: enabled " + address + " -> " + id);
