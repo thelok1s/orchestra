@@ -375,12 +375,14 @@ public final class DeviceDef {
         func.framing = ch != null ? ch.framing : null;
         if (fn.has("summary") || fn.has("summary_i18n")) func.summary = localized(fn, "summary", "");
 
+        // Plan 8: parse the AAP `feature` byte for ALL function types (not only level/slider),
+        // so toggle/multitoggle can be driven generically.
+        String feat = fn.optString("feature", null);
+        if (feat != null) {
+            try { func.featureByte = Integer.parseInt(feat, 16); }
+            catch (NumberFormatException e) { func.featureByte = -1; }
+        }
         if ("level".equals(type) || "slider".equals(type)) {
-            String feat = fn.optString("feature", null);
-            if (feat != null) {
-                try { func.featureByte = Integer.parseInt(feat, 16); }
-                catch (NumberFormatException e) { func.featureByte = -1; }
-            }
             // "level" carries min/max/step at the top level; "slider" nests them in `range`.
             JSONObject range = fn.optJSONObject("range");
             JSONObject src = range != null ? range : fn;
