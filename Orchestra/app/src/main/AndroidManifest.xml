@@ -25,12 +25,6 @@
                 android:protectionLevel="signature" />
     <uses-permission android:name="io.github.thelok1s.orchestra.permission.AAP_STATE" />
 
-    <!-- Signature permission guarding the VolumeApplyReceiver. Only the Orchestra app (same signer)
-         can invoke it to prevent third-party applications from triggering volume changes. -->
-    <permission android:name="io.github.thelok1s.orchestra.permission.VOLUME_APPLY"
-                android:protectionLevel="signature" />
-    <uses-permission android:name="io.github.thelok1s.orchestra.permission.VOLUME_APPLY" />
-
     <uses-permission android:name="android.permission.BLUETOOTH" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
@@ -103,7 +97,7 @@
         <!-- Applies an ANC mode by toggle index (fired by the volume-panel hook). -->
         <receiver android:name=".VolumeApplyReceiver"
                   android:exported="true"
-                  android:permission="io.github.thelok1s.orchestra.permission.VOLUME_APPLY">
+                  android:permission="android.permission.BLUETOOTH_PRIVILEGED">
             <intent-filter>
                 <action android:name="io.github.thelok1s.orchestra.APPLY_INDEX" />
             </intent-filter>
