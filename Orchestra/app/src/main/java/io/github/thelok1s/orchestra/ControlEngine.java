@@ -54,20 +54,37 @@ public interface ControlEngine {
             int modeByte;
             try { modeByte = Integer.parseInt(valueHex, 16); }
             catch (NumberFormatException e) { android.util.Log.w(DeviceDef.TAG, "AACP bad option_value hex: " + valueHex); return false; }
-            AacpClientBridge.sendCommand(mac, "anc", modeByte);
-            AapState.forMac(mac).setAncMode(modeByte); // Fix 2: optimistic echo; broker reconciles on next push
+            if (f.getFeatureByte() >= 0) {
+                AacpClientBridge.sendFeature(mac, f.getFeatureByte(), modeByte);
+                AapState.forMac(mac).setValue(f.id, modeByte); // optimistic echo (generic cache)
+            } else {
+                AacpClientBridge.sendCommand(mac, "anc", modeByte);
+            }
+            AapState.forMac(mac).setAncMode(modeByte); // Fix 2: optimistic echo (typed); broker reconciles on next push
             return true;
         }
         public String readMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
             if (f == null) return null;
-            Integer mode = AapState.forMac(mac).getAncMode();
+            Integer mode = AapState.forMac(mac).getValue(f.id);
+            if (mode == null) mode = AapState.forMac(mac).getAncMode();
             if (mode == null) return null;
             return f.valueMap.get(String.format("%02x", mode & 0xff));
         }
         public boolean applyToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, boolean on) {
-            // Fix 3: only conversational_awareness is wired; reject any other toggle id (mirrors old AacpEngine guard)
-            if (f == null || !"conversational_awareness".equals(f.id)) {
-                android.util.Log.w(DeviceDef.TAG, "AACP applyToggle: unsupported toggle " + (f != null ? f.id : "null"));
+            if (f == null) return false;
+            if (f.getFeatureByte() >= 0) {
+                String valueHex = f.optionValues.get(on ? "on" : "off");
+                if (valueHex == null) { android.util.Log.w(DeviceDef.TAG, "AACP no option_value for " + (on ? "on" : "off")); return false; }
+                int vb;
+                try { vb = Integer.parseInt(valueHex, 16); }
+                catch (NumberFormatException e) { android.util.Log.w(DeviceDef.TAG, "AACP bad option_value hex: " + valueHex); return false; }
+                AacpClientBridge.sendFeature(mac, f.getFeatureByte(), vb);
+                AapState.forMac(mac).setValue(f.id, vb); // optimistic echo (generic cache)
+                return true;
+            }
+            // Legacy fallback: only conversational_awareness is wired via the dedicated "ca" op.
+            if (!"conversational_awareness".equals(f.id)) {
+                android.util.Log.w(DeviceDef.TAG, "AACP applyToggle: unsupported toggle " + f.id);
                 return false;
             }
             AacpClientBridge.sendCommand(mac, "ca", on ? 1 : 0);
@@ -75,6 +92,13 @@ public interface ControlEngine {
             return true;
         }
         public Boolean readToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            if (f != null) {
+                Integer b = AapState.forMac(mac).getValue(f.id);
+                if (b != null) {
+                    String id = f.valueMap.get(String.format("%02x", b & 0xff));
+                    return id == null ? null : "on".equals(id);
+                }
+            }
             return AapState.forMac(mac).getCaEnabled();
         }
         @Override public String readInfo(BluetoothAdapter a, String mac, DeviceDef d, DeviceDef.Func f) {
@@ -87,6 +111,7 @@ public interface ControlEngine {
             if (f == null || f.featureByte < 0) return false;
             int v = Math.max(f.min, Math.min(f.max, value));
             AacpClientBridge.sendFeature(mac, f.featureByte, v);
+            AapState.forMac(mac).setValue(f.id, v); // optimistic echo (generic cache)
             // Task 2 spike: 0x2E is NOT echoed on write (buds only report it at bring-up / on
             // physical change), so the optimistic echo here is load-bearing, exactly like ANC/CA.
             if ("adaptive_strength".equals(f.id)) AapState.forMac(mac).setAdaptiveStrength(v);
@@ -94,8 +119,8 @@ public interface ControlEngine {
         }
         @Override public Integer readLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
             if (f == null) return null;
-            if ("adaptive_strength".equals(f.id)) return AapState.forMac(mac).getAdaptiveStrength();
-            return null;
+            Integer v = AapState.forMac(mac).getValue(f.id);
+            return v != null ? v : AapState.forMac(mac).getAdaptiveStrength();
         }
         @Override public void registerListener(String mac, String key, Runnable onChange) {
             AacpEngine.registerListener(mac, key, onChange);

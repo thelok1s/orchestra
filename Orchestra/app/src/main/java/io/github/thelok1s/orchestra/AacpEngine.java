@@ -76,6 +76,10 @@ public final class AacpEngine {
         Thread reader;
         volatile boolean running;
         volatile boolean sawInbound;
+        /** Task 3: the resolved manifest for this device, latched at connect time so the reader
+         *  can later dispatch generically off it (Lane A / Lane B gating). Nullable — legacy
+         *  callers that don't hold a def leave this unset and the reader keeps hard-coded parsing. */
+        volatile DeviceDef def;
         Session(String mac) { this.mac = mac; }
     }
 
@@ -117,6 +121,17 @@ public final class AacpEngine {
         }
     }
 
+    /** Task 3: overload that also latches the resolved manifest onto the session so the reader
+     *  can later dispatch generically off it. Never overwrites an already-latched def with null —
+     *  callers without a def (legacy paths) just leave whatever a prior caller latched in place.
+     *  Connect logic itself is unchanged from {@link #ensureConnected(BluetoothAdapter, String)}. */
+    public static void ensureConnected(BluetoothAdapter adapter, String mac, DeviceDef def) {
+        String key = mac.toUpperCase(Locale.ROOT);
+        Session s = SESSIONS.computeIfAbsent(key, Session::new);
+        if (def != null) s.def = def; // latch the manifest for the reader (Lane A / Lane B gating)
+        ensureConnected(adapter, mac); // existing connect logic unchanged
+    }
+
     private static void startReader(Session s) {
         s.running = true;
         s.reader = new Thread(() -> {
@@ -139,7 +154,7 @@ public final class AacpEngine {
                     Integer adapt = AapCodec.parseAdaptiveStrength(buf, n);
                     if (adapt != null) { state.setAdaptiveStrength(adapt); changed = true;
                         Log.i(TAG, "AACP notify adaptive strength=" + adapt + " for " + s.mac); }
-                    AapCodec.Battery bat = AapCodec.parseBattery(buf, n);
+                    AapCodec.Battery bat = AapCodec.parseBattery(buf, n, batteryLayoutOf(s.def));
                     if (bat != null) { state.setBattery(bat); changed = true;
                         Log.i(TAG, "AACP notify battery " + state.batterySummary() + " for " + s.mac);
                         broadcastBattery(s.mac); }
@@ -153,6 +168,17 @@ public final class AacpEngine {
                     Integer sp = AapCodec.parseCaSpeech(buf, n);
                     if (sp != null) { Log.i(TAG, "AACP notify CA speech level=" + sp + " for " + s.mac);
                         fireSpeech(s.mac, sp); }
+                    // Task 5: generic Lane-A cache, dual-populated alongside the typed parsers
+                    // above (which stay intact and still drive behaviors + the AAP_STATE broadcast).
+                    // Nothing consumes `values` yet; Task 6 broadcasts it to the app process.
+                    DeviceDef def = s.def;
+                    if (def != null) {
+                        for (DeviceDef.Func f : def.funcs()) {
+                            if (f.getFeatureByte() < 0) continue; // pre-rev10 funcs skipped -> generic stays empty
+                            Integer v = AapCodec.parseFeature(buf, n, f.getFeatureByte());
+                            if (v != null) { state.setValue(f.id, v); changed = true; }
+                        }
+                    }
                     if (changed) fireListener(s.mac);
                 }
             } catch (Exception e) {
@@ -161,6 +187,15 @@ public final class AacpEngine {
         }, "aacp-reader-" + s.mac);
         s.reader.setDaemon(true);
         s.reader.start();
+    }
+
+    /** Task 5: the manifest's battery layout (if the device's "battery" func declares one), else
+     *  null so {@link AapCodec#parseBattery(byte[], int, Map)} falls back to its default mapping
+     *  (today's exact behavior, verified in Task 2). Pure/context-free — safe in the broker. */
+    private static Map<Integer, String> batteryLayoutOf(DeviceDef def) {
+        if (def == null) return null;
+        for (DeviceDef.Func f : def.funcs()) if ("battery".equals(f.id)) return f.batteryLayout;
+        return null;
     }
 
     /** Reflected L2CAP BluetoothSocket constructor (no public API). Tries known signatures. */
@@ -318,13 +353,14 @@ public final class AacpEngine {
         if (f == null) return false;
         String valueHex = f.optionValues.get(optId);
         if (valueHex == null) { Log.w(TAG, "AACP no option_value for " + optId); return false; }
+        ensureConnected(adapter, mac, def); // latch def; setAncByte's own ensureConnected is then a no-op
         return setAncByte(adapter, mac, Integer.parseInt(valueHex, 16));
     }
 
     /** Returns the cached mode option id (mapped via the manifest value_map), or null if unknown. */
     static String readMode(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f) {
         if (f == null) return null;
-        ensureConnected(adapter, mac);
+        ensureConnected(adapter, mac, def);
         Integer mode = getAncByte(mac);
         if (mode == null) return null;
         return f.valueMap.get(String.format("%02x", mode & 0xff));
@@ -336,7 +372,7 @@ public final class AacpEngine {
             Log.w(TAG, "AACP applyToggle: unsupported toggle " + (f != null ? f.id : "null"));
             return false;
         }
-        ensureConnected(adapter, mac);
+        ensureConnected(adapter, mac, def);
         Session s = SESSIONS.get(mac.toUpperCase(Locale.ROOT));
         if (s == null) return false;
         synchronized (s.lock) {
@@ -357,14 +393,14 @@ public final class AacpEngine {
 
     static Boolean readToggle(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f) {
         if (f == null || !"conversational_awareness".equals(f.id)) return null;
-        ensureConnected(adapter, mac);
+        ensureConnected(adapter, mac, def);
         return AapState.forMac(mac).getCaEnabled();
     }
 
     /** Live display string for an info/battery function ("battery" or "ear_detection"), or null. */
     static String readInfo(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f) {
         if (f == null) return null;
-        ensureConnected(adapter, mac);
+        ensureConnected(adapter, mac, def);
         AapState st = AapState.forMac(mac);
         if ("battery".equals(f.id)) return st.batterySummary();
         if ("ear_detection".equals(f.id)) return st.earSummary();

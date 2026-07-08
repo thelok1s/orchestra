@@ -1,5 +1,7 @@
 package io.github.thelok1s.orchestra;
 
+import java.util.Map;
+
 /**
  * Pure AAP (Apple Accessory Protocol, {@code aap_v1}) byte framing — no Android dependencies, so it
  * is unit-testable on the JVM. Per the design's Assumption 1 the protocol framing (header, opcodes,
@@ -84,8 +86,23 @@ public final class AapCodec {
         }
     }
 
-    /** Parse a battery notification (04 00 04 00 04 00 <count> (<comp> 01 <level> <status> 01)*). */
-    static Battery parseBattery(byte[] frame, int len) {
+    /** Hardcoded Pro-2 component->slot mapping, used when a manifest doesn't supply {@code battery_layout}
+     *  (or doesn't cover a given component byte). Kept as its own method so behavior is byte-for-byte
+     *  identical to the pre-manifest-driven code path. */
+    private static String defaultSlot(int comp) {
+        switch (comp) {
+            case 0x04: return "left";
+            case 0x02: return "right";
+            case 0x08: return "case";
+            default: return null;
+        }
+    }
+
+    /** Parse a battery notification (04 00 04 00 04 00 <count> (<comp> 01 <level> <status> 01)*),
+     *  using {@code layout} (component byte -> slot name "left"/"right"/"case"/"single") to resolve
+     *  each component when the manifest supplies one; falls back to {@link #defaultSlot(int)} for any
+     *  component {@code layout} doesn't cover (or when {@code layout} is null/empty). */
+    static Battery parseBattery(byte[] frame, int len, Map<Integer, String> layout) {
         byte[] prefix = {0x04, 0x00, 0x04, 0x00, 0x04, 0x00};
         if (len < prefix.length + 1) return null;
         for (int i = 0; i < prefix.length; i++) if (frame[i] != prefix[i]) return null;
@@ -96,14 +113,23 @@ public final class AapCodec {
             int comp = frame[off] & 0xff;
             int level = frame[off + 2] & 0xff;
             int status = frame[off + 3] & 0xff;
-            switch (comp) {
-                case 0x04: l = level; ls = status; break;   // Left
-                case 0x02: r = level; rs = status; break;   // Right
-                case 0x08: c = level; cs = status; break;   // Case
+            String slot = (layout != null && layout.containsKey(comp)) ? layout.get(comp) : defaultSlot(comp);
+            if (slot == null) continue;
+            switch (slot) {
+                case "left": l = level; ls = status; break;
+                case "right": r = level; rs = status; break;
+                case "case": c = level; cs = status; break;
+                // "single" (mono/one-earbud devices) has no dedicated Battery field yet; skip rather
+                // than guess a slot, per the graceful-degrade convention (never crash, never misattribute).
                 default: break;
             }
         }
         return new Battery(l, ls, r, rs, c, cs);
+    }
+
+    /** Parse a battery notification using the hardcoded Pro-2 default component->slot mapping. */
+    static Battery parseBattery(byte[] frame, int len) {
+        return parseBattery(frame, len, null);
     }
 
     /** Parsed ear-detection status (0=in-ear, 1=out-of-ear, 2=in-case). */

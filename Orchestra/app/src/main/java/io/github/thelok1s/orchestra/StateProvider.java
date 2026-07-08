@@ -23,6 +23,14 @@ import android.net.Uri;
  * Column: enabled (0|1) = {@link DeviceStore#flag} (default false). Task 4B: lets the
  * com.google.android.bluetooth-process hook read the (default-off) act_as_apple toggle without
  * app SharedPreferences access.
+ *
+ *   content://io.github.thelok1s.orchestra.state/manifest/<MAC>
+ * Column: json = the resolved raw manifest body ({@link ManifestRepository#rawDeviceJson}) for the
+ * device hooked to that MAC ({@link DeviceStore#enabledId}), or an empty cursor if the MAC isn't
+ * hooked / has no manifest. Plan 8 Task 3: lets the SystemUI AAP broker resolve a {@code DeviceDef}
+ * cross-process — the broker's {@code App.context()} is null, so it can't call
+ * {@code DeviceDef.forAddress} directly (that resolves via this app's assets/prefs); this provider
+ * runs in-process where {@code App.context()} is valid and hands the broker the raw JSON to parse.
  */
 public class StateProvider extends ContentProvider {
     static final String AUTHORITY = "io.github.thelok1s.orchestra.state";
@@ -54,6 +62,13 @@ public class StateProvider extends ContentProvider {
             MatrixCursor fc = new MatrixCursor(new String[]{"enabled"});
             fc.addRow(new Object[]{DeviceStore.flag(seg.get(1), false) ? 1 : 0});
             return fc;
+        }
+        if (seg.size() == 2 && "manifest".equals(seg.get(0))) {
+            String id = DeviceStore.enabledId(seg.get(1));            // mac -> device_id (null if not hooked)
+            String json = id != null ? ManifestRepository.rawDeviceJson(id) : null;
+            MatrixCursor mc = new MatrixCursor(new String[]{"json"});
+            if (json != null) mc.addRow(new Object[]{json});
+            return mc;                                                // empty cursor => broker treats as miss
         }
         if (seg.size() != 2 || !"battery".equals(seg.get(0))) return null;
         String mac = seg.get(1).toUpperCase(java.util.Locale.ROOT);

@@ -101,6 +101,15 @@ public final class DeviceDef {
         return null;
     }
 
+    /** Read-only view of the full parsed function catalog, in declared order. */
+    public java.util.List<Func> funcs() { return java.util.Collections.unmodifiableList(functions); }
+
+    /** True if the catalog declares a function with slug id {@code id}. */
+    public boolean hasFunc(String id) {
+        for (Func f : functions) if (f.id != null && f.id.equals(id)) return true;
+        return false;
+    }
+
     /**
      * The functions to actually inject for {@code address}: implemented (renderable by the current
      * provider), user-enabled, and not suppressed by an active conflict. This is what both provider
@@ -199,6 +208,8 @@ public final class DeviceDef {
         boolean verified;       // set/read bytes confirmed on hardware
         boolean local;          // LOCAL behavior toggle (e.g. auto_pause, ca_duck): not an AAP/RFCOMM
                                  // command; a privileged process (SystemUI broker) gates it at runtime
+        // type:"battery" only: component byte -> slot ("left"|"right"|"case"|"single"); empty = default
+        final Map<Integer, String> batteryLayout = new LinkedHashMap<>();
 
         Func(String id, String type, String title, String capability, String setCommand,
              String payloadTemplate, String readCommand, int stateByteIndex, int settingId) {
@@ -284,7 +295,12 @@ public final class DeviceDef {
         }
     }
 
-    static DeviceDef parse(JSONObject root) throws Exception {
+    /** Widened from package-private to public (Task 3) so the SystemUI-resident AAP broker
+     *  ({@code io.github.thelok1s.orchestra.aap.AapBroker}, a different package) can parse a raw
+     *  manifest body pulled cross-process via {@code StateProvider}. Pure JSON parsing — no
+     *  {@code App.context()} use (unlike {@link #forAddress}, which resolves via DeviceStore/assets
+     *  and is unsafe off the app process). */
+    public static DeviceDef parse(JSONObject root) throws Exception {
         int schemaVersion = root.optInt("schema_version", root.optInt("schema", 0));
         if (schemaVersion < SUPPORTED_SCHEMA_MIN || schemaVersion > SUPPORTED_SCHEMA_MAX) {
             Log.w(TAG, "ignoring manifest " + root.optString("id", "?")
@@ -359,18 +375,30 @@ public final class DeviceDef {
         func.framing = ch != null ? ch.framing : null;
         if (fn.has("summary") || fn.has("summary_i18n")) func.summary = localized(fn, "summary", "");
 
+        // Plan 8: parse the AAP `feature` byte for ALL function types (not only level/slider),
+        // so toggle/multitoggle can be driven generically.
+        String feat = fn.optString("feature", null);
+        if (feat != null) {
+            try { func.featureByte = Integer.parseInt(feat, 16); }
+            catch (NumberFormatException e) { func.featureByte = -1; }
+        }
         if ("level".equals(type) || "slider".equals(type)) {
-            String feat = fn.optString("feature", null);
-            if (feat != null) {
-                try { func.featureByte = Integer.parseInt(feat, 16); }
-                catch (NumberFormatException e) { func.featureByte = -1; }
-            }
             // "level" carries min/max/step at the top level; "slider" nests them in `range`.
             JSONObject range = fn.optJSONObject("range");
             JSONObject src = range != null ? range : fn;
             func.min = src.optInt("min", 0);
             func.max = src.optInt("max", 100);
             func.step = src.optInt("step", 1);
+        }
+
+        // battery layout (type:"battery"): component byte -> slot
+        JSONObject bl = fn.optJSONObject("battery_layout");
+        if (bl != null) {
+            for (java.util.Iterator<String> it = bl.keys(); it.hasNext(); ) {
+                String k = it.next();
+                try { func.batteryLayout.put(Integer.parseInt(k, 16), bl.getString(k)); }
+                catch (Exception ignored) {}
+            }
         }
 
         // options (multitoggle/list)

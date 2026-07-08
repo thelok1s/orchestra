@@ -18,6 +18,11 @@ public final class AapState {
     private volatile AapCodec.Ear ear;
     private volatile Integer adaptiveStrength;   // 0..100, null = unknown
 
+    /** Task 5: generic per-function value cache, keyed by manifest {@code Func.id}. Populated
+     *  by the broker reader alongside the typed fields above (dual-populate); nothing consumes
+     *  this yet — Task 6 broadcasts it to the app process. */
+    private final java.util.Map<String, Integer> values = new java.util.concurrent.ConcurrentHashMap<>();
+
     private AapState() {}
 
     public static AapState forMac(String mac) {
@@ -76,6 +81,10 @@ public final class AapState {
         }
         return "One in ear";
     }
+
+    void setValue(String id, int b) { values.put(id, b); }
+    public Integer getValue(String id) { return values.get(id); }
+    public java.util.Map<String, Integer> valuesSnapshot() { return new java.util.LinkedHashMap<>(values); }
 
     private static void append(StringBuilder sb, String part) {
         if (sb.length() > 0) sb.append(" · ");

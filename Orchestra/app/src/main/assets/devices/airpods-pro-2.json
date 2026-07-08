@@ -1,7 +1,7 @@
 {
   "schema_version": 4,
-  "revision": 9,
-  "revision_date": "2026-07-02",
+  "revision": 10,
+  "revision_date": "2026-07-08",
   "id": "airpods-pro-2",
   "name": "AirPods Pro 2",
   "manufacturer": "Apple",
@@ -34,6 +34,7 @@
         "ru": "Управление шумом"
       },
       "capability": "sound_modes",
+      "feature": "0d",
       "options": [
         {
           "id": "off",
@@ -108,6 +109,11 @@
         "ru": "Батарея"
       },
       "capability": "battery",
+      "battery_layout": {
+        "04": "left",
+        "02": "right",
+        "08": "case"
+      },
       "read": {
         "notify_opcode": "040004",
         "_doc": "AacpEngine parses 04 00 04 00 04 00 <count> (<comp> 01 <level> <status> 01)* into per-bud battery. NOT a native device-settings row (settingslib won't render a switch-less, action-less row); surfaced via the native Fast-Pair battery header (untethered-battery metadata keys) + Orchestra's app. inject:false keeps it off the device-settings page while the engine still parses it."
@@ -153,6 +159,7 @@
       },
       "summary": "Lowers volume when you start speaking",
       "capability": "conversational_awareness",
+      "feature": "28",
       "icon": "anc",
       "set": {
         "command": "0900",
