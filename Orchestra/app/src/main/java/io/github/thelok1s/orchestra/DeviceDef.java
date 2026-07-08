@@ -101,6 +101,15 @@ public final class DeviceDef {
         return null;
     }
 
+    /** Read-only view of the full parsed function catalog, in declared order. */
+    public java.util.List<Func> funcs() { return java.util.Collections.unmodifiableList(functions); }
+
+    /** True if the catalog declares a function with slug id {@code id}. */
+    public boolean hasFunc(String id) {
+        for (Func f : functions) if (f.id != null && f.id.equals(id)) return true;
+        return false;
+    }
+
     /**
      * The functions to actually inject for {@code address}: implemented (renderable by the current
      * provider), user-enabled, and not suppressed by an active conflict. This is what both provider
@@ -199,6 +208,8 @@ public final class DeviceDef {
         boolean verified;       // set/read bytes confirmed on hardware
         boolean local;          // LOCAL behavior toggle (e.g. auto_pause, ca_duck): not an AAP/RFCOMM
                                  // command; a privileged process (SystemUI broker) gates it at runtime
+        // type:"battery" only: component byte -> slot ("left"|"right"|"case"|"single"); empty = default
+        final Map<Integer, String> batteryLayout = new LinkedHashMap<>();
 
         Func(String id, String type, String title, String capability, String setCommand,
              String payloadTemplate, String readCommand, int stateByteIndex, int settingId) {
@@ -371,6 +382,16 @@ public final class DeviceDef {
             func.min = src.optInt("min", 0);
             func.max = src.optInt("max", 100);
             func.step = src.optInt("step", 1);
+        }
+
+        // battery layout (type:"battery"): component byte -> slot
+        JSONObject bl = fn.optJSONObject("battery_layout");
+        if (bl != null) {
+            for (java.util.Iterator<String> it = bl.keys(); it.hasNext(); ) {
+                String k = it.next();
+                try { func.batteryLayout.put(Integer.parseInt(k, 16), bl.getString(k)); }
+                catch (Exception ignored) {}
+            }
         }
 
         // options (multitoggle/list)
