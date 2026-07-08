@@ -102,11 +102,11 @@ dependencies {
     // errno 12 (INIT_LINKER) in the Bluetooth system process (bytedance/android-inline-hook#91).
     implementation("com.bytedance.android:shadowhook:1.0.10")
 
-    implementation("androidx.core:core-ktx:1.16.0")
-    implementation("androidx.activity:activity-compose:1.10.1")
+    implementation("androidx.core:core-ktx:1.19.0")
+    implementation("androidx.activity:activity-compose:1.13.0")
     // M3 Expressive (public MaterialExpressiveTheme/ExperimentalMaterial3ExpressiveApi) ships in
     // material3 1.5.0-alpha; it requires Compose foundation/ui 1.12.0-alpha03.
-    val compose = "1.12.0-alpha03"
+    val compose = "1.12.0-beta02"
     implementation("androidx.compose.ui:ui:$compose")
     implementation("androidx.compose.ui:ui-graphics:$compose")
     implementation("androidx.compose.foundation:foundation:$compose")
