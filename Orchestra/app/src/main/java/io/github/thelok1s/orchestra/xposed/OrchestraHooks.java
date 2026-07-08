@@ -3,6 +3,7 @@ package io.github.thelok1s.orchestra.xposed;
 import android.app.AndroidAppHelper;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
 import android.content.Context;
 import android.content.Intent;
 
@@ -445,7 +446,8 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                     try {
                         String mac = i.getStringExtra("mac");
                         if (mac == null) return;
-                        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+                        BluetoothManager bm = (BluetoothManager) c.getSystemService(Context.BLUETOOTH_SERVICE);
+                        BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
                         if (adapter == null) return;
                         BluetoothDevice d = adapter.getRemoteDevice(mac);
                         if (isAapDevice(d)) writeBattery(d); // re-query ContentProvider + write keys
@@ -481,7 +483,10 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
     private void assertTagsForBondedDevices() {
         ensureBatteryReceiver(); // idempotent; currentApplication() is non-null here (onResume)
         try {
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+            android.app.Application app = AndroidAppHelper.currentApplication();
+            if (app == null) return;
+            BluetoothManager bm = (BluetoothManager) app.getSystemService(Context.BLUETOOTH_SERVICE);
+            BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
             if (adapter == null || !adapter.isEnabled()) return;
             Set<BluetoothDevice> bonded = adapter.getBondedDevices();
             if (bonded == null) return;
