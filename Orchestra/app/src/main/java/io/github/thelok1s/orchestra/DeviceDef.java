@@ -295,7 +295,12 @@ public final class DeviceDef {
         }
     }
 
-    static DeviceDef parse(JSONObject root) throws Exception {
+    /** Widened from package-private to public (Task 3) so the SystemUI-resident AAP broker
+     *  ({@code io.github.thelok1s.orchestra.aap.AapBroker}, a different package) can parse a raw
+     *  manifest body pulled cross-process via {@code StateProvider}. Pure JSON parsing — no
+     *  {@code App.context()} use (unlike {@link #forAddress}, which resolves via DeviceStore/assets
+     *  and is unsafe off the app process). */
+    public static DeviceDef parse(JSONObject root) throws Exception {
         int schemaVersion = root.optInt("schema_version", root.optInt("schema", 0));
         if (schemaVersion < SUPPORTED_SCHEMA_MIN || schemaVersion > SUPPORTED_SCHEMA_MAX) {
             Log.w(TAG, "ignoring manifest " + root.optString("id", "?")

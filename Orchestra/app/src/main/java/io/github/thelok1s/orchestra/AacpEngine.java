@@ -76,6 +76,10 @@ public final class AacpEngine {
         Thread reader;
         volatile boolean running;
         volatile boolean sawInbound;
+        /** Task 3: the resolved manifest for this device, latched at connect time so the reader
+         *  can later dispatch generically off it (Lane A / Lane B gating). Nullable — legacy
+         *  callers that don't hold a def leave this unset and the reader keeps hard-coded parsing. */
+        volatile DeviceDef def;
         Session(String mac) { this.mac = mac; }
     }
 
@@ -115,6 +119,17 @@ public final class AacpEngine {
                 close(s);
             }
         }
+    }
+
+    /** Task 3: overload that also latches the resolved manifest onto the session so the reader
+     *  can later dispatch generically off it. Never overwrites an already-latched def with null —
+     *  callers without a def (legacy paths) just leave whatever a prior caller latched in place.
+     *  Connect logic itself is unchanged from {@link #ensureConnected(BluetoothAdapter, String)}. */
+    public static void ensureConnected(BluetoothAdapter adapter, String mac, DeviceDef def) {
+        String key = mac.toUpperCase(Locale.ROOT);
+        Session s = SESSIONS.computeIfAbsent(key, Session::new);
+        if (def != null) s.def = def; // latch the manifest for the reader (Lane A / Lane B gating)
+        ensureConnected(adapter, mac); // existing connect logic unchanged
     }
 
     private static void startReader(Session s) {
@@ -318,13 +333,14 @@ public final class AacpEngine {
         if (f == null) return false;
         String valueHex = f.optionValues.get(optId);
         if (valueHex == null) { Log.w(TAG, "AACP no option_value for " + optId); return false; }
+        ensureConnected(adapter, mac, def); // latch def; setAncByte's own ensureConnected is then a no-op
         return setAncByte(adapter, mac, Integer.parseInt(valueHex, 16));
     }
 
     /** Returns the cached mode option id (mapped via the manifest value_map), or null if unknown. */
     static String readMode(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f) {
         if (f == null) return null;
-        ensureConnected(adapter, mac);
+        ensureConnected(adapter, mac, def);
         Integer mode = getAncByte(mac);
         if (mode == null) return null;
         return f.valueMap.get(String.format("%02x", mode & 0xff));
@@ -336,7 +352,7 @@ public final class AacpEngine {
             Log.w(TAG, "AACP applyToggle: unsupported toggle " + (f != null ? f.id : "null"));
             return false;
         }
-        ensureConnected(adapter, mac);
+        ensureConnected(adapter, mac, def);
         Session s = SESSIONS.get(mac.toUpperCase(Locale.ROOT));
         if (s == null) return false;
         synchronized (s.lock) {
@@ -357,14 +373,14 @@ public final class AacpEngine {
 
     static Boolean readToggle(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f) {
         if (f == null || !"conversational_awareness".equals(f.id)) return null;
-        ensureConnected(adapter, mac);
+        ensureConnected(adapter, mac, def);
         return AapState.forMac(mac).getCaEnabled();
     }
 
     /** Live display string for an info/battery function ("battery" or "ear_detection"), or null. */
     static String readInfo(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f) {
         if (f == null) return null;
-        ensureConnected(adapter, mac);
+        ensureConnected(adapter, mac, def);
         AapState st = AapState.forMac(mac);
         if ("battery".equals(f.id)) return st.batterySummary();
         if ("ear_detection".equals(f.id)) return st.earSummary();

@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import io.github.thelok1s.orchestra.AacpEngine;
 import io.github.thelok1s.orchestra.AapCodec;
 import io.github.thelok1s.orchestra.AapState;
+import io.github.thelok1s.orchestra.DeviceDef;
 
 /**
  * SystemUI-resident AAP connection broker (Plan 6). SystemUI is always alive, so it becomes the
@@ -174,7 +175,35 @@ public final class AapBroker {
     private static void registerAndConnect(Context ctx, BluetoothAdapter a, String mac) {
         AacpEngine.registerListener(mac, "broker", () -> publishState(ctx, mac));
         AacpEngine.registerSpeechListener(mac, level -> onSpeechLevel(ctx, mac, level));
-        new Thread(() -> AacpEngine.ensureConnected(a, mac), "aap-conn").start();
+        new Thread(() -> {
+            DeviceDef def = resolveDef(ctx, mac);
+            AacpEngine.ensureConnected(a, mac, def);
+        }, "aap-conn").start();
+    }
+
+    /**
+     * Task 3: resolves the manifest for {@code mac} via {@code StateProvider}'s
+     * {@code manifest/<mac>} path (see that provider's javadoc). {@code App.context()} is null in
+     * this (SystemUI) process, so {@code DeviceDef.forAddress(mac)} — which resolves via
+     * DeviceStore/ManifestRepository/assets, all {@code App.context()}-backed — cannot be called
+     * directly here; this pulls the raw JSON cross-process instead and parses it locally (parsing
+     * is pure, no Context use). Fail-soft: any miss/throw returns null and the caller falls back to
+     * the def-absent {@link AacpEngine#ensureConnected(BluetoothAdapter, String)} path.
+     */
+    private static DeviceDef resolveDef(Context ctx, String mac) {
+        try {
+            Uri uri = Uri.parse("content://io.github.thelok1s.orchestra.state/manifest/"
+                    + mac.toUpperCase(Locale.ROOT));
+            try (Cursor c = ctx.getContentResolver().query(uri, null, null, null, null)) {
+                if (c != null && c.moveToFirst()) {
+                    String json = c.getString(0);
+                    if (json != null && !json.isEmpty()) return DeviceDef.parse(new org.json.JSONObject(json));
+                }
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "resolveDef miss for " + mac + ": " + t);
+        }
+        return null; // fail-soft => engine uses the legacy def-absent path
     }
 
     /**
@@ -213,12 +242,13 @@ public final class AapBroker {
         if (a == null) return;
         AacpEngine.registerListener(mac, "broker", () -> publishState(ctx, mac));
         AacpEngine.registerSpeechListener(mac, level -> onSpeechLevel(ctx, mac, level));
+        DeviceDef def = resolveDef(ctx, mac);
         synchronized (RECONNECT_LOCKS.computeIfAbsent(mac, k -> new Object())) {
         if (AapState.forMac(mac).getBattery() != null) return; // a concurrent attempt already completed
         for (int attempt = 1; attempt <= 3; attempt++) {
             AacpEngine.disconnect(mac); // always a fresh session (never reuse a half-open socket)
             try { Thread.sleep(2500); } catch (InterruptedException e) { return; }
-            AacpEngine.ensureConnected(a, mac);
+            AacpEngine.ensureConnected(a, mac, def);
             // Grace period for the bring-up dump, then check it was complete (battery present).
             long deadline = System.currentTimeMillis() + 2000;
             while (System.currentTimeMillis() < deadline) {
