@@ -59,6 +59,17 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.filled.Speaker
+import androidx.compose.material.icons.filled.Hearing
+import androidx.compose.material.icons.filled.Earbuds
+import androidx.compose.material.icons.filled.HeadsetMic
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.outlined.Speaker
+import androidx.compose.material.icons.outlined.Hearing
+import androidx.compose.material.icons.outlined.Earbuds
+import androidx.compose.material.icons.outlined.HeadsetMic
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -313,6 +324,28 @@ private fun readBattery(d: android.bluetooth.BluetoothDevice): Batt {
     return Batt(l, r, c, main,
         metaBool(d, META_L_CHG), metaBool(d, META_R_CHG), metaBool(d, META_CASE_CHG),
         metaBool(d, META_MAIN_CHG), tws || l >= 0 || r >= 0 || c >= 0)
+}
+
+private fun iconForDevice(deviceId: String, filled: Boolean): androidx.compose.ui.graphics.vector.ImageVector {
+    val def = io.github.thelok1s.orchestra.DeviceDef.loadById(deviceId)
+    val type = def?.deviceType ?: "headphones"
+    return if (filled) {
+        when (type) {
+            "speaker" -> Icons.Filled.Speaker
+            "earbuds" -> Icons.Filled.Hearing
+            "earbuds_2" -> Icons.Filled.Earbuds
+            "headset_mic" -> Icons.Filled.HeadsetMic
+            else -> Icons.Filled.Headphones
+        }
+    } else {
+        when (type) {
+            "speaker" -> Icons.Outlined.Speaker
+            "earbuds" -> Icons.Outlined.Hearing
+            "earbuds_2" -> Icons.Outlined.Earbuds
+            "headset_mic" -> Icons.Outlined.HeadsetMic
+            else -> Icons.Outlined.Headphones
+        }
+    }
 }
 
 internal fun btEnabled(context: Context): Boolean = try {
@@ -693,7 +726,7 @@ private fun HookedDeviceCard(
                         .background(MaterialTheme.colorScheme.secondaryContainer),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(Icons.Filled.Headphones, contentDescription = null,
+                    Icon(iconForDevice(d.deviceId, true), contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -918,7 +951,7 @@ private fun AvailableRow(
                     .background(MaterialTheme.colorScheme.secondaryContainer),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Filled.Headphones, contentDescription = null,
+                Icon(iconForDevice(d.deviceId, true), contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSecondaryContainer)
             }
         },
