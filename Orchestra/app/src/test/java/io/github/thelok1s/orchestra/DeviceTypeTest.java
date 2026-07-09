@@ -48,4 +48,29 @@ public class DeviceTypeTest {
         assertNotNull(d);
         assertEquals("headphones", d.deviceType);
     }
+
+    @Test
+    public void testFallbackForShokzId() throws Exception {
+        String json = "{"
+            + "\"schema_version\":3,\"id\":\"shokz-openswim-pro\",\"revision\":1,"
+            + "\"channels\":{\"c\":{\"transport\":\"rfcomm\",\"uuid\":\"00001101-0000-1000-8000-00805f9b34fb\"}},"
+            + "\"default_channel\":\"c\""
+            + "}";
+        DeviceDef d = DeviceDef.parse(new JSONObject(json));
+        assertNotNull(d);
+        assertEquals("earbuds", d.deviceType);
+    }
+
+    @Test
+    public void testFallbackForWI600nId() throws Exception {
+        String json = "{"
+            + "\"schema_version\":3,\"id\":\"sony-wi-c600n\",\"revision\":1,"
+            + "\"channels\":{\"c\":{\"transport\":\"rfcomm\",\"uuid\":\"00001101-0000-1000-8000-00805f9b34fb\"}},"
+            + "\"default_channel\":\"c\""
+            + "}";
+        DeviceDef d = DeviceDef.parse(new JSONObject(json));
+        assertNotNull(d);
+        assertEquals("earbuds", d.deviceType);
+    }
 }
+

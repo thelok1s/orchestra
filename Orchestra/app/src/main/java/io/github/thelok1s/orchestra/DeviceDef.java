@@ -329,7 +329,11 @@ public final class DeviceDef {
                     } catch (Exception ignored) {}
                 }
             }
-            deviceType = hasTwsBattery ? "earbuds_2" : "headphones";
+            if (id != null && (id.contains("shokz") || id.contains("c600n") || id.contains("swim"))) {
+                deviceType = "earbuds";
+            } else {
+                deviceType = hasTwsBattery ? "earbuds_2" : "headphones";
+            }
         }
 
         Map<String, Channel> channels = new LinkedHashMap<>();
