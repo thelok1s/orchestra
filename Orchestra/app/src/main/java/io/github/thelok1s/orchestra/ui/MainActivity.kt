@@ -896,7 +896,11 @@ private fun HookedDeviceCard(
     val rest = controls.filter { it.status != "UNAVAILABLE" }
     val verified = rest.filter { it.verified }
     val unverified = rest.filter { !it.verified }
-    val activeCount = controls.count { it.status == "ACTIVE" }
+    // In-app-only controls (status UNAVAILABLE) never inject, but they work in-app — count them
+    // as enabled unless the user toggled one off, so the header reads 7/7 rather than 4/7.
+    val activeCount = controls.count { c ->
+        c.status == "ACTIVE" || (c.status == "UNAVAILABLE" && (!c.toggleable || c.enabled))
+    }
 
     // Ear-detection: only for AAP devices (those with an ear_detection capability in their manifest).
     val isAacpDevice = caps.any { it.id == "ear_detection" }
