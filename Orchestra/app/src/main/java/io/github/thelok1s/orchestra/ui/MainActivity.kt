@@ -77,10 +77,21 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlurEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
@@ -172,9 +183,15 @@ fun OrchestraApp(refreshKey: Int) {
             DeviceControlsScreen(opened, onBack = { openDeviceMac = null })
         } else {
             Box(Modifier.fillMaxSize()) {
+                // Screen content is recorded into a layer so the floating nav bar can re-draw a
+                // blurred copy of whatever scrolls beneath it (backdrop blur, no library).
+                val contentLayer = rememberGraphicsLayer()
                 Scaffold(
                     topBar = { TopAppBar(title = { Text("Orchestra") }) },
-                    bottomBar = { FloatingNavBar(dest) { dest = it } },
+                    modifier = Modifier.drawWithContent {
+                        contentLayer.record { this@drawWithContent.drawContent() }
+                        drawLayer(contentLayer)
+                    },
                 ) { padding ->
                     AnimatedContent(
                         targetState = dest,
@@ -192,6 +209,11 @@ fun OrchestraApp(refreshKey: Int) {
                         }
                     }
                 }
+                FloatingNavBar(
+                    dest = dest,
+                    contentLayer = contentLayer,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                ) { dest = it }
 
                 // Debug as an overlay screen, dismissed by the predictive back gesture (animated).
                 AnimatedVisibility(
@@ -225,18 +247,46 @@ fun OrchestraApp(refreshKey: Int) {
     }
 }
 
-/** Detached, fully-rounded, elevated bottom nav (M3 Expressive floating bar). */
+/**
+ * Detached, fully-rounded floating bottom nav (M3 Expressive) with a real backdrop blur:
+ * re-draws [contentLayer] (the recorded screen content) offset under the pill through a
+ * [BlurEffect], tinted by a translucent surface scrim.
+ */
 @Composable
-private fun FloatingNavBar(dest: Dest, onSelect: (Dest) -> Unit) {
-    Surface(
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shadowElevation = 6.dp,
-        modifier = Modifier
+private fun FloatingNavBar(
+    dest: Dest,
+    contentLayer: GraphicsLayer,
+    modifier: Modifier = Modifier,
+    onSelect: (Dest) -> Unit,
+) {
+    var barBounds by remember { mutableStateOf(Rect.Zero) }
+    Box(
+        modifier
             .navigationBarsPadding()
             .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
-            .fillMaxWidth(),
+            .fillMaxWidth()
+            .clip(CircleShape)
+            .onGloballyPositioned { barBounds = it.boundsInRoot() },
     ) {
+        // Blurred copy of the screen content directly beneath the bar.
+        Box(
+            Modifier.matchParentSize()
+                .graphicsLayer {
+                    renderEffect = BlurEffect(24f, 24f, TileMode.Clamp)
+                    clip = true
+                    shape = CircleShape
+                }
+                .drawBehind {
+                    translate(-barBounds.left, -barBounds.top) {
+                        drawLayer(contentLayer)
+                    }
+                }
+        )
+        // Translucent tint so items stay legible over any content.
+        Box(
+            Modifier.matchParentSize()
+                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f))
+        )
         Row(Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
             Dest.entries.forEach { d ->
                 val selected = dest == d
@@ -425,7 +475,8 @@ private fun StatusScreen(refreshKey: Int) {
     val (btVersion, btTechList) = remember(refreshKey) { btTech(context) }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 108.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Rise(0) { HeroCard(moduleActive, apiLevel, hookedCount) }
@@ -675,7 +726,7 @@ private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (supported.isEmpty()) {
@@ -1167,7 +1218,7 @@ private fun SettingsScreen(onOpenDebug: () -> Unit) {
     var tick by remember { mutableStateOf(0) }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
         verticalArrangement = Arrangement.spacedBy(26.dp)
     ) {
         SettingsGroup(null) {
