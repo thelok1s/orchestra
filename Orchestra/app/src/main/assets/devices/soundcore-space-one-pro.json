@@ -4,10 +4,10 @@
   "revision_date": "2026-06-24",
   "id": "soundcore-space-one-pro",
   "name": "Soundcore Space One Pro",
+  "device_type": "headphones",
   "manufacturer": "Anker / Soundcore",
   "model_code": "3062",
   "re_model": "A3062",
-
   "match": {
     "name_regex": "(?i)soundcore Space One Pro",
     "service_uuids_any": [
@@ -15,7 +15,6 @@
       "66666666-6666-6666-6666-666666666666"
     ]
   },
-
   "channels": {
     "rfcomm-main": {
       "transport": "rfcomm",
@@ -31,43 +30,85 @@
     }
   },
   "default_channel": "rfcomm-main",
-
   "platforms": {
     "pixelos": {
-      "detect": { "manufacturer": "Google", "system_prop": { "ro.product.brand": "google" } },
-      "requires": ["root", "lsposed", "pkg:com.android.systemui", "pkg:com.android.settings"],
+      "detect": {
+        "manufacturer": "Google",
+        "system_prop": {
+          "ro.product.brand": "google"
+        }
+      },
+      "requires": [
+        "root",
+        "lsposed",
+        "pkg:com.android.systemui",
+        "pkg:com.android.settings"
+      ],
       "inject": {
         "settings_pkg": "com.android.settings",
         "systemui_pkg": "com.android.systemui",
         "about_fragment": "com.android.settings.bluetooth.BluetoothDetailsConfigurableFragment",
-        "surfaces": ["device_details", "volume_panel"],
-        "reserved_ids": { "anc": 1001 }
+        "surfaces": [
+          "device_details",
+          "volume_panel"
+        ],
+        "reserved_ids": {
+          "anc": 1001
+        }
       }
     }
   },
-
   "_capabilities_source": "OpenSCQ30 a3062.rs + common/packet/outbound command ids, then VERIFIED against a BLE GATT capture of the Soundcore app 2026-06-09 (captures/*.pklg; the soundcore_v1 framing rides inside GATT writes/notifications, identical bytes to RFCOMM). Verified: sound_mode 0681 (B0 00/01/02) + its sub-bytes (B1 ANC level, B3 adaptive, B4 wind/'Air protection', B5 transparency level), dolby 0286, surrounding_sounds 01ae, eq 0387, button 0481. NOTE: ANC level / adaptive / wind / transparency-level are SUB-FIELDS of the single 0681 packet, not standalone commands — they need a read-modify-write composite encoder, so they are inject:false (in-app only) for now.",
-
   "functions": [
     {
       "id": "sound_mode",
       "type": "multitoggle",
       "title": "Noise control",
-      "title_i18n": { "ru": "Управление шумом" },
+      "title_i18n": {
+        "ru": "Управление шумом"
+      },
       "capability": "sound_modes",
       "options": [
-        { "id": "anc",          "label": "Noise Cancelling", "icon": "anc",          "label_i18n": { "ru": "Шумоподавление" } },
-        { "id": "off",          "label": "Off",              "icon": "off",          "label_i18n": { "ru": "Выкл." } },
-        { "id": "adaptive",     "label": "Adaptive",         "icon": "adaptive",     "label_i18n": { "ru": "Адаптивный" } },
-        { "id": "transparency", "label": "Transparency",     "icon": "transparency", "label_i18n": { "ru": "Прозрачность" } }
+        {
+          "id": "anc",
+          "label": "Noise Cancelling",
+          "icon": "anc",
+          "label_i18n": {
+            "ru": "Шумоподавление"
+          }
+        },
+        {
+          "id": "off",
+          "label": "Off",
+          "icon": "off",
+          "label_i18n": {
+            "ru": "Выкл."
+          }
+        },
+        {
+          "id": "adaptive",
+          "label": "Adaptive",
+          "icon": "adaptive",
+          "label_i18n": {
+            "ru": "Адаптивный"
+          }
+        },
+        {
+          "id": "transparency",
+          "label": "Transparency",
+          "icon": "transparency",
+          "label_i18n": {
+            "ru": "Прозрачность"
+          }
+        }
       ],
       "set": {
         "command": "0681",
         "payload_template": "{mode}",
         "option_values": {
-          "anc":          "005000000005",
-          "off":          "025000000005",
-          "adaptive":     "005000010005",
+          "anc": "005000000005",
+          "off": "025000000005",
+          "adaptive": "005000010005",
           "transparency": "015000000005"
         },
         "_payload_map": "Full 6-byte payload B0..B5 = [mode][ancLevel][transpFlag][adaptive][wind][transpLevel]. B0: 00=ANC, 01=Transparency, 02=Normal/Off. B1: ANC strength 0x10..0x50 (we hardcode 50=max). B3: 01=adaptive ANC, 00=manual. So Adaptive = B0=00 + B3=01 → `005000010005` (capture 2026-06-09 showed adaptive = `00 50 00 01 00 05`); plain ANC = B0=00,B3=00 → `005000000005`. B4 wind, B5 transparency level."
@@ -78,90 +119,206 @@
         "state_byte_index": 78,
         "_comment": "Multi-byte match (relative to response start): B0 at 78, adaptive flag B3 at 81. Order matters — adaptive checked before plain anc.",
         "match": [
-          { "option": "off",          "bytes": { "78": "02" } },
-          { "option": "transparency", "bytes": { "78": "01" } },
-          { "option": "adaptive",     "bytes": { "78": "00", "81": "01" } },
-          { "option": "anc",          "bytes": { "78": "00", "81": "00" } }
+          {
+            "option": "off",
+            "bytes": {
+              "78": "02"
+            }
+          },
+          {
+            "option": "transparency",
+            "bytes": {
+              "78": "01"
+            }
+          },
+          {
+            "option": "adaptive",
+            "bytes": {
+              "78": "00",
+              "81": "01"
+            }
+          },
+          {
+            "option": "anc",
+            "bytes": {
+              "78": "00",
+              "81": "00"
+            }
+          }
         ],
-        "value_map": { "00": "anc", "01": "transparency", "02": "off" }
+        "value_map": {
+          "00": "anc",
+          "01": "transparency",
+          "02": "off"
+        }
       },
       "inject": "auto",
-      "ui": { "setting_id": 1001, "surfaces": ["device_details", "volume_panel"] },
+      "ui": {
+        "setting_id": 1001,
+        "surfaces": [
+          "device_details",
+          "volume_panel"
+        ]
+      },
       "_verified": true,
       "_verified_note": "B0 mode VERIFIED live via Soundcore app + btsnoop 2026-06-14: ANC=00, Transparency=01, Normal/Off=02. Adaptive = B0=00+B3=01 (`005000010005`; capture showed `00 50 00 01 00 05`). 4-mode (NC/Off/Adaptive/Transparency) mirrors Pixel Buds. Read uses multi-byte match (B0 @78 + B3 @81) to tell Adaptive from plain ANC."
     },
-
     {
       "id": "anc_mode",
       "type": "multitoggle",
       "title": "ANC mode",
       "capability": "sound_modes_v2",
       "options": [
-        { "id": "adaptive", "label": "Adaptive", "icon": "anc" },
-        { "id": "manual",   "label": "Manual",   "icon": "anc" }
+        {
+          "id": "adaptive",
+          "label": "Adaptive",
+          "icon": "anc"
+        },
+        {
+          "id": "manual",
+          "label": "Manual",
+          "icon": "anc"
+        }
       ],
-      "set": { "command": "0681", "_byte": "B3 of the sound_mode packet: 01=adaptive, 00=manual. Verified 2026-06-09 (23:48:43 adaptive `005000010005`, 23:48:57 manual `005000000005`).", "option_values": { "adaptive": "01", "manual": "00" } },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "0681",
+        "_byte": "B3 of the sound_mode packet: 01=adaptive, 00=manual. Verified 2026-06-09 (23:48:43 adaptive `005000010005`, 23:48:57 manual `005000000005`).",
+        "option_values": {
+          "adaptive": "01",
+          "manual": "00"
+        }
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": false,
       "inject_reason": "Sub-field (B3) of the sound_mode packet — needs a read-modify-write composite encoder, not a standalone command. In-app only.",
-      "requires": { "sound_mode": "anc" },
-      "ui": { "setting_id": 2210, "surfaces": [] },
+      "requires": {
+        "sound_mode": "anc"
+      },
+      "ui": {
+        "setting_id": 2210,
+        "surfaces": []
+      },
       "_verified": true
     },
-
     {
       "id": "manual_anc_level",
       "type": "slider",
       "title": "Noise cancelling strength",
       "capability": "sound_modes_v2",
-      "range": { "min": 1, "max": 5, "step": 1 },
-      "set": { "command": "0681", "_byte": "B1 of the sound_mode packet = level*0x10 (1→0x10 … 5→0x50). Verified 2026-06-09 (23:49:16 `001000000005` … 23:49:49 `005000000005`)." },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null },
+      "range": {
+        "min": 1,
+        "max": 5,
+        "step": 1
+      },
+      "set": {
+        "command": "0681",
+        "_byte": "B1 of the sound_mode packet = level*0x10 (1→0x10 … 5→0x50). Verified 2026-06-09 (23:49:16 `001000000005` … 23:49:49 `005000000005`)."
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null
+      },
       "inject": false,
       "inject_reason": "Slider, and a sub-field (B1) of the sound_mode packet — in-app composite control only.",
-      "requires": { "sound_mode": "anc", "anc_mode": "manual" },
-      "ui": { "setting_id": 2211, "surfaces": [] },
+      "requires": {
+        "sound_mode": "anc",
+        "anc_mode": "manual"
+      },
+      "ui": {
+        "setting_id": 2211,
+        "surfaces": []
+      },
       "_verified": true
     },
-
     {
       "id": "transparency_level",
       "type": "slider",
       "title": "Transparency level",
       "capability": "sound_modes_v2",
-      "range": { "min": 1, "max": 5, "step": 1 },
-      "set": { "command": "0681", "_byte": "B5 (last byte) of the sound_mode packet = transparency level 01..05 (B2 also flips to 01 in this mode). Verified 2026-06-09 (23:50:36 `015001000001` … 23:51:17 `015001000005`)." },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null },
+      "range": {
+        "min": 1,
+        "max": 5,
+        "step": 1
+      },
+      "set": {
+        "command": "0681",
+        "_byte": "B5 (last byte) of the sound_mode packet = transparency level 01..05 (B2 also flips to 01 in this mode). Verified 2026-06-09 (23:50:36 `015001000001` … 23:51:17 `015001000005`)."
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null
+      },
       "inject": false,
       "inject_reason": "Slider, and a sub-field (B5) of the sound_mode packet — in-app composite control only.",
-      "requires": { "sound_mode": "transparency" },
-      "ui": { "setting_id": 2212, "surfaces": [] },
+      "requires": {
+        "sound_mode": "transparency"
+      },
+      "ui": {
+        "setting_id": 2212,
+        "surfaces": []
+      },
       "_verified": true
     },
-
     {
       "id": "wind_noise_reduction",
       "type": "toggle",
       "title": "Wind noise reduction (Air protection)",
       "capability": "sound_modes_v2",
-      "set": { "command": "0681", "_byte": "B4 of the sound_mode packet: 01=on, 00=off. The Soundcore app calls this 'Air protection'. Verified 2026-06-09 (23:48:20 on `005000000105`, 23:48:30 off `005000000005`)." },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "0681",
+        "_byte": "B4 of the sound_mode packet: 01=on, 00=off. The Soundcore app calls this 'Air protection'. Verified 2026-06-09 (23:48:20 on `005000000105`, 23:48:30 off `005000000005`)."
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": false,
       "inject_reason": "Sub-field (B4) of the sound_mode packet, not a standalone command — needs a read-modify-write composite encoder. Sending 0681 with only this byte would reset the mode/level. In-app composite control only.",
-      "requires": { "sound_mode": "anc" },
-      "ui": { "setting_id": 2213, "surfaces": [] },
+      "requires": {
+        "sound_mode": "anc"
+      },
+      "ui": {
+        "setting_id": 2213,
+        "surfaces": []
+      },
       "_verified": true
     },
-
     {
       "id": "anc_cycle_noise_cancelling",
       "type": "toggle",
       "title": "Include ANC in cycle",
       "capability": "ambient_sound_mode_cycle",
-      "set": { "command": "0682", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" }, "_note": "cycle is one packet of 3 bits; needs combined encode" },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "0682",
+        "payload_template": "{state}",
+        "state_values": {
+          "on": "01",
+          "off": "00"
+        },
+        "_note": "cycle is one packet of 3 bits; needs combined encode"
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "ui": { "setting_id": 2214, "surfaces": ["device_details"] },
+      "ui": {
+        "setting_id": 2214,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": false
     },
     {
@@ -169,10 +326,27 @@
       "type": "toggle",
       "title": "Include Transparency in cycle",
       "capability": "ambient_sound_mode_cycle",
-      "set": { "command": "0682", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "0682",
+        "payload_template": "{state}",
+        "state_values": {
+          "on": "01",
+          "off": "00"
+        }
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "ui": { "setting_id": 2215, "surfaces": ["device_details"] },
+      "ui": {
+        "setting_id": 2215,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": false
     },
     {
@@ -180,198 +354,449 @@
       "type": "toggle",
       "title": "Include Normal in cycle",
       "capability": "ambient_sound_mode_cycle",
-      "set": { "command": "0682", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "0682",
+        "payload_template": "{state}",
+        "state_values": {
+          "on": "01",
+          "off": "00"
+        }
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "ui": { "setting_id": 2216, "surfaces": ["device_details"] },
+      "ui": {
+        "setting_id": 2216,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": false
     },
-
     {
       "id": "multipoint",
       "type": "toggle",
       "title": "Dual connection",
-      "title_i18n": { "ru": "Мультиточка" },
+      "title_i18n": {
+        "ru": "Мультиточка"
+      },
       "icon": "multipoint",
       "summary": "Stay connected to two devices",
-      "summary_i18n": { "ru": "Подключение к двум устройствам" },
+      "summary_i18n": {
+        "ru": "Подключение к двум устройствам"
+      },
       "capability": "dual_connections",
-      "set": { "command": "0b84", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "0b84",
+        "payload_template": "{state}",
+        "state_values": {
+          "on": "01",
+          "off": "00"
+        }
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "conflicts_with": ["ldac"],
-      "ui": { "setting_id": 2220, "surfaces": ["device_details"] },
+      "conflicts_with": [
+        "ldac"
+      ],
+      "ui": {
+        "setting_id": 2220,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": true,
       "_verified_note": "0b84 on=01/off=00 confirmed live 2026-06-14 via the Soundcore app 'Двойные соединения' toggle (btsnoop). Device-list read is 0b01; per-device connect/disconnect 0b81/0b82."
     },
-
     {
       "id": "ldac",
       "type": "toggle",
       "title": "LDAC (Hi-Res)",
       "capability": "ldac",
-      "set": { "command": "017f", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" }, "_set_unverified": "OpenSCQ30 only captures 017f as the request/update id; the set opcode may differ." },
-      "read": { "command": "017f", "response_command": "017f", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "017f",
+        "payload_template": "{state}",
+        "state_values": {
+          "on": "01",
+          "off": "00"
+        },
+        "_set_unverified": "OpenSCQ30 only captures 017f as the request/update id; the set opcode may differ."
+      },
+      "read": {
+        "command": "017f",
+        "response_command": "017f",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "conflicts_with": ["multipoint"],
-      "ui": { "setting_id": 2221, "surfaces": ["device_details"] },
+      "conflicts_with": [
+        "multipoint"
+      ],
+      "ui": {
+        "setting_id": 2221,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": false
     },
-
     {
       "id": "dolby_audio",
       "type": "toggle",
       "title": "Dolby Audio",
       "icon": "dolby",
       "summary": "Spatial surround sound",
-      "summary_i18n": { "ru": "Объёмное звучание" },
+      "summary_i18n": {
+        "ru": "Объёмное звучание"
+      },
       "capability": "flag/dolby_audio",
-      "set": { "command": "0286", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "0286",
+        "payload_template": "{state}",
+        "state_values": {
+          "on": "01",
+          "off": "00"
+        }
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "ui": { "setting_id": 2222, "surfaces": ["device_details"] },
+      "ui": {
+        "setting_id": 2222,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": true,
       "_verified_note": "0286 on=01/off=00 confirmed in BLE capture 2026-06-09 (23:52:51 ON `08ee00000002860b00018a`, 23:53:00 OFF). Standalone toggle."
     },
-
     {
       "id": "side_tone",
       "type": "toggle",
       "title": "Side tone",
       "icon": "mic",
       "summary": "Hear your own voice on calls",
-      "summary_i18n": { "ru": "Слышать свой голос при звонках" },
+      "summary_i18n": {
+        "ru": "Слышать свой голос при звонках"
+      },
       "capability": "flag/side_tone",
-      "set": { "command": "0184", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "0184",
+        "payload_template": "{state}",
+        "state_values": {
+          "on": "01",
+          "off": "00"
+        }
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "ui": { "setting_id": 2223, "surfaces": ["device_details"] },
+      "ui": {
+        "setting_id": 2223,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": true,
       "_verified_note": "0184 on=01/off=00 confirmed live 2026-06-14 via the Soundcore app 'Самопрослушивание' toggle (btsnoop capture). Standalone toggle."
     },
-
     {
       "id": "surrounding_sounds",
       "type": "toggle",
       "title": "Surrounding sounds",
-      "title_i18n": { "ru": "Окружающие звуки" },
+      "title_i18n": {
+        "ru": "Окружающие звуки"
+      },
       "icon": "surround",
       "summary": "Voice prompt on ambient-mode change",
-      "summary_i18n": { "ru": "Голосовая подсказка при смене режима" },
+      "summary_i18n": {
+        "ru": "Голосовая подсказка при смене режима"
+      },
       "capability": "flag/ambient_sound_mode_voice_prompt",
-      "set": { "command": "01ae", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "01ae",
+        "payload_template": "{state}",
+        "state_values": {
+          "on": "01",
+          "off": "00"
+        }
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "ui": { "setting_id": 2224, "surfaces": ["device_details"] },
+      "ui": {
+        "setting_id": 2224,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": true,
       "_verified_note": "01ae on=01/off=00 confirmed in BLE capture 2026-06-09 (23:54:11 ON `08ee00000001ae0b0001b1`, 23:54:16 OFF). The Soundcore app labels this 'Surrounding sounds' (OpenSCQ30 calls cmd 01ae ambient_sound_mode_voice_prompt). Standalone toggle."
     },
-
     {
       "id": "low_battery_prompt",
       "type": "toggle",
       "title": "Low-battery prompt",
       "icon": "battery",
       "summary": "Voice alert when battery is low",
-      "summary_i18n": { "ru": "Голосовое оповещение о низком заряде" },
+      "summary_i18n": {
+        "ru": "Голосовое оповещение о низком заряде"
+      },
       "capability": "flag/low_battery_prompt",
-      "set": { "command": "1082", "payload_template": "{state}", "state_values": { "on": "01", "off": "00" } },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "1082",
+        "payload_template": "{state}",
+        "state_values": {
+          "on": "01",
+          "off": "00"
+        }
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "ui": { "setting_id": 2225, "surfaces": ["device_details"] },
+      "ui": {
+        "setting_id": 2225,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": true,
       "_verified_note": "1082 off=00 confirmed live 2026-06-14 via the Soundcore app 'Уведомление о низком заряде батареи' toggle (btsnoop). on=01 by pattern. Standalone toggle."
     },
-
     {
       "id": "limit_high_volume",
       "type": "toggle",
       "title": "Limit high volume",
       "capability": "limit_high_volume",
-      "set": { "command": "2082", "payload_template": "{state}5a", "state_values": { "on": "01", "off": "00" }, "_note": "payload is [enabled, db_limit]; 0x5a=90dB default." },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "2082",
+        "payload_template": "{state}5a",
+        "state_values": {
+          "on": "01",
+          "off": "00"
+        },
+        "_note": "payload is [enabled, db_limit]; 0x5a=90dB default."
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "ui": { "setting_id": 2226, "surfaces": ["device_details"] },
+      "ui": {
+        "setting_id": 2226,
+        "surfaces": [
+          "device_details"
+        ]
+      },
       "_verified": false
     },
-
     {
       "id": "auto_power_off",
       "type": "list",
       "title": "Auto power-off",
       "capability": "auto_power_off",
       "options": [
-        { "id": "off", "label": "Never" },
-        { "id": "30m", "label": "30 min" },
-        { "id": "60m", "label": "60 min" },
-        { "id": "90m", "label": "90 min" },
-        { "id": "120m", "label": "120 min" }
+        {
+          "id": "off",
+          "label": "Never"
+        },
+        {
+          "id": "30m",
+          "label": "30 min"
+        },
+        {
+          "id": "60m",
+          "label": "60 min"
+        },
+        {
+          "id": "90m",
+          "label": "90 min"
+        },
+        {
+          "id": "120m",
+          "label": "120 min"
+        }
       ],
-      "set": { "command": "0186", "payload_template": "{value}", "option_values": { "off": "00", "30m": "01", "60m": "02", "90m": "03", "120m": "04" } },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "0186",
+        "payload_template": "{value}",
+        "option_values": {
+          "off": "00",
+          "30m": "01",
+          "60m": "02",
+          "90m": "03",
+          "120m": "04"
+        }
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "ui": { "setting_id": 2227, "surfaces": [] },
+      "ui": {
+        "setting_id": 2227,
+        "surfaces": []
+      },
       "_verified": false
     },
-
     {
       "id": "eq_preset",
       "type": "list",
       "title": "Equalizer preset",
       "capability": "equalizer",
       "options": [
-        { "id": "soundcore_signature", "label": "Soundcore Signature" },
-        { "id": "acoustic", "label": "Acoustic" },
-        { "id": "bass_booster", "label": "Bass Booster" },
-        { "id": "bass_reducer", "label": "Bass Reducer" },
-        { "id": "classical", "label": "Classical" },
-        { "id": "podcast", "label": "Podcast" },
-        { "id": "custom", "label": "Custom" }
+        {
+          "id": "soundcore_signature",
+          "label": "Soundcore Signature"
+        },
+        {
+          "id": "acoustic",
+          "label": "Acoustic"
+        },
+        {
+          "id": "bass_booster",
+          "label": "Bass Booster"
+        },
+        {
+          "id": "bass_reducer",
+          "label": "Bass Reducer"
+        },
+        {
+          "id": "classical",
+          "label": "Classical"
+        },
+        {
+          "id": "podcast",
+          "label": "Podcast"
+        },
+        {
+          "id": "custom",
+          "label": "Custom"
+        }
       ],
-      "set": { "command": "0387", "payload_template": "{value}", "_note": "A3062 uses cmd 0387 (EQ + custom HearID), confirmed in BLE capture 2026-06-09 23:52:32 (long payload: preset id LE u16 + 8 band gains + hearid block). Full layout = OpenSCQ30 set_equalizer_and_custom_hear_id." },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null, "value_map": {} },
+      "set": {
+        "command": "0387",
+        "payload_template": "{value}",
+        "_note": "A3062 uses cmd 0387 (EQ + custom HearID), confirmed in BLE capture 2026-06-09 23:52:32 (long payload: preset id LE u16 + 8 band gains + hearid block). Full layout = OpenSCQ30 set_equalizer_and_custom_hear_id."
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null,
+        "value_map": {}
+      },
       "inject": "auto",
-      "ui": { "setting_id": 2228, "surfaces": [] },
+      "ui": {
+        "setting_id": 2228,
+        "surfaces": []
+      },
       "_verified": false
     },
-
     {
       "id": "eq_custom_bands",
       "type": "slider",
       "title": "Custom EQ bands",
       "capability": "equalizer",
-      "range": { "min": -120, "max": 120, "step": 5, "unit": "0.1dB", "bands": 8 },
-      "set": { "command": "0387", "payload_template": "{value}", "_note": "8 band gains; see set_equalizer_and_custom_hear_id." },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null },
+      "range": {
+        "min": -120,
+        "max": 120,
+        "step": 5,
+        "unit": "0.1dB",
+        "bands": 8
+      },
+      "set": {
+        "command": "0387",
+        "payload_template": "{value}",
+        "_note": "8 band gains; see set_equalizer_and_custom_hear_id."
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null
+      },
       "inject": "auto",
-      "requires": { "eq_preset": "custom" },
-      "ui": { "setting_id": 2229, "surfaces": [] },
+      "requires": {
+        "eq_preset": "custom"
+      },
+      "ui": {
+        "setting_id": 2229,
+        "surfaces": []
+      },
       "_verified": false
     },
-
     {
       "id": "button_config",
       "type": "list",
       "title": "Gesture controls",
       "capability": "button_configuration",
       "options": [
-        { "id": "double_press", "label": "Double press" }
+        {
+          "id": "double_press",
+          "label": "Double press"
+        }
       ],
-      "set": { "command": "0481", "payload_template": "0000{value}", "_note": "Confirmed cmd 0481 with payload `0000<action>` in BLE capture 2026-06-09 23:52:01 (`000007`) / 23:52:23 (`00000f`=none/0xF). Per-gesture: 0481 double, 0482 triple, 0483 hold, 0484 etc. (action code list still TBD)." },
-      "read": { "command": "0101", "response_command": "0101", "state_byte_index": null },
+      "set": {
+        "command": "0481",
+        "payload_template": "0000{value}",
+        "_note": "Confirmed cmd 0481 with payload `0000<action>` in BLE capture 2026-06-09 23:52:01 (`000007`) / 23:52:23 (`00000f`=none/0xF). Per-gesture: 0481 double, 0482 triple, 0483 hold, 0484 etc. (action code list still TBD)."
+      },
+      "read": {
+        "command": "0101",
+        "response_command": "0101",
+        "state_byte_index": null
+      },
       "inject": "auto",
-      "ui": { "setting_id": 2230, "surfaces": [] },
+      "ui": {
+        "setting_id": 2230,
+        "surfaces": []
+      },
       "_verified": false
     },
-
     {
       "id": "battery",
       "type": "info",
       "title": "Battery",
       "capability": "single_battery",
-      "read": { "command": "0103", "response_command": "0103", "state_byte_index": null, "_note": "max_level 10, level_offset 1." },
+      "read": {
+        "command": "0103",
+        "response_command": "0103",
+        "state_byte_index": null,
+        "_note": "max_level 10, level_offset 1."
+      },
       "inject": false,
-      "ui": { "setting_id": 2240, "surfaces": [] },
+      "ui": {
+        "setting_id": 2240,
+        "surfaces": []
+      },
       "_verified": false
     },
     {
@@ -379,14 +804,19 @@
       "type": "info",
       "title": "Firmware / serial",
       "capability": "serial_number_and_firmware_version",
-      "read": { "command": "0105", "response_command": "0105", "state_byte_index": null },
+      "read": {
+        "command": "0105",
+        "response_command": "0105",
+        "state_byte_index": null
+      },
       "inject": false,
-      "ui": { "setting_id": 2241, "surfaces": [] },
+      "ui": {
+        "setting_id": 2241,
+        "surfaces": []
+      },
       "_verified": false
     }
   ],
-
   "_observed_unidentified_commands": "Host->device opcodes seen in the 2026-06-14 btsnoop while navigating the Soundcore app but NOT yet mapped to a labelled control: 2086, 108d, 1097 (pl=01), 0501, 2003. Recorded for completeness; purpose TBD. Reads observed device->host: 0103 (battery, e.g. 09ff00000101030b000820), 0b02 (dual-connection device list).",
-
   "_notes": "MAC f4:9d:8a:63:e5:f7 used during RE. State packet (cmd 01 01) is 105 bytes; fw '04.36'; model+MAC '3062F7E5638A9DF4'; sound-mode block at idx74 '04 04 0f 03 <mode> 50 00 00 00 05' (mode byte idx78). Capability list mirrors OpenSCQ30 A3062 — all 14 A3062 modules represented as the 21 functions above. Mode B0 mapping CORRECTED 2026-06-14 (anc=00, transparency=01, off=02; was swapped). Verified-live commands: 0681(modes+sub-bytes), 0286(dolby), 01ae(surrounding), 0184(side tone), 1082(low-battery), 0b84(multipoint), 0481(button), 0387(eq). Still guessed (_verified:false): ldac 017f, limit_high_volume 2082, auto_power_off 0186, anc_cycle 0682 — not surfaced as easy toggles in this app build."
 }

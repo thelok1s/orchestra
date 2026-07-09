@@ -1,0 +1,132 @@
+{
+  "schema_version": 3,
+  "revision": 1,
+  "revision_date": "2026-07-08",
+  "id": "galaxy-buds-pro",
+  "name": "Galaxy Buds Pro",
+  "device_type": "earbuds_2",
+  "manufacturer": "Samsung",
+  "model_code": "buds_pro",
+  "re_model": "Buds Pro",
+  "match": {
+    "name_regex": "(?i)Galaxy Buds Pro",
+    "service_uuids_any": [
+      "00001101-0000-1000-8000-00805f9b34fb"
+    ]
+  },
+  "channels": {
+    "spp-main": {
+      "transport": "rfcomm",
+      "uuid": "00001101-0000-1000-8000-00805f9b34fb",
+      "secure": false,
+      "protocol": {
+        "framing": "samsung_v1",
+        "_doc": "Samsung SPP framing: [SOM: 0xFD] [Header: 2 bytes] [MsgID: 1 byte] [Payload] [CRC16: 2 bytes] [EOM: 0xDD]"
+      }
+    }
+  },
+  "default_channel": "spp-main",
+  "platforms": {
+    "pixelos": {
+      "detect": {
+        "manufacturer": "Google",
+        "system_prop": {
+          "ro.product.brand": "google"
+        }
+      },
+      "requires": [
+        "root",
+        "lsposed",
+        "pkg:com.android.systemui",
+        "pkg:com.android.settings"
+      ],
+      "inject": {
+        "settings_pkg": "com.android.settings",
+        "systemui_pkg": "com.android.systemui",
+        "about_fragment": "com.android.settings.bluetooth.BluetoothDetailsConfigurableFragment",
+        "surfaces": [
+          "device_details",
+          "volume_panel"
+        ],
+        "reserved_ids": {
+          "anc": 1001
+        }
+      }
+    }
+  },
+  "_capabilities_source": "Composed from JojiiOfficial/GalaxyBuds-rs reverse engineering data. Uses samsung_v1 framing over SPP.",
+  "functions": [
+    {
+      "id": "sound_mode",
+      "type": "multitoggle",
+      "title": "Noise control",
+      "title_i18n": {
+        "ru": "Управление шумом"
+      },
+      "capability": "noise_control",
+      "options": [
+        {
+          "id": "anc",
+          "label": "Noise Cancelling",
+          "icon": "anc"
+        },
+        {
+          "id": "off",
+          "label": "Off",
+          "icon": "off"
+        },
+        {
+          "id": "transparency",
+          "label": "Ambient Sound",
+          "icon": "transparency"
+        }
+      ],
+      "set": {
+        "command": "77",
+        "payload_template": "{mode}",
+        "option_values": {
+          "anc": "01",
+          "off": "00",
+          "transparency": "02"
+        }
+      },
+      "read": {
+        "command": "61",
+        "response_command": "61",
+        "state_byte_index": 16,
+        "value_map": {
+          "01": "anc",
+          "00": "off",
+          "02": "transparency"
+        }
+      },
+      "inject": "auto",
+      "ui": {
+        "setting_id": 1001,
+        "surfaces": [
+          "device_details",
+          "volume_panel"
+        ]
+      },
+      "_verified": false,
+      "_verified_note": "Derived from GalaxyBuds-rs; test on device to confirm."
+    },
+    {
+      "id": "battery",
+      "type": "info",
+      "title": "Battery",
+      "capability": "single_battery",
+      "read": {
+        "command": "61",
+        "response_command": "61",
+        "state_byte_index": 6
+      },
+      "inject": false,
+      "ui": {
+        "setting_id": 2040,
+        "surfaces": []
+      },
+      "_verified": false
+    }
+  ]
+}

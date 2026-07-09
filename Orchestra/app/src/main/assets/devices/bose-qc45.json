@@ -1,0 +1,132 @@
+{
+  "schema_version": 3,
+  "revision": 1,
+  "revision_date": "2026-07-08",
+  "id": "bose-qc45",
+  "name": "Bose QuietComfort 45",
+  "device_type": "headphones",
+  "manufacturer": "Bose",
+  "model_code": "qc45",
+  "re_model": "QC45",
+  "match": {
+    "name_regex": "(?i)Bose QC45",
+    "service_uuids_any": [
+      "00001101-0000-1000-8000-00805f9b34fb"
+    ]
+  },
+  "channels": {
+    "spp-main": {
+      "transport": "rfcomm",
+      "uuid": "00001101-0000-1000-8000-00805f9b34fb",
+      "secure": false,
+      "protocol": {
+        "framing": "bose_v1",
+        "_doc": "Bose BMAP framing: [category: 1 byte] [commandId: 1 byte] [operator: 1 byte] [payloadLength: 1 byte] [payload]"
+      }
+    }
+  },
+  "default_channel": "spp-main",
+  "platforms": {
+    "pixelos": {
+      "detect": {
+        "manufacturer": "Google",
+        "system_prop": {
+          "ro.product.brand": "google"
+        }
+      },
+      "requires": [
+        "root",
+        "lsposed",
+        "pkg:com.android.systemui",
+        "pkg:com.android.settings"
+      ],
+      "inject": {
+        "settings_pkg": "com.android.settings",
+        "systemui_pkg": "com.android.systemui",
+        "about_fragment": "com.android.settings.bluetooth.BluetoothDetailsConfigurableFragment",
+        "surfaces": [
+          "device_details",
+          "volume_panel"
+        ],
+        "reserved_ids": {
+          "anc": 1001
+        }
+      }
+    }
+  },
+  "_capabilities_source": "Composed from Denton-L/based-connect reverse engineering data. Uses Bose BMAP framing over standard SPP.",
+  "functions": [
+    {
+      "id": "sound_mode",
+      "type": "multitoggle",
+      "title": "Noise control",
+      "title_i18n": {
+        "ru": "Управление шумом"
+      },
+      "capability": "audio_modes",
+      "options": [
+        {
+          "id": "anc",
+          "label": "High",
+          "icon": "anc"
+        },
+        {
+          "id": "low",
+          "label": "Low",
+          "icon": "low"
+        },
+        {
+          "id": "off",
+          "label": "Off",
+          "icon": "off"
+        }
+      ],
+      "set": {
+        "command": "01:06:02",
+        "payload_template": "{mode}",
+        "option_values": {
+          "anc": "01",
+          "low": "03",
+          "off": "00"
+        }
+      },
+      "read": {
+        "command": "01:06:01",
+        "response_command": "01:06:03",
+        "state_byte_index": 4,
+        "value_map": {
+          "01": "anc",
+          "03": "low",
+          "00": "off"
+        }
+      },
+      "inject": "auto",
+      "ui": {
+        "setting_id": 1001,
+        "surfaces": [
+          "device_details",
+          "volume_panel"
+        ]
+      },
+      "_verified": false,
+      "_verified_note": "Derived from based-connect; test on device to confirm."
+    },
+    {
+      "id": "battery",
+      "type": "info",
+      "title": "Battery",
+      "capability": "single_battery",
+      "read": {
+        "command": "02:02:01",
+        "response_command": "02:02:03",
+        "state_byte_index": 4
+      },
+      "inject": false,
+      "ui": {
+        "setting_id": 2040,
+        "surfaces": []
+      },
+      "_verified": false
+    }
+  ]
+}

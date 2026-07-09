@@ -1,0 +1,171 @@
+{
+  "schema_version": 4,
+  "revision": 1,
+  "revision_date": "2026-07-08",
+  "id": "airpods-pro",
+  "name": "AirPods Pro",
+  "device_type": "earbuds_2",
+  "manufacturer": "Apple",
+  "model_code": "A2084",
+  "match": {
+    "name_regex": "(?i)AirPods Pro(?! 2)",
+    "service_uuids_any": [
+      "74ec2172-0bad-4d01-8f77-997b2be0722a"
+    ]
+  },
+  "channels": {
+    "aacp-main": {
+      "transport": "aacp",
+      "psm": 4097,
+      "secure": false,
+      "protocol": {
+        "framing": "aap_v1"
+      }
+    }
+  },
+  "default_channel": "aacp-main",
+  "_capabilities_source": "LibrePods (kavishdevar/librepods) reverse engineered protocols. Sound modes 01=Off, 02=ANC, 03=Transparency.",
+  "functions": [
+    {
+      "id": "sound_mode",
+      "type": "multitoggle",
+      "title": "Noise control",
+      "title_i18n": {
+        "ru": "Управление шумом"
+      },
+      "capability": "sound_modes",
+      "options": [
+        {
+          "id": "off",
+          "label": "Off",
+          "icon": "off",
+          "label_i18n": {
+            "ru": "Выкл."
+          }
+        },
+        {
+          "id": "anc",
+          "label": "Noise Cancelling",
+          "icon": "anc",
+          "label_i18n": {
+            "ru": "Шумоподавление"
+          }
+        },
+        {
+          "id": "transparency",
+          "label": "Transparency",
+          "icon": "transparency",
+          "label_i18n": {
+            "ru": "Прозрачность"
+          }
+        }
+      ],
+      "set": {
+        "command": "0900",
+        "payload_template": "{mode}",
+        "option_values": {
+          "off": "01",
+          "anc": "02",
+          "transparency": "03"
+        }
+      },
+      "read": {
+        "command": "09000d",
+        "response_command": "09000d",
+        "state_byte_index": 7,
+        "value_map": {
+          "01": "off",
+          "02": "anc",
+          "03": "transparency"
+        }
+      },
+      "inject": "auto",
+      "ui": {
+        "setting_id": 1001,
+        "surfaces": [
+          "device_details"
+        ]
+      },
+      "_verified": false
+    },
+    {
+      "id": "battery",
+      "type": "battery",
+      "title": "Battery",
+      "title_i18n": {
+        "ru": "Батарея"
+      },
+      "capability": "battery",
+      "read": {
+        "notify_opcode": "040004"
+      },
+      "inject": false,
+      "ui": {
+        "setting_id": 1002,
+        "surfaces": [
+          "app"
+        ]
+      },
+      "_verified": false
+    },
+    {
+      "id": "ear_detection",
+      "type": "info",
+      "title": "Ear detection",
+      "title_i18n": {
+        "ru": "Датчик в ухе"
+      },
+      "capability": "ear_detection",
+      "read": {
+        "notify_opcode": "040006"
+      },
+      "inject": false,
+      "ui": {
+        "setting_id": 1003,
+        "surfaces": [
+          "app"
+        ]
+      },
+      "_verified": false
+    },
+    {
+      "id": "auto_pause",
+      "type": "toggle",
+      "title": "Automatic ear detection",
+      "title_i18n": {
+        "ru": "Автопауза при снятии"
+      },
+      "summary": "Pause when a pod is removed, resume when re-worn",
+      "capability": "auto_pause",
+      "icon": "anc",
+      "local": true,
+      "inject": "auto",
+      "ui": {
+        "setting_id": 1005,
+        "surfaces": [
+          "device_details"
+        ]
+      },
+      "_verified": false
+    },
+    {
+      "id": "rename",
+      "type": "text",
+      "title": "Rename",
+      "title_i18n": {
+        "ru": "Переименовать"
+      },
+      "summary": "Set a local name for this device (shown across the system)",
+      "capability": "rename",
+      "local": true,
+      "inject": false,
+      "ui": {
+        "setting_id": 1008,
+        "surfaces": [
+          "app"
+        ]
+      },
+      "_verified": false
+    }
+  ]
+}
