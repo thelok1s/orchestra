@@ -52,9 +52,11 @@ public final class DeviceDef {
         final String uuid;                  // rfcomm
         final boolean secure;
         final String framing;               // protocol.framing, e.g. "shokz_v1"; null = transport-default
-        Channel(String id, String transport, String uuid, boolean secure, String framing) {
+        final org.json.JSONObject protocol; // the raw `protocol` block (framing constants engines read)
+        Channel(String id, String transport, String uuid, boolean secure, String framing,
+                org.json.JSONObject protocol) {
             this.id = id; this.transport = transport; this.uuid = uuid;
-            this.secure = secure; this.framing = framing;
+            this.secure = secure; this.framing = framing; this.protocol = protocol;
         }
     }
 
@@ -87,6 +89,20 @@ public final class DeviceDef {
     Func funcBySettingId(int settingId) {
         for (Func f : functions) if (f.settingId == settingId) return f;
         return null;
+    }
+
+    /**
+     * A single-byte framing constant (hex, e.g. {@code "fd"}) from the default channel's
+     * {@code protocol} block, or {@code dflt} if absent/malformed. Lets engines read per-device
+     * markers (Samsung SOM/EOM, a Bose response operator) from the manifest instead of hardcoding.
+     */
+    int protocolByte(String key, int dflt) {
+        Channel c = channels.get(defaultChannel);
+        if (c == null || c.protocol == null) return dflt;
+        String v = c.protocol.optString(key, null);
+        if (v == null) return dflt;
+        try { return Integer.parseInt(v.replaceFirst("^0[xX]", ""), 16) & 0xff; }
+        catch (NumberFormatException e) { return dflt; }
     }
 
     /** True if any channel uses the AAP transport, i.e. an {@link AacpEngine} session applies. */
@@ -184,6 +200,7 @@ public final class DeviceDef {
         int hostMacOffsetOff = -1;   // toggle "off" frame: byte offset where 6 host-MAC LE bytes go (-1=none)
         // read
         final String readCommand;                           // hex, e.g. "0101"
+        String responseCommand;                             // command id expected in the reply (e.g. Bose "01:06:03"); may be null
         final int stateByteIndex;                           // -1 if unknown
         final Map<String, String> valueMap = new LinkedHashMap<>();     // hex byte -> optId / on/off
         // Optional multi-byte readback match (for composite controls like 4-mode ANC where one
@@ -320,7 +337,7 @@ public final class DeviceDef {
             JSONObject proto = c.optJSONObject("protocol");
             String framing = proto != null ? proto.optString("framing", null) : null;
             channels.put(cid, new Channel(cid, c.getString("transport"),
-                    c.optString("uuid", null), c.optBoolean("secure", false), framing));
+                    c.optString("uuid", null), c.optBoolean("secure", false), framing, proto));
         }
         String defaultChannel = root.optString("default_channel",
                 channels.isEmpty() ? null : channels.keySet().iterator().next());
@@ -373,6 +390,7 @@ public final class DeviceDef {
         Channel ch = channels.get(func.channelId);
         func.transport = ch != null ? ch.transport : null;
         func.framing = ch != null ? ch.framing : null;
+        func.responseCommand = read != null ? read.optString("response_command", null) : null;
         if (fn.has("summary") || fn.has("summary_i18n")) func.summary = localized(fn, "summary", "");
 
         // Plan 8: parse the AAP `feature` byte for ALL function types (not only level/slider),
