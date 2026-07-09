@@ -80,8 +80,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.compositeOver
@@ -209,9 +212,12 @@ fun OrchestraApp(refreshKey: Int) {
                         }
                     }
                 }
+                BottomBlurStrip(
+                    contentLayer = contentLayer,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
                 FloatingNavBar(
                     dest = dest,
-                    contentLayer = contentLayer,
                     modifier = Modifier.align(Alignment.BottomCenter),
                 ) { dest = it }
 
@@ -248,45 +254,57 @@ fun OrchestraApp(refreshKey: Int) {
 }
 
 /**
- * Detached, fully-rounded floating bottom nav (M3 Expressive) with a real backdrop blur:
- * re-draws [contentLayer] (the recorded screen content) offset under the pill through a
- * [BlurEffect], tinted by a translucent surface scrim.
+ * Full-width blur strip pinned to the bottom edge (behind the floating nav pill): re-draws
+ * [contentLayer] (the recorded screen content) through a [BlurEffect], alpha-masked by a
+ * vertical gradient so the blur fades in toward the screen bottom — Telegram-style. Covers
+ * the gesture-navigation area too. Draw-only; never intercepts touches.
  */
+@Composable
+private fun BottomBlurStrip(contentLayer: GraphicsLayer, modifier: Modifier = Modifier) {
+    var bounds by remember { mutableStateOf(Rect.Zero) }
+    val navPad = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(navPad + 116.dp)
+            .onGloballyPositioned { bounds = it.boundsInRoot() }
+            .graphicsLayer {
+                renderEffect = BlurEffect(28f, 28f, TileMode.Clamp)
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+            .drawBehind {
+                translate(-bounds.left, -bounds.top) {
+                    drawLayer(contentLayer)
+                }
+                // Fade the blur out toward the top of the strip (DstIn alpha mask).
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        0.45f to Color.Black,
+                        1f to Color.Black,
+                    ),
+                    blendMode = BlendMode.DstIn,
+                )
+            }
+    )
+}
+
+/** Detached, fully-rounded, elevated bottom nav (M3 Expressive floating pill). */
 @Composable
 private fun FloatingNavBar(
     dest: Dest,
-    contentLayer: GraphicsLayer,
     modifier: Modifier = Modifier,
     onSelect: (Dest) -> Unit,
 ) {
-    var barBounds by remember { mutableStateOf(Rect.Zero) }
-    Box(
-        modifier
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 6.dp,
+        modifier = modifier
             .navigationBarsPadding()
             .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
-            .fillMaxWidth()
-            .clip(CircleShape)
-            .onGloballyPositioned { barBounds = it.boundsInRoot() },
+            .fillMaxWidth(),
     ) {
-        // Blurred copy of the screen content directly beneath the bar.
-        Box(
-            Modifier.matchParentSize()
-                .graphicsLayer {
-                    renderEffect = BlurEffect(24f, 24f, TileMode.Clamp)
-                    clip = true
-                    shape = CircleShape
-                }
-                .drawBehind {
-                    translate(-barBounds.left, -barBounds.top) {
-                        drawLayer(contentLayer)
-                    }
-                }
-        )
-        // Translucent tint so items stay legible over any content.
-        Box(
-            Modifier.matchParentSize()
-                .background(MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.55f))
-        )
         Row(Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
             Dest.entries.forEach { d ->
                 val selected = dest == d
