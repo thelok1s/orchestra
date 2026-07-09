@@ -584,7 +584,7 @@ private fun StatTile(
 ) {
     Column(
         modifier
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
@@ -622,6 +622,7 @@ private fun StatusCard(
     expandedContent: (@Composable () -> Unit)? = null,
 ) {
     Card(
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = statusColor.copy(alpha = 0.10f)),
         modifier = Modifier.fillMaxWidth().animateContentSize(
             animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
@@ -697,8 +698,9 @@ private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
         }
         if (available.isNotEmpty()) {
             SectionHeader("Available to hook", "${available.size}")
-            Card(colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+            Card(shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
                 Column {
                     available.forEach { d ->
                         AvailableRow(
@@ -846,6 +848,7 @@ private fun HookedDeviceCard(
     }
 
     Card(
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         modifier = Modifier.fillMaxWidth().animateContentSize(
@@ -1408,7 +1411,7 @@ private fun DebugScreen(refreshKey: Int, onBack: () -> Unit) {
 private fun DebugCard(text: String) {
     Card(colors = CardDefaults.cardColors(
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        shape = RoundedCornerShape(16.dp)) {
+        shape = RoundedCornerShape(28.dp)) {
         SelectionContainer {
             Text(text, modifier = Modifier.padding(16.dp),
                 fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
