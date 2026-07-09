@@ -15,6 +15,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -29,6 +30,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -59,6 +61,9 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -123,10 +128,10 @@ private const val FLAG_INAPP = "show_inapp"
 private const val FLAG_MAC = "show_mac"
 private const val FLAG_ACT_AS_APPLE = "act_as_apple"
 
-private enum class Dest(val label: String, val icon: ImageVector) {
-    STATUS("Status", Icons.Filled.CheckCircle),
-    DEVICES("Devices", Icons.Filled.Headphones),
-    SETTINGS("Settings", Icons.Filled.Tune),
+private enum class Dest(val label: String, val icon: ImageVector, val iconOutlined: ImageVector) {
+    STATUS("Status", Icons.Filled.CheckCircle, Icons.Outlined.CheckCircle),
+    DEVICES("Devices", Icons.Filled.Headphones, Icons.Outlined.Headphones),
+    SETTINGS("Settings", Icons.Filled.Tune, Icons.Outlined.Tune),
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
@@ -160,18 +165,7 @@ fun OrchestraApp(refreshKey: Int) {
             Box(Modifier.fillMaxSize()) {
                 Scaffold(
                     topBar = { TopAppBar(title = { Text("Orchestra") }) },
-                    bottomBar = {
-                        NavigationBar {
-                            Dest.entries.forEach { d ->
-                                NavigationBarItem(
-                                    selected = dest == d,
-                                    onClick = { dest = d },
-                                    icon = { Icon(d.icon, contentDescription = d.label) },
-                                    label = { Text(d.label) },
-                                )
-                            }
-                        }
-                    },
+                    bottomBar = { FloatingNavBar(dest) { dest = it } },
                 ) { padding ->
                     AnimatedContent(
                         targetState = dest,
@@ -216,6 +210,58 @@ fun OrchestraApp(refreshKey: Int) {
                     ) {
                         DebugScreen(refreshKey, onBack = { debugOpen = false })
                     }
+                }
+            }
+        }
+    }
+}
+
+/** Detached, fully-rounded, elevated bottom nav (M3 Expressive floating bar). */
+@Composable
+private fun FloatingNavBar(dest: Dest, onSelect: (Dest) -> Unit) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 6.dp,
+        modifier = Modifier
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+            .fillMaxWidth(),
+    ) {
+        Row(Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
+            Dest.entries.forEach { d ->
+                val selected = dest == d
+                val pill by animateColorAsState(
+                    if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
+                    label = "navPill",
+                )
+                Column(
+                    Modifier
+                        .weight(1f)
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                        ) { onSelect(d) },
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Box(
+                        Modifier.width(64.dp).height(32.dp).clip(CircleShape).background(pill),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Icon(
+                            if (selected) d.icon else d.iconOutlined,
+                            contentDescription = d.label,
+                            tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
+                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        d.label,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = if (selected) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
