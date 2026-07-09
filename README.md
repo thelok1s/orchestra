@@ -1,34 +1,26 @@
 <p align="center">
   <img src="icons/play_store_512.png" width="128" alt="Orchestra icon">
 </p>
-
 <h1 align="center">Orchestra</h1>
 
 <p align="center">
-  Native headphone controls inside Pixel / Android system UI — no vendor app, driven by
-  per-device manifests over RFCOMM (Soundcore) or AAP/L2CAP (AirPods).
+  Native headphone controls inside Android system UI — no vendor app, driven by
+  per-device manifests. Supports Apple, Soundcore, Samsung and others – add yours to the list!.
 </p>
 
 ---
 
 ## What it is
 
-**Orchestra** is a single APK that is *both* a launchable Compose app **and** an LSPosed module. It
-makes the stock Android Bluetooth **"About device"** page render native controls — ANC / noise-control
-modes, feature switches, and battery — for Soundcore and AirPods headphones, by impersonating the
-device-settings integration that Pixel Buds use. There is no vendor app in the loop: Orchestra talks to
-the headphones directly over their native control protocol (RFCOMM for Soundcore, Apple's Accessory
-Protocol over L2CAP for AirPods), and every device is described by a small **JSON manifest** so adding
-a model is data, not code.
+**Orchestra** is an LSPosed module. It makes the stock Android Bluetooth **"About device"** page render native controls — ANC / noise-control modes, feature switches, and battery by impersonating the device-settings integration for your ROM's vendor own headphonees (example: Pixel + Pixel Buds). There is no vendor app in the loop: Orchestra talks to the headphones directly over their native control protocol (RFCOMM,L2CAP, etc.), and every device is described by a small **JSON manifest** so addinga model is data, not code.
 
 The same controls that Pixel Buds get natively (segmented ANC control, feature toggles, per-bud
 battery) appear for your headphones, in the system Settings UI, themed with Material You.
 
 ## Requirements
 
-- A device where **root + LSPosed** (or a compatible Xposed framework) is available — developed on a
-  **Pixel** running **Android 16 / 17**.
-- The **LSPosed** (or "Vector"/modern Xposed) manager.
+- Rooted device.
+- **LSPosed** (or a compatible Xposed framework) compatble with API <=100
 - A supported headphone (see below) — or write a manifest for your own.
 
 > Orchestra needs LSPosed because it writes a privileged Bluetooth metadata tag and hooks the system
@@ -37,7 +29,7 @@ battery) appear for your headphones, in the system Settings UI, themed with Mate
 ## Compatibility & support state
 
 Orchestra impersonates the **Pixel** device-settings integration, so platform support is defined along
-three axes — the OS, the ROM, and the Xposed framework. The **headphones themselves are not hardcoded**:
+three axes — the OS, the ROM, and the LSposed framework. The **headphones themselves are not hardcoded**:
 which devices are supported is defined entirely by **manifests** (see *Supported headphones* below).
 
 | Axis | Supported | Notes |
@@ -48,13 +40,7 @@ which devices are supported is defined entirely by **manifests** (see *Supported
 
 ## Install & setup
 
-1. Build or download the APK and install it:
-   ```bash
-   # build
-   cd Orchestra && JAVA_HOME="$(/usr/libexec/java_home -v 21)" ./gradlew :app:assembleDebug
-   # install
-   adb install -r Orchestra/app/build/outputs/apk/debug/app-debug.apk
-   ```
+1. Download the latest APK from [releases](https://github.com/thelok1s/orchestra/releases/latest)
 2. In **LSPosed**, enable **Orchestra** and set its **scope** to:
    **System UI** + **Settings** + **Orchestra** (itself), then **restart System UI** (or reboot).
 3. Open the Orchestra app → **Devices** tab → toggle a paired Soundcore device **on** ("hook" it).
@@ -81,15 +67,11 @@ Currently shipped + hardware-verified:
 | **Shokz OpenSwim Pro** | S180 | Equalizer (Standard / Vocal / Swimming), Multipoint, MP3↔Bluetooth mode, MP3 shuffle, universal-button & volume-long-press actions (MP3 transport + volume are in-app). Bone-conduction; `shokz_v1` framing over RFCOMM. State is write-only/optimistic. |
 | **AirPods Pro 2** | A3048 | 4-mode Noise Control (Off / ANC / Transparency / Adaptive), Conversational Awareness toggle, live per-bud + case battery on the native header, ear detection (in-app), background auto-pause on ear removal, CA volume-duck (gradual fade), Adaptive Audio strength (in-app 0–100 slider, active while Noise Control = Adaptive), Rename (in-app, sets the local Bluetooth alias) |
 
-Both render correctly on the Android 17 **About-device** page. Each manifest also catalogues further
+Each manifest also catalogues further
 controls that ship **disabled** until their command bytes are hardware-confirmed (`_verified: false`).
 A control shipped `_verified: false` must be opted in **per device** in the app's **Devices** tab
 before its About-page toggle appears; verified controls inject automatically. The live, authoritative
 device list is the catalog index in the manifests repo.
-
-AirPods Pro 2 still needs **root + LSPosed** like every other device here — it is not a special case,
-despite talking a different (Apple AAP) protocol under the hood. Its manifest ships in the app's
-**bundled seed** at revision 9.
 
 ## How it works
 
@@ -163,10 +145,6 @@ The app uses that repo at runtime:
 
 ## Known limitations & roadmap
 
-- **Volume-panel Noise-Control tile** works on Android 17, but only while a supported headphone is
-  the **active audio output**, and — like every Xposed hook — only after System UI has been
-  (re)started since the app was last updated. Its install status is logged to logcat
-  (`adb logcat -s OrchestraMX`) for diagnosis.
 - A per-device **in-app control screen** (tap an AirPods device card in the Devices tab) renders
   `slider`/`level` and `text` functions that can't be injected into the native About page — e.g.
   AirPods Pro 2's Adaptive Audio strength slider and Rename field, plus live battery/ear rows. A
@@ -184,19 +162,17 @@ The app uses that repo at runtime:
   it's one or the other: **on** → handoff + multipoint, no media buttons; **off** → media buttons +
   standard multipoint, no Apple handoff. (Long-press to cycle ANC keeps working either way — it's
   bud-native.)
-- Only **2 devices** are fully verified; several per-device opcodes remain `_verified: false`.
-- The module currently uses the **legacy Xposed API**; a dual legacy + **modern libxposed** engine
-  (works across `<100` and `≥101` framework API levels) is on the roadmap.
 
 ## Disclaimer
 
-Orchestra is an **unofficial** project, not affiliated with Google or Anker/Soundcore. It sends control
+Orchestra is an **unofficial** project, not affiliated with Google, Apple or Anker/Soundcore. It sends control
 frames to **your own** headphones; some protocol bytes are reverse-engineered and unverified controls
 are opt-in. Use at your own risk.
 
 ## Credits & license
 
-Capability catalogue and protocol bytes were built from the excellent
-[**OpenSCQ30**](https://github.com/Oppzippy/OpenSCQ30), SoundcoreManager, and SoundcoreDesktop projects.
+[**OpenSCQ30**](https://github.com/Oppzippy/OpenSCQ30)
+[**GalaxyBudsClient**](https://github.com/timschneeb/GalaxyBudsClient)
+[**librepods**](https://github.com/librepods-org/librepods)
 
 Licensed under **GPL-3.0** — see [`LICENSE`](LICENSE).
