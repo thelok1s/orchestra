@@ -1013,12 +1013,6 @@ private fun HookedDeviceCard(
                     }
                 }
                 Switch(checked = true, onCheckedChange = { onUnhook() })
-                // Only AAP (AirPods-protocol) devices have a dedicated in-app control screen today.
-                if (isAacpDevice) {
-                    IconButton(onClick = onOpen) {
-                        Icon(Icons.Filled.ChevronRight, contentDescription = "Open device controls")
-                    }
-                }
                 Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                     contentDescription = "Expand")
             }
@@ -1051,6 +1045,24 @@ private fun HookedDeviceCard(
                                     DeviceStore.setCapabilityEnabled(d.mac, c.id, !c.enabled); onChange()
                                 })
                             }
+                        }
+                    }
+                    // Only AAP (AirPods-protocol) devices have a dedicated in-app control screen
+                    // today. Lives here (not in the header) to keep the header row uncluttered.
+                    if (isAacpDevice) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Row(
+                            Modifier.fillMaxWidth().clickable { onOpen() }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Device controls", style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f))
+                            Icon(Icons.Filled.ChevronRight,
+                                contentDescription = "Open device controls",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
