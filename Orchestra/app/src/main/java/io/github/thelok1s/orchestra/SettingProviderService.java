@@ -201,6 +201,7 @@ public class SettingProviderService extends Service {
                 if (idx < 0) idx = chosenIndex;
             }
             cacheFor(address).put(settingId, idx);
+            DeviceStore.setLastIndex(address, f.id, idx); // durable last-known for optimistic re-reads
             IBinder listener = listeners.get(address);
             if (listener != null) pushFromCache(def, address, listener);
         });
@@ -226,20 +227,41 @@ public class SettingProviderService extends Service {
             }
             ControlEngine engine = ControlEngine.forFunc(f);
             if (engine == null) continue;
-            int idx;
+            // The freshly-read authoritative value (null if the read failed or is unsupported).
+            Integer authoritative = null;
             if (f.isToggle()) {
                 Boolean on = engine.readToggle(adapter, address, def, f);
-                // Unknown (unverified read) -> keep any cached value, else default off.
-                idx = on != null ? (on ? 1 : 0)
-                        : (cache.containsKey(f.settingId) ? cache.get(f.settingId) : 0);
+                if (on != null) authoritative = on ? 1 : 0;
             } else {
                 String cur = engine.readMode(adapter, address, def, f);
-                idx = cur != null ? f.indexOfOption(cur) : 0;
-                if (idx < 0) idx = 0;
+                if (cur != null) {
+                    int i = f.indexOfOption(cur);
+                    if (i >= 0) authoritative = i;
+                }
             }
-            cache.put(f.settingId, idx);
+            // A failed read must NEVER clobber a known value: fall back to what we already know this
+            // session, then to the persisted last value; only truly-unknown controls stay unset.
+            Integer resolved = resolveIndex(authoritative, cache.get(f.settingId),
+                    DeviceStore.lastIndex(address, f.id, -1));
+            if (resolved != null) {
+                cache.put(f.settingId, resolved);
+                if (authoritative != null) DeviceStore.setLastIndex(address, f.id, authoritative);
+            }
         }
         pushFromCache(def, address, listener);
+    }
+
+    /**
+     * Resolve the index to show for a control from (in priority) the freshly-read authoritative
+     * value, the value cached this session, and the persisted last-known value. Returns null when
+     * nothing is known — the caller leaves the control unset so {@link #pushFromCache} applies the
+     * default, rather than a failed read overwriting a known value with 0. Pure; unit-tested.
+     */
+    static Integer resolveIndex(Integer authoritative, Integer sessionCached, int persisted) {
+        if (authoritative != null) return authoritative; // a live device read always wins
+        if (sessionCached != null) return sessionCached;  // else keep what we already know this session
+        if (persisted >= 0) return persisted;             // else the last value we set/saw (optimistic)
+        return null;                                      // truly unknown -> leave unset
     }
 
     /** Build a DeviceSetting for every injected function from the cached indices (one IPC push). */
