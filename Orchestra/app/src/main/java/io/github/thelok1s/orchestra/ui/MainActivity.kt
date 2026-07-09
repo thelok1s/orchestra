@@ -853,10 +853,10 @@ private fun HookedDeviceCard(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    Modifier.size(48.dp).clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.secondaryContainer),
-                    contentAlignment = Alignment.Center
+                ShapeChip(
+                    shape = remember(d.mac) { shapeForSeed(d.mac) },
+                    size = 48.dp,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
                 ) {
                     Icon(Icons.Filled.Headphones, contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -1078,10 +1078,10 @@ private fun AvailableRow(
     ListItem(
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         leadingContent = {
-            Box(
-                Modifier.size(40.dp).clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                contentAlignment = Alignment.Center
+            ShapeChip(
+                shape = remember(d.mac) { shapeForSeed(d.mac) },
+                size = 40.dp,
+                color = MaterialTheme.colorScheme.secondaryContainer,
             ) {
                 Icon(Icons.Filled.Headphones, contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSecondaryContainer)
