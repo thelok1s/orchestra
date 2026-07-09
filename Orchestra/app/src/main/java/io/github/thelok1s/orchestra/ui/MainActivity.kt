@@ -431,9 +431,12 @@ private fun StatusScreen(refreshKey: Int) {
         Rise(0) { HeroCard(moduleActive, apiLevel, hookedCount) }
 
         Rise(1) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                Modifier.height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
                 StatTile(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     icon = if (moduleActive) Icons.Filled.Extension else Icons.Filled.Cancel,
                     iconTint = null,
                     shape = MaterialShapes.Clover4Leaf.asShape(),
@@ -442,7 +445,7 @@ private fun StatusScreen(refreshKey: Int) {
                     good = moduleActive,
                 )
                 StatTile(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
                     icon = if (bt) Icons.Filled.Bluetooth else Icons.Filled.BluetoothDisabled,
                     iconTint = if (bt) BluetoothBlue else null,
                     shape = MaterialShapes.SoftBurst.asShape(),
@@ -593,6 +596,7 @@ private fun StatTile(
         ShapeChip(shape = shape, size = 52.dp, color = chipBg) {
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(26.dp))
         }
+        Spacer(Modifier.weight(1f))
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(value, style = MaterialTheme.typography.headlineSmall)
             Text(label, style = MaterialTheme.typography.labelLarge,
