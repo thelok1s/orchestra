@@ -171,8 +171,8 @@ are opt-in. Use at your own risk.
 
 ## Credits & license
 
-[**OpenSCQ30**](https://github.com/Oppzippy/OpenSCQ30)
-[**GalaxyBudsClient**](https://github.com/timschneeb/GalaxyBudsClient)
-[**librepods**](https://github.com/librepods-org/librepods)
+[**OpenSCQ30**](https://github.com/Oppzippy/OpenSCQ30)  
+[**GalaxyBudsClient**](https://github.com/timschneeb/GalaxyBudsClient)  
+[**librepods**](https://github.com/librepods-org/librepods)  
 
 Licensed under **GPL-3.0** — see [`LICENSE`](LICENSE).
