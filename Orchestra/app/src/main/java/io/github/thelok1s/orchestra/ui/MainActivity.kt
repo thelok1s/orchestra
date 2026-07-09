@@ -15,7 +15,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.RepeatMode
@@ -91,6 +92,7 @@ import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.graphics.rememberGraphicsLayer
 import androidx.compose.ui.layout.boundsInRoot
@@ -98,6 +100,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
@@ -289,7 +292,16 @@ private fun BottomBlurStrip(contentLayer: GraphicsLayer, modifier: Modifier = Mo
     )
 }
 
-/** Detached, fully-rounded, elevated bottom nav (M3 Expressive floating pill). */
+/**
+ * Detached, fully-rounded, elevated bottom nav (M3 Expressive floating pill).
+ *
+ * One SHARED active indicator translates between slots (spring — retargeting mid-flight
+ * redirects with preserved velocity instead of restarting), while each item crossfades its
+ * outlined/filled icon and tints in lockstep with the 220ms screen crossfade. Frame-hot values
+ * are deferred out of composition: the pill offset via the lambda [offset] overload (layout
+ * phase) and icon alphas via [graphicsLayer] blocks (draw phase), so animation frames don't
+ * recompose the navbar tree at all.
+ */
 @Composable
 private fun FloatingNavBar(
     dest: Dest,
@@ -305,40 +317,76 @@ private fun FloatingNavBar(
             .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
             .fillMaxWidth(),
     ) {
-        Row(Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
-            Dest.entries.forEach { d ->
-                val selected = dest == d
-                val pill by animateColorAsState(
-                    if (selected) MaterialTheme.colorScheme.secondaryContainer else Color.Transparent,
-                    label = "navPill",
-                )
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .clickable(
-                            interactionSource = remember { MutableInteractionSource() },
-                            indication = null,
-                        ) { onSelect(d) },
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp),
-                ) {
-                    Box(
-                        Modifier.width(64.dp).height(32.dp).clip(CircleShape).background(pill),
-                        contentAlignment = Alignment.Center,
+        BoxWithConstraints(Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
+            val slot = maxWidth / Dest.entries.size
+            val indicatorX by animateDpAsState(
+                targetValue = slot * dest.ordinal + (slot - 64.dp) / 2,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+                label = "navPillX",
+            )
+            // The single moving pill, behind the items. Lambda offset = placement-only updates.
+            Box(
+                Modifier
+                    .offset { IntOffset(indicatorX.roundToPx(), 0) }
+                    .width(64.dp).height(32.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+            )
+            Row(Modifier.fillMaxWidth()) {
+                Dest.entries.forEach { d ->
+                    val selected = dest == d
+                    // 0 → 1 selection progress; duration matches the screen crossfade (220ms).
+                    val progress by animateFloatAsState(
+                        targetValue = if (selected) 1f else 0f,
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        label = "navSel",
+                    )
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { onSelect(d) },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
                     ) {
-                        Icon(
-                            if (selected) d.icon else d.iconOutlined,
-                            contentDescription = d.label,
-                            tint = if (selected) MaterialTheme.colorScheme.onSecondaryContainer
-                            else MaterialTheme.colorScheme.onSurfaceVariant,
+                        val tint = lerp(
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                            MaterialTheme.colorScheme.onSecondaryContainer,
+                            progress,
+                        )
+                        Box(
+                            Modifier.width(64.dp).height(32.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            // Outlined ↔ filled crossfade; alphas resolve at draw time.
+                            Icon(
+                                d.iconOutlined,
+                                contentDescription = d.label,
+                                tint = tint,
+                                modifier = Modifier.graphicsLayer { alpha = 1f - progress },
+                            )
+                            Icon(
+                                d.icon,
+                                contentDescription = null,
+                                tint = tint,
+                                modifier = Modifier.graphicsLayer { alpha = progress },
+                            )
+                        }
+                        Text(
+                            d.label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = lerp(
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                MaterialTheme.colorScheme.onSurface,
+                                progress,
+                            ),
                         )
                     }
-                    Text(
-                        d.label,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (selected) MaterialTheme.colorScheme.onSurface
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
         }
