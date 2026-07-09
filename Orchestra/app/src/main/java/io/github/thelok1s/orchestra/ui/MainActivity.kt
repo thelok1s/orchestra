@@ -17,7 +17,12 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -50,8 +55,10 @@ import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Extension
@@ -72,6 +79,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -404,6 +413,7 @@ internal fun btTech(context: Context): Pair<String, List<Pair<String, Boolean>>>
 
 // ---------- Status ----------
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun StatusScreen(refreshKey: Int) {
     val context = LocalContext.current
@@ -418,67 +428,176 @@ private fun StatusScreen(refreshKey: Int) {
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        StatusCard(
-            icon = if (moduleActive) Icons.Filled.Extension else Icons.Filled.Cancel,
-            statusColor = if (moduleActive) StatusGood else StatusBad,
-            title = "LSPosed module",
-            value = if (moduleActive)
-                (if (apiLevel > 0) "Active · API $apiLevel" else "Active")
-            else "Not active",
-            detail = if (moduleActive) "Hooks loaded — controls are live."
-            else "Enable Orchestra in LSPosed with scope: System UI, Settings, Orchestra. Then restart System UI."
-        )
-        StatusCard(
-            icon = if (bt) Icons.Filled.Bluetooth else Icons.Filled.BluetoothDisabled,
-            statusColor = if (bt) StatusGood else StatusIdle,
-            iconTint = if (bt) BluetoothBlue else null,
-            title = "Bluetooth",
-            value = if (bt) "On" else "Off",
-            detail = "${supported.count { it.connected }} of ${supported.size} supported device(s) connected."
-        )
-        StatusCard(
-            icon = Icons.Filled.Headphones,
-            statusColor = if (hookedCount > 0) StatusGood else StatusIdle,
-            title = "Hooked devices",
-            value = hookedCount.toString(),
-            detail = "Devices you've switched on in Devices. Each gets native controls."
-        )
+        Rise(0) { HeroCard(moduleActive, apiLevel, hookedCount) }
+
+        Rise(1) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StatTile(
+                    modifier = Modifier.weight(1f),
+                    icon = if (moduleActive) Icons.Filled.Extension else Icons.Filled.Cancel,
+                    iconTint = null,
+                    shape = MaterialShapes.Clover4Leaf.asShape(),
+                    label = "LSPosed module",
+                    value = if (moduleActive) "Active" else "Off",
+                    good = moduleActive,
+                )
+                StatTile(
+                    modifier = Modifier.weight(1f),
+                    icon = if (bt) Icons.Filled.Bluetooth else Icons.Filled.BluetoothDisabled,
+                    iconTint = if (bt) BluetoothBlue else null,
+                    shape = MaterialShapes.SoftBurst.asShape(),
+                    label = "${supported.count { it.connected }}/${supported.size} device(s) connected",
+                    value = if (bt) "On" else "Off",
+                    good = bt,
+                )
+            }
+        }
+
+        Rise(2) {
+            StatusCard(
+                icon = Icons.Filled.Headphones,
+                statusColor = if (hookedCount > 0) StatusGood else StatusIdle,
+                shape = MaterialShapes.Cookie4Sided.asShape(),
+                title = "Hooked devices",
+                value = hookedCount.toString(),
+                detail = "Devices you've switched on in Devices. Each gets native controls."
+            )
+        }
         // Android tile — tap to expand radio capabilities.
         var androidExpanded by rememberSaveable { mutableStateOf(false) }
-        StatusCard(
-            icon = Icons.Filled.Android,
-            statusColor = StatusGood,
-            iconTint = Color(0xFF3DDC84), // Android green
-            title = "Android",
-            value = "${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}",
-            detail = "Orchestra ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · tap for radio info",
-            onClick = { androidExpanded = !androidExpanded },
-            trailing = {
-                Icon(if (androidExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            },
-            expanded = androidExpanded,
-            expandedContent = {
-                Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(btVersion, style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    btTechList.forEach { (label, supp) ->
-                        Row(verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(
-                                if (supp) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
-                                contentDescription = null,
-                                tint = if (supp) StatusGood else MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(label, style = MaterialTheme.typography.bodyMedium,
-                                color = if (supp) MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.onSurfaceVariant)
+        Rise(3) {
+            StatusCard(
+                icon = Icons.Filled.Android,
+                statusColor = StatusGood,
+                shape = MaterialShapes.PixelCircle.asShape(),
+                iconTint = Color(0xFF3DDC84), // Android green
+                title = "Android",
+                value = "${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}",
+                detail = "Orchestra ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · tap for radio info",
+                onClick = { androidExpanded = !androidExpanded },
+                trailing = {
+                    Icon(if (androidExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                },
+                expanded = androidExpanded,
+                expandedContent = {
+                    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(btVersion, style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        btTechList.forEach { (label, supp) ->
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(
+                                    if (supp) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                    contentDescription = null,
+                                    tint = if (supp) StatusGood else MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(label, style = MaterialTheme.typography.bodyMedium,
+                                    color = if (supp) MaterialTheme.colorScheme.onSurface
+                                    else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }
-            }
+            )
+        }
+    }
+}
+
+/** Big "all systems go" hero: morphing cog badge + oversized decorative shape off the corner. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun HeroCard(moduleActive: Boolean, apiLevel: Int, hookedCount: Int) {
+    val container = if (moduleActive) MaterialTheme.colorScheme.primaryContainer
+    else MaterialTheme.colorScheme.errorContainer
+    val onContainer = if (moduleActive) MaterialTheme.colorScheme.onPrimaryContainer
+    else MaterialTheme.colorScheme.onErrorContainer
+    val accent = if (moduleActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+    val onAccent = if (moduleActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onError
+
+    // Slow breathe: gentle rotate + scale on the badge (design: orch-breathe 5s).
+    val breathe = rememberInfiniteTransition(label = "breathe")
+    val angle by breathe.animateFloat(0f, 180f,
+        infiniteRepeatable(tween(2500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "angle")
+    val scale by breathe.animateFloat(1f, 1.06f,
+        infiniteRepeatable(tween(2500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale")
+
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(container)) {
+        // Oversized decorative shape bleeding off the top-right corner.
+        Box(
+            Modifier.align(Alignment.TopEnd).offset(x = 38.dp, y = (-38).dp).size(150.dp)
+                .clip(MaterialShapes.Sunny.asShape())
+                .background(accent.copy(alpha = 0.22f))
         )
+        Row(
+            Modifier.padding(start = 22.dp, top = 22.dp, end = 22.dp, bottom = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(72.dp)
+                    .graphicsLayer { rotationZ = angle; scaleX = scale; scaleY = scale }
+                    .clip(MaterialShapes.Cookie12Sided.asShape())
+                    .background(accent),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (moduleActive) Icons.Filled.Check else Icons.Filled.Close,
+                    contentDescription = null, tint = onAccent, modifier = Modifier.size(36.dp),
+                )
+            }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    if (moduleActive) "All systems go" else "Module not active",
+                    style = MaterialTheme.typography.headlineSmall, color = onContainer,
+                )
+                Text(
+                    if (moduleActive) {
+                        val api = if (apiLevel > 0) " · API $apiLevel" else ""
+                        "Module active$api · $hookedCount device${if (hookedCount == 1) "" else "s"} hooked"
+                    } else {
+                        "Enable Orchestra in LSPosed with scope: System UI, Settings, Orchestra. " +
+                            "Then restart System UI."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = onContainer.copy(alpha = 0.78f),
+                )
+            }
+        }
+    }
+}
+
+/** Compact bento tile: big shape chip, bold value, small label. */
+@Composable
+private fun StatTile(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    iconTint: Color?,
+    shape: Shape,
+    label: String,
+    value: String,
+    good: Boolean,
+) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(20.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        val chipBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+            .compositeOver(MaterialTheme.colorScheme.surfaceContainerHighest)
+        val tint = iconTint
+            ?: if (good) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        ShapeChip(shape = shape, size = 52.dp, color = chipBg) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(26.dp))
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(value, style = MaterialTheme.typography.headlineSmall)
+            Text(label, style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -488,6 +607,7 @@ private fun StatusScreen(refreshKey: Int) {
 private fun StatusCard(
     icon: ImageVector,
     statusColor: Color,
+    shape: Shape,
     title: String,
     value: String,
     detail: String,
@@ -508,10 +628,9 @@ private fun StatusCard(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    Modifier.size(46.dp).clip(CircleShape).background(statusColor.copy(alpha = 0.20f)),
-                    contentAlignment = Alignment.Center
-                ) { Icon(icon, contentDescription = null, tint = iconTint ?: statusColor) }
+                ShapeChip(shape = shape, size = 48.dp, color = statusColor.copy(alpha = 0.20f)) {
+                    Icon(icon, contentDescription = null, tint = iconTint ?: statusColor)
+                }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(title, style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
