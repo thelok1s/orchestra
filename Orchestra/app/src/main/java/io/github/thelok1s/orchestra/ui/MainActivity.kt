@@ -644,14 +644,18 @@ private fun HeroCard(moduleActive: Boolean, hookedCount: Int) {
         infiniteRepeatable(tween(2500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale")
 
     Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(container)) {
-        // Oversized decorative shape bleeding off the top-right corner.
-        Box(
-            Modifier.align(Alignment.TopEnd).offset(x = 38.dp, y = (-38).dp).size(150.dp)
-                .clip(MaterialShapes.Sunny.asShape())
-                .background(accent.copy(alpha = 0.22f))
-        )
+        // Oversized decorative shape bleeding off the top-right corner. Wrapped in a
+        // matchParentSize box so its 150dp doesn't participate in the card's measurement —
+        // the card is sized by the content row alone.
+        Box(Modifier.matchParentSize()) {
+            Box(
+                Modifier.align(Alignment.TopEnd).offset(x = 38.dp, y = (-38).dp).size(150.dp)
+                    .clip(MaterialShapes.Sunny.asShape())
+                    .background(accent.copy(alpha = 0.22f))
+            )
+        }
         Row(
-            Modifier.padding(start = 22.dp, top = 22.dp, end = 22.dp, bottom = 24.dp),
+            Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
             horizontalArrangement = Arrangement.spacedBy(18.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -712,7 +716,6 @@ private fun StatTile(
         ShapeChip(shape = shape, size = 52.dp, color = chipBg) {
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(26.dp))
         }
-        Spacer(Modifier.weight(1f))
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(value, style = MaterialTheme.typography.headlineSmall)
             Text(label, style = MaterialTheme.typography.labelLarge,
