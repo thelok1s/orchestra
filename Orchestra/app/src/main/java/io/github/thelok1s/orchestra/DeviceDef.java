@@ -31,7 +31,6 @@ public final class DeviceDef {
 
     final String id;
     final String name;
-    public final String deviceType;
     // transport (back-compat: derived from default_channel for RfcommEngine)
     final String transportUuid;
     final boolean secure;
@@ -59,12 +58,11 @@ public final class DeviceDef {
         }
     }
 
-    private DeviceDef(String id, String name, String deviceType, int schemaVersion, int revision,
+    private DeviceDef(String id, String name, int schemaVersion, int revision,
                       Map<String, Channel> channels, String defaultChannel,
                       org.json.JSONObject platforms, List<Func> functions) {
         this.id = id;
         this.name = name;
-        this.deviceType = deviceType;
         this.schemaVersion = schemaVersion;
         this.revision = revision;
         this.channels = channels;
@@ -285,7 +283,7 @@ public final class DeviceDef {
         return out;
     }
 
-    public static DeviceDef loadById(String deviceId) {
+    static DeviceDef loadById(String deviceId) {
         if (deviceId == null || deviceId.isEmpty()) return null;
         try {
             String raw = DeviceStore.rawDeviceJson(deviceId);
@@ -314,28 +312,6 @@ public final class DeviceDef {
         String name = root.optString("name", id);
         int revision = root.optInt("revision", 1);
 
-        String deviceType = root.optString("device_type", root.optString("type", null));
-        if (deviceType == null) {
-            boolean hasTwsBattery = false;
-            JSONArray funcs = root.optJSONArray("functions");
-            if (funcs != null) {
-                for (int i = 0; i < funcs.length(); i++) {
-                    try {
-                        JSONObject fn = funcs.getJSONObject(i);
-                        if ("battery".equals(fn.optString("type")) && fn.has("battery_layout")) {
-                            hasTwsBattery = true;
-                            break;
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-            if (id != null && (id.contains("shokz") || id.contains("c600n") || id.contains("swim"))) {
-                deviceType = "earbuds";
-            } else {
-                deviceType = hasTwsBattery ? "earbuds_2" : "headphones";
-            }
-        }
-
         Map<String, Channel> channels = new LinkedHashMap<>();
         JSONObject chs = root.getJSONObject("channels");
         for (java.util.Iterator<String> it = chs.keys(); it.hasNext(); ) {
@@ -362,7 +338,7 @@ public final class DeviceDef {
                 }
             }
         }
-        return new DeviceDef(id, name, deviceType, schemaVersion, revision, channels, defaultChannel,
+        return new DeviceDef(id, name, schemaVersion, revision, channels, defaultChannel,
                 platforms, functions);
     }
 
