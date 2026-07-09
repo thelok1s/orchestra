@@ -1,18 +1,9 @@
 package io.github.thelok1s.orchestra;
 
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothSocket;
 import android.util.Log;
 
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Soundcore-style RFCOMM control. Framing (soundcore_v1), verified live on Space One Pro:
@@ -20,117 +11,15 @@ import java.util.concurrent.TimeUnit;
  *   device->host: 09 ff 00 00 01 <cmd:2> <len:2 LE> <payload..> <crc>
  * len = total packet byte count (LE); crc = sum(all preceding bytes) & 0xff.
  *
- * <p><b>Persistent control socket.</b> Each device keeps one pooled {@link Session} (opened on first
- * use, reused across set/read ops, idle-closed after {@link #IDLE_CLOSE_MS}). Every op runs under the
- * session's lock so the two callers (SettingProviderService's single-thread executor and
- * VolumeApplyReceiver's ad-hoc thread) can never interleave writes on one socket. A stale/dropped
- * socket is detected and one reconnect is retried — this removes the per-op connect that used to
- * fail when the device was mid-connection and added ~1s of latency to every tap.
+ * <p>The socket lifecycle (one pooled, serialized, reconnecting control socket per device) lives in
+ * {@link SppTransport}, shared with the other framed-over-RFCOMM engines (Shokz/Samsung/Bose).
  */
 final class RfcommEngine {
     private static final String TAG = DeviceDef.TAG;
     private static final byte[] CMD_PREFIX = {0x08, (byte) 0xee, 0x00, 0x00, 0x00};
     private static final byte[] RESP_PREFIX = {0x09, (byte) 0xff, 0x00, 0x00, 0x01};
-    private static final long IDLE_CLOSE_MS = 8000;
 
     private RfcommEngine() {}
-
-    // ---- persistent session pool ----
-
-    private static final Map<String, Session> SESSIONS = new ConcurrentHashMap<>();
-    private static final ScheduledExecutorService REAPER =
-            Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "rfcomm-reaper");
-                t.setDaemon(true);
-                return t;
-            });
-    static {
-        REAPER.scheduleWithFixedDelay(RfcommEngine::reap,
-                IDLE_CLOSE_MS, IDLE_CLOSE_MS, TimeUnit.MILLISECONDS);
-    }
-
-    /** One device's reused control socket. All access is under {@link #lock}. */
-    private static final class Session {
-        final String mac;
-        final Object lock = new Object();
-        BluetoothSocket socket;
-        InputStream in;
-        OutputStream out;
-        long lastUsed;
-        Session(String mac) { this.mac = mac; }
-    }
-
-    private interface SocketOp<T> {
-        T run(InputStream in, OutputStream out) throws Exception;
-    }
-
-    /**
-     * Run {@code op} on the device's pooled socket, opening/reconnecting as needed. Returns
-     * {@code fail} if the op can't run (e.g. device unreachable) after one reconnect attempt.
-     * A null/false-style result returned BY the op is a valid result and is not retried.
-     */
-    private static <T> T withSession(BluetoothAdapter adapter, String mac, DeviceDef def,
-                                     T fail, SocketOp<T> op) {
-        String key = mac.toUpperCase();
-        Session s = SESSIONS.computeIfAbsent(key, Session::new);
-        synchronized (s.lock) {
-            for (int attempt = 0; attempt < 2; attempt++) {
-                try {
-                    ensureOpen(adapter, mac, def, s);
-                    T result = op.run(s.in, s.out);
-                    s.lastUsed = System.currentTimeMillis();
-                    return result;
-                } catch (Exception e) {
-                    Log.w(TAG, "session op failed for " + key + " (attempt " + attempt + "): " + e);
-                    Logbook.add("RFCOMM " + key + " failed (try " + attempt + "): " + e);
-                    closeSession(s); // discard; the next attempt reconnects fresh
-                }
-            }
-            return fail;
-        }
-    }
-
-    /** Caller must hold {@code s.lock}. Opens the socket if absent/disconnected. */
-    private static void ensureOpen(BluetoothAdapter adapter, String mac, DeviceDef def, Session s)
-            throws Exception {
-        if (s.socket != null && s.socket.isConnected()) return;
-        closeSession(s);
-        BluetoothSocket sock = connect(adapter, mac, def);
-        s.socket = sock;
-        s.in = sock.getInputStream();
-        s.out = sock.getOutputStream();
-        s.lastUsed = System.currentTimeMillis();
-        Log.i(TAG, "session opened for " + mac);
-        Logbook.add("RFCOMM connected " + mac);
-    }
-
-    /** Caller must hold {@code s.lock}. */
-    private static void closeSession(Session s) {
-        closeQuietly(s.socket);
-        s.socket = null;
-        s.in = null;
-        s.out = null;
-    }
-
-    private static void reap() {
-        long now = System.currentTimeMillis();
-        for (Session s : SESSIONS.values()) {
-            synchronized (s.lock) {
-                if (s.socket != null && now - s.lastUsed > IDLE_CLOSE_MS) {
-                    closeSession(s);
-                    Log.i(TAG, "session idle-closed for " + s.mac);
-                }
-            }
-        }
-    }
-
-    /** Discard any buffered inbound bytes so a stale ACK can't pollute the next read. */
-    private static void drain(InputStream in) throws Exception {
-        byte[] junk = new byte[256];
-        while (in.available() > 0) {
-            if (in.read(junk) <= 0) break;
-        }
-    }
 
     // ---- framing ----
 
@@ -152,17 +41,6 @@ final class RfcommEngine {
         return frame;
     }
 
-    /** Open an (insecure) RFCOMM socket to the device's control UUID. */
-    static BluetoothSocket connect(BluetoothAdapter adapter, String mac, DeviceDef def) throws Exception {
-        BluetoothDevice device = adapter.getRemoteDevice(mac.toUpperCase());
-        UUID uuid = UUID.fromString(def.transportUuid);
-        BluetoothSocket socket = def.secure
-                ? device.createRfcommSocketToServiceRecord(uuid)
-                : device.createInsecureRfcommSocketToServiceRecord(uuid);
-        socket.connect();
-        return socket;
-    }
-
     // ---- set / read (multitoggle) ----
 
     /** Send a set command for the chosen option id of the default (ANC) function. */
@@ -178,13 +56,13 @@ final class RfcommEngine {
         if (valueHex == null) { Log.w(TAG, "no option_value for " + optId); return false; }
         String payload = f.payloadTemplate.replace("{mode}", valueHex);
         final byte[] frame = buildFrame(f.setCommand, payload);
-        return Boolean.TRUE.equals(withSession(adapter, mac, def, Boolean.FALSE, (in, out) -> {
+        return Boolean.TRUE.equals(SppTransport.withSession(adapter, mac, def, Boolean.FALSE, (in, out) -> {
             Log.i(TAG, "TX set " + optId + ": " + hex(frame));
             Logbook.add("set " + f.id + " → " + optId + "  (" + hex(frame) + ")");
             out.write(frame);
             out.flush();
             try { Thread.sleep(300); } catch (InterruptedException ignored) {}
-            drain(in); // consume the ACK so it doesn't leak into a later read
+            SppTransport.drain(in); // consume the ACK so it doesn't leak into a later read
             return Boolean.TRUE;
         }));
     }
@@ -197,8 +75,8 @@ final class RfcommEngine {
     static String sendRaw(BluetoothAdapter adapter, String mac, DeviceDef def,
                           String cmdHex, String payloadHex) {
         final byte[] frame = buildFrame(cmdHex, payloadHex);
-        return withSession(adapter, mac, def, null, (in, out) -> {
-            drain(in);
+        return SppTransport.withSession(adapter, mac, def, null, (in, out) -> {
+            SppTransport.drain(in);
             Log.i(TAG, "TX raw " + cmdHex + " " + (payloadHex == null ? "" : payloadHex) + ": " + hex(frame));
             out.write(frame);
             out.flush();
@@ -237,39 +115,22 @@ final class RfcommEngine {
         if (f == null || f.readCommand == null) return null;
         final boolean useMatch = !f.readMatch.isEmpty();
         final int needIdx = useMatch ? maxMatchIndex(f) : f.stateByteIndex;
-        final byte[] frame = buildFrame(f.readCommand, null);
-        return withSession(adapter, mac, def, null, (in, out) -> {
-            drain(in); // clear any stale bytes before issuing our request
-            out.write(frame);
-            out.flush();
-
-            byte[] acc = new byte[1024];
-            int len = 0;
-            long deadline = System.currentTimeMillis() + 2000;
-            byte[] buf = new byte[512];
-            while (System.currentTimeMillis() < deadline && len < acc.length) {
-                if (in.available() > 0) {
-                    int n = in.read(buf);
-                    if (n < 0) break;
-                    int copy = Math.min(n, acc.length - len);
-                    System.arraycopy(buf, 0, acc, len, copy);
-                    len += copy;
-                    int s = findResponseStart(acc, len, f.readCommand);
-                    if (s >= 0 && s + needIdx < len) break; // got the packet + the bytes we need
-                } else {
-                    try { Thread.sleep(50); } catch (InterruptedException ignored) {}
-                }
-            }
-            int s = findResponseStart(acc, len, f.readCommand);
-            if (s < 0) { Log.w(TAG, "no state packet (got " + len + " bytes)"); return null; }
+        final String readCommand = f.readCommand;
+        final byte[] frame = buildFrame(readCommand, null);
+        return SppTransport.withSession(adapter, mac, def, null, (in, out) -> {
+            SppTransport.Rx rx = SppTransport.sendAndAwait(in, out, frame, 2000, (acc, len) -> {
+                int s = findResponseStart(acc, len, readCommand);
+                return (s >= 0 && s + needIdx < len) ? s : -1; // packet + the bytes we need have arrived
+            });
+            if (rx == null) { Log.w(TAG, "no state packet"); return null; }
             String optId;
             if (useMatch) {
-                optId = matchOption(acc, len, s, f);
+                optId = matchOption(rx.buf, rx.len, rx.start, f);
                 Log.i(TAG, "readMode (match) -> " + optId);
             } else {
-                int idx = s + f.stateByteIndex;
-                if (idx >= len) { Log.w(TAG, "state byte beyond packet"); return null; }
-                String valHex = String.format("%02x", acc[idx] & 0xff);
+                int idx = rx.start + f.stateByteIndex;
+                if (idx >= rx.len) { Log.w(TAG, "state byte beyond packet"); return null; }
+                String valHex = String.format("%02x", rx.buf[idx] & 0xff);
                 optId = f.valueMap.get(valHex);
                 Log.i(TAG, "readMode value=" + valHex + " -> " + optId);
             }
@@ -293,13 +154,13 @@ final class RfcommEngine {
                               DeviceDef.Func f, int value) {
         final byte[] frame = levelFrame(f, value);
         if (frame == null) return false;
-        return Boolean.TRUE.equals(withSession(adapter, mac, def, Boolean.FALSE, (in, out) -> {
+        return Boolean.TRUE.equals(SppTransport.withSession(adapter, mac, def, Boolean.FALSE, (in, out) -> {
             Log.i(TAG, "TX level " + f.id + "=" + value + ": " + hex(frame));
             Logbook.add("level " + f.id + " → " + value + "  (" + hex(frame) + ")");
             out.write(frame);
             out.flush();
             try { Thread.sleep(300); } catch (InterruptedException ignored) {}
-            drain(in);
+            SppTransport.drain(in);
             return Boolean.TRUE;
         }));
     }
@@ -323,33 +184,17 @@ final class RfcommEngine {
      */
     static Integer readLevel(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f) {
         if (f == null || f.readCommand == null || f.stateByteIndex < 0) return null;
-        final byte[] frame = buildFrame(f.readCommand, null);
-        return withSession(adapter, mac, def, null, (in, out) -> {
-            drain(in);
-            out.write(frame);
-            out.flush();
-            byte[] acc = new byte[1024];
-            int len = 0;
-            long deadline = System.currentTimeMillis() + 2000;
-            byte[] buf = new byte[512];
-            while (System.currentTimeMillis() < deadline && len < acc.length) {
-                if (in.available() > 0) {
-                    int n = in.read(buf);
-                    if (n < 0) break;
-                    int copy = Math.min(n, acc.length - len);
-                    System.arraycopy(buf, 0, acc, len, copy);
-                    len += copy;
-                    int s = findResponseStart(acc, len, f.readCommand);
-                    if (s >= 0 && s + f.stateByteIndex < len) break;
-                } else {
-                    try { Thread.sleep(50); } catch (InterruptedException ignored) {}
-                }
-            }
-            int s = findResponseStart(acc, len, f.readCommand);
-            if (s < 0) return null;
-            int idx = s + f.stateByteIndex;
-            if (idx >= len) return null;
-            return acc[idx] & 0xff;
+        final String readCommand = f.readCommand;
+        final int sbi = f.stateByteIndex;
+        final byte[] frame = buildFrame(readCommand, null);
+        return SppTransport.withSession(adapter, mac, def, null, (in, out) -> {
+            SppTransport.Rx rx = SppTransport.sendAndAwait(in, out, frame, 2000, (acc, len) -> {
+                int s = findResponseStart(acc, len, readCommand);
+                return (s >= 0 && s + sbi < len) ? s : -1;
+            });
+            if (rx == null) return null;
+            int v = rx.at(sbi);
+            return v >= 0 ? v : null;
         });
     }
 
@@ -364,13 +209,13 @@ final class RfcommEngine {
         String template = f.payloadTemplate != null ? f.payloadTemplate : "{state}";
         String payload = template.replace("{state}", valueHex);
         final byte[] frame = buildFrame(f.setCommand, payload);
-        return Boolean.TRUE.equals(withSession(adapter, mac, def, Boolean.FALSE, (in, out) -> {
+        return Boolean.TRUE.equals(SppTransport.withSession(adapter, mac, def, Boolean.FALSE, (in, out) -> {
             Log.i(TAG, "TX toggle " + f.id + "=" + on + ": " + hex(frame));
             Logbook.add("toggle " + f.id + " → " + (on ? "on" : "off") + "  (" + hex(frame) + ")");
             out.write(frame);
             out.flush();
             try { Thread.sleep(300); } catch (InterruptedException ignored) {}
-            drain(in);
+            SppTransport.drain(in);
             return Boolean.TRUE;
         }));
     }
@@ -388,7 +233,6 @@ final class RfcommEngine {
         return "on".equalsIgnoreCase(optId);
     }
 
-    /** Locate the response packet for the read command and return absolute index of the state byte. */
     /** Absolute index where the response packet for {@code readCommand} starts, or -1. */
     private static int findResponseStart(byte[] acc, int len, String readCommand) {
         byte[] cmd = unhex(readCommand);
@@ -404,13 +248,6 @@ final class RfcommEngine {
             if (match) return s;
         }
         return -1;
-    }
-
-    private static int findStateByte(byte[] acc, int len, DeviceDef.Func f) {
-        int s = findResponseStart(acc, len, f.readCommand);
-        if (s < 0) return -1;
-        int idx = s + f.stateByteIndex;
-        return idx < len ? idx : -1;
     }
 
     /** Highest byte offset referenced by any match rule (so we know when enough has arrived). */
@@ -439,8 +276,4 @@ final class RfcommEngine {
     static byte[] unhex(String s) { return HexUtil.unhex(s); }
 
     static String hex(byte[] a) { return HexUtil.hex(a); }
-
-    private static void closeQuietly(BluetoothSocket s) {
-        try { if (s != null) s.close(); } catch (Exception ignored) {}
-    }
 }

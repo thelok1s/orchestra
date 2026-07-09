@@ -160,11 +160,67 @@ public interface ControlEngine {
         @Override public void unregisterListener(String mac, String key) { /* no-op */ }
     };
 
+    /** Samsung Galaxy Buds "samsung_v1" SPP framing (see {@link SamsungEngine}). */
+    ControlEngine SAMSUNG = new ControlEngine() {
+        public boolean applyMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, String optId) {
+            return SamsungEngine.applyMode(a, mac, def, f, optId);
+        }
+        public String readMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return SamsungEngine.readMode(a, mac, def, f);
+        }
+        public boolean applyToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, boolean on) {
+            return SamsungEngine.applyToggle(a, mac, def, f, on);
+        }
+        public Boolean readToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return SamsungEngine.readToggle(a, mac, def, f);
+        }
+        @Override public String readInfo(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return null;
+        }
+        @Override public boolean applyLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, int value) {
+            return SamsungEngine.applyLevel(a, mac, def, f, value);
+        }
+        @Override public Integer readLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return SamsungEngine.readLevel(a, mac, def, f);
+        }
+        @Override public void registerListener(String mac, String key, Runnable onChange) { /* no push channel */ }
+        @Override public void unregisterListener(String mac, String key) { /* no-op */ }
+    };
+
+    /** Bose BMAP "bose_v1" SPP framing (see {@link BoseEngine}). */
+    ControlEngine BOSE = new ControlEngine() {
+        public boolean applyMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, String optId) {
+            return BoseEngine.applyMode(a, mac, def, f, optId);
+        }
+        public String readMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return BoseEngine.readMode(a, mac, def, f);
+        }
+        public boolean applyToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, boolean on) {
+            return BoseEngine.applyToggle(a, mac, def, f, on);
+        }
+        public Boolean readToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return BoseEngine.readToggle(a, mac, def, f);
+        }
+        @Override public String readInfo(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return null;
+        }
+        @Override public boolean applyLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, int value) {
+            return BoseEngine.applyLevel(a, mac, def, f, value);
+        }
+        @Override public Integer readLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return BoseEngine.readLevel(a, mac, def, f);
+        }
+        @Override public void registerListener(String mac, String key, Runnable onChange) { /* no push channel */ }
+        @Override public void unregisterListener(String mac, String key) { /* no-op */ }
+    };
+
     /** @return the engine for a transport/framing key, or null if this app build can't drive it. */
     static ControlEngine forTransport(String transport) {
         if ("rfcomm".equals(transport)) return RFCOMM;
         if ("aacp".equals(transport)) return AACP;
         if ("shokz_v1".equals(transport)) return SHOKZ;
+        if ("samsung_v1".equals(transport)) return SAMSUNG;
+        if ("bose_v1".equals(transport)) return BOSE;
         return null;
     }
 

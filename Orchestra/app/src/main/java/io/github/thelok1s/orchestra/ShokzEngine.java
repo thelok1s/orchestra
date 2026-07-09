@@ -1,18 +1,8 @@
 package io.github.thelok1s.orchestra;
 
 import android.bluetooth.BluetoothAdapter;
-import android.bluetooth.BluetoothDevice;
-import android.bluetooth.BluetoothSocket;
 import android.util.Log;
 
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.Map;
-import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -44,11 +34,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * engineered, add it here and populate the manifest {@code read} blocks.
  *
  * <p>Connections are pooled (one reused socket per MAC), with a single reconnect retry per op and
- * idle reaping after {@link #IDLE_CLOSE_MS}.
+ * idle reaping handled by SppTransport.
  */
 final class ShokzEngine {
     private static final String TAG = DeviceDef.TAG;
-    private static final long IDLE_CLOSE_MS = 8_000;
 
     // Offsets of the per-command checksum (zeroed when we patch a frame; device ignores it).
     private static final int CKSUM_OFF_A = 14; // FORMAT A: 2 bytes at [14:16]
@@ -59,90 +48,7 @@ final class ShokzEngine {
 
     private ShokzEngine() {}
 
-    // ---- session pool ----
-
-    private static final Map<String, Session> SESSIONS = new ConcurrentHashMap<>();
-    private static final ScheduledExecutorService REAPER =
-            Executors.newSingleThreadScheduledExecutor(r -> {
-                Thread t = new Thread(r, "shokz-reaper");
-                t.setDaemon(true);
-                return t;
-            });
-    static {
-        REAPER.scheduleWithFixedDelay(ShokzEngine::reap,
-                IDLE_CLOSE_MS, IDLE_CLOSE_MS, TimeUnit.MILLISECONDS);
-    }
-
-    private static final class Session {
-        final String mac;
-        final Object lock = new Object();
-        BluetoothSocket socket;
-        InputStream in;
-        OutputStream out;
-        long lastUsed;
-        Session(String mac) { this.mac = mac; }
-    }
-
-    private interface SocketOp<T> {
-        T run(InputStream in, OutputStream out) throws Exception;
-    }
-
-    private static <T> T withSession(BluetoothAdapter adapter, String mac, DeviceDef def,
-                                     T fail, SocketOp<T> op) {
-        String key = mac.toUpperCase();
-        Session s = SESSIONS.computeIfAbsent(key, Session::new);
-        synchronized (s.lock) {
-            for (int attempt = 0; attempt < 2; attempt++) {
-                try {
-                    ensureOpen(adapter, mac, def, s);
-                    T result = op.run(s.in, s.out);
-                    s.lastUsed = System.currentTimeMillis();
-                    return result;
-                } catch (Exception e) {
-                    Log.w(TAG, "[Shokz] session op failed for " + key
-                            + " (attempt " + attempt + "): " + e);
-                    Logbook.add("[Shokz] " + key + " failed (try " + attempt + "): " + e);
-                    closeSession(s);
-                }
-            }
-            return fail;
-        }
-    }
-
-    private static void ensureOpen(BluetoothAdapter adapter, String mac, DeviceDef def, Session s)
-            throws Exception {
-        if (s.socket != null && s.socket.isConnected()) return;
-        closeSession(s);
-        BluetoothDevice device = adapter.getRemoteDevice(mac.toUpperCase());
-        UUID uuid = UUID.fromString(def.transportUuid);
-        BluetoothSocket sock = def.secure
-                ? device.createRfcommSocketToServiceRecord(uuid)
-                : device.createInsecureRfcommSocketToServiceRecord(uuid);
-        sock.connect();
-        s.socket = sock;
-        s.in     = sock.getInputStream();
-        s.out    = sock.getOutputStream();
-        s.lastUsed = System.currentTimeMillis();
-        Log.i(TAG, "[Shokz] session opened for " + mac);
-        Logbook.add("[Shokz] connected " + mac);
-    }
-
-    private static void closeSession(Session s) {
-        try { if (s.socket != null) s.socket.close(); } catch (Exception ignored) {}
-        s.socket = null; s.in = null; s.out = null;
-    }
-
-    private static void reap() {
-        long now = System.currentTimeMillis();
-        for (Session s : SESSIONS.values()) {
-            synchronized (s.lock) {
-                if (s.socket != null && now - s.lastUsed > IDLE_CLOSE_MS) {
-                    closeSession(s);
-                    Log.i(TAG, "[Shokz] idle-closed " + s.mac);
-                }
-            }
-        }
-    }
+    // Socket lifecycle (pool, reconnect, drain) lives in SppTransport, shared across engines.
 
     // ---- frame send ----
 
@@ -151,14 +57,14 @@ final class ShokzEngine {
                                 byte[] frame, String logWhat) {
         if (frame == null || frame.length < 3) return false;
         frame[2] = (byte) (SEQ.getAndIncrement() & 0xff); // rolling per-send seq (device ignores value)
-        return Boolean.TRUE.equals(withSession(adapter, mac, def, Boolean.FALSE, (in, out) -> {
+        return Boolean.TRUE.equals(SppTransport.withSession(adapter, mac, def, Boolean.FALSE, (in, out) -> {
             Log.i(TAG, "[Shokz] TX " + logWhat + ": " + HexUtil.hex(frame));
             Logbook.add("[Shokz] " + logWhat);
-            drain(in);
+            SppTransport.drain(in);
             out.write(frame);
             out.flush();
             try { Thread.sleep(120); } catch (InterruptedException ignored) {}
-            drain(in); // absorb any ACK; we do not parse it (no confirmed response layout)
+            SppTransport.drain(in); // absorb any ACK; we do not parse it (no confirmed response layout)
             return Boolean.TRUE;
         }));
     }
@@ -251,8 +157,8 @@ final class ShokzEngine {
      */
     static String sendRaw(BluetoothAdapter adapter, String mac, DeviceDef def, String hexFrame) {
         final byte[] frame = HexUtil.unhex(hexFrame);
-        return withSession(adapter, mac, def, null, (in, out) -> {
-            drain(in);
+        return SppTransport.withSession(adapter, mac, def, null, (in, out) -> {
+            SppTransport.drain(in);
             out.write(frame);
             out.flush();
             try { Thread.sleep(400); } catch (InterruptedException ignored) {}
@@ -305,10 +211,4 @@ final class ShokzEngine {
         }
     }
 
-    private static void drain(InputStream in) throws Exception {
-        byte[] junk = new byte[512];
-        while (in.available() > 0) {
-            if (in.read(junk) <= 0) break;
-        }
-    }
 }
