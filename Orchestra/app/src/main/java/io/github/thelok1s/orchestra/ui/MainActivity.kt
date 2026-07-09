@@ -70,14 +70,14 @@ import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Speaker
-import androidx.compose.material.icons.filled.Hearing
+import androidx.compose.material.icons.filled.EarbudsBattery
 import androidx.compose.material.icons.filled.Earbuds
 import androidx.compose.material.icons.filled.HeadsetMic
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Speaker
-import androidx.compose.material.icons.outlined.Hearing
+import androidx.compose.material.icons.outlined.EarbudsBattery
 import androidx.compose.material.icons.outlined.Earbuds
 import androidx.compose.material.icons.outlined.HeadsetMic
 import androidx.compose.material3.*
@@ -500,16 +500,16 @@ private fun iconForDevice(deviceId: String, filled: Boolean): androidx.compose.u
     return if (filled) {
         when (type) {
             "speaker" -> Icons.Filled.Speaker
-            "earbuds" -> Icons.Filled.Hearing
-            "earbuds_2" -> Icons.Filled.Earbuds
+            "earbuds" -> Icons.Filled.Earbuds
+            "earbuds_2" -> Icons.Filled.EarbudsBattery
             "headset_mic" -> Icons.Filled.HeadsetMic
             else -> Icons.Filled.Headphones
         }
     } else {
         when (type) {
             "speaker" -> Icons.Outlined.Speaker
-            "earbuds" -> Icons.Outlined.Hearing
-            "earbuds_2" -> Icons.Outlined.Earbuds
+            "earbuds" -> Icons.Outlined.Earbuds
+            "earbuds_2" -> Icons.Outlined.EarbudsBattery
             "headset_mic" -> Icons.Outlined.HeadsetMic
             else -> Icons.Outlined.Headphones
         }
