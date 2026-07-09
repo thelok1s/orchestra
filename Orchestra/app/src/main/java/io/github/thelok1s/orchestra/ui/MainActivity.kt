@@ -497,7 +497,7 @@ private fun StatusScreen(refreshKey: Int) {
             .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 108.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Rise(0) { HeroCard(moduleActive, apiLevel, hookedCount) }
+        Rise(0) { HeroCard(moduleActive, hookedCount) }
 
         Rise(1) {
             Row(
@@ -509,7 +509,7 @@ private fun StatusScreen(refreshKey: Int) {
                     icon = if (moduleActive) Icons.Filled.Extension else Icons.Filled.Cancel,
                     iconTint = null,
                     shape = MaterialShapes.Clover4Leaf.asShape(),
-                    label = "LSPosed module",
+                    label = if (apiLevel > 0) "LSPosed · API $apiLevel" else "LSPosed module",
                     value = if (moduleActive) "Active" else "Off",
                     good = moduleActive,
                 )
@@ -517,7 +517,7 @@ private fun StatusScreen(refreshKey: Int) {
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     icon = if (bt) Icons.Filled.Bluetooth else Icons.Filled.BluetoothDisabled,
                     iconTint = if (bt) BluetoothBlue else null,
-                    shape = MaterialShapes.SoftBurst.asShape(),
+                    shape = MaterialShapes.Pill.asShape(),
                     label = "${supported.count { it.connected }}/${supported.size} device(s) connected",
                     value = if (bt) "On" else "Off",
                     good = bt,
@@ -580,7 +580,7 @@ private fun StatusScreen(refreshKey: Int) {
 /** Big "all systems go" hero: morphing cog badge + oversized decorative shape off the corner. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun HeroCard(moduleActive: Boolean, apiLevel: Int, hookedCount: Int) {
+private fun HeroCard(moduleActive: Boolean, hookedCount: Int) {
     val container = if (moduleActive) MaterialTheme.colorScheme.primaryContainer
     else MaterialTheme.colorScheme.errorContainer
     val onContainer = if (moduleActive) MaterialTheme.colorScheme.onPrimaryContainer
@@ -626,8 +626,7 @@ private fun HeroCard(moduleActive: Boolean, apiLevel: Int, hookedCount: Int) {
                 )
                 Text(
                     if (moduleActive) {
-                        val api = if (apiLevel > 0) " · API $apiLevel" else ""
-                        "Module active$api · $hookedCount device${if (hookedCount == 1) "" else "s"} hooked"
+                        "Module active · $hookedCount device${if (hookedCount == 1) "" else "s"} hooked"
                     } else {
                         "Enable Orchestra in LSPosed with scope: System UI, Settings, Orchestra. " +
                             "Then restart System UI."
