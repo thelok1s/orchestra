@@ -77,7 +77,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.compositeOver
@@ -86,6 +85,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import io.github.thelok1s.orchestra.BuildConfig
 import io.github.thelok1s.orchestra.DeviceStore
@@ -1141,52 +1141,116 @@ private fun AvailableRow(
 
 // ---------- Settings ----------
 
-@Composable
-private fun SettingsScreen(onOpenDebug: () -> Unit) {
-    var tick by remember { mutableStateOf(0) }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        SectionHeader("Display", "")
-        SettingToggle("Show device statuses", "Battery and connection on each device card",
-            DeviceStore.flag(FLAG_STATUSES, true)) { DeviceStore.setFlag(FLAG_STATUSES, it); tick++ }
+/** Connected-corner position of a row within its settings group. */
+private enum class RowPos { Single, First, Middle, Last }
 
-        SectionHeader("Bluetooth identity", "")
-        SettingToggle("Act as Apple device",
-            "Advertise the phone as Apple so AirPods stay connected to it and other devices at " +
-                "once. Takes effect after Bluetooth is restarted. While on, the phone identifies " +
-                "as Apple to all Bluetooth devices.",
-            DeviceStore.flag(FLAG_ACT_AS_APPLE, false)) { DeviceStore.setFlag(FLAG_ACT_AS_APPLE, it); tick++ }
-
-        SectionHeader("Debug", "")
-        SettingToggle("Show unverified controls", "Reveal controls whose bytes aren't hardware-confirmed",
-            DeviceStore.flag(FLAG_UNVERIFIED, false)) { DeviceStore.setFlag(FLAG_UNVERIFIED, it); tick++ }
-        SettingToggle("Show in-app-only controls", "Controls with no native page surface (sliders, composite)",
-            DeviceStore.flag(FLAG_INAPP, false)) { DeviceStore.setFlag(FLAG_INAPP, it); tick++ }
-        SettingToggle("Show device MAC", "Display the Bluetooth address on device cards",
-            DeviceStore.flag(FLAG_MAC, false)) { DeviceStore.setFlag(FLAG_MAC, it); tick++ }
-        ListItem(
-            modifier = Modifier.clickable { onOpenDebug() },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            leadingContent = { Icon(Icons.Filled.BugReport, contentDescription = null) },
-            headlineContent = { Text("Debug & logs") },
-            supportingContent = { Text("Live event log, catalog and runtime info") },
-            trailingContent = { Icon(Icons.Filled.ExpandMore, contentDescription = null,
-                modifier = Modifier.rotate(-90f)) }
-        )
-        if (tick < 0) Text("")
+private fun rowShape(pos: RowPos): RoundedCornerShape {
+    val o = 28.dp
+    val i = 6.dp
+    return when (pos) {
+        RowPos.Single -> RoundedCornerShape(o)
+        RowPos.First -> RoundedCornerShape(o, o, i, i)
+        RowPos.Middle -> RoundedCornerShape(i)
+        RowPos.Last -> RoundedCornerShape(i, i, o, o)
     }
 }
 
 @Composable
-private fun SettingToggle(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    ListItem(
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        headlineContent = { Text(title) },
-        supportingContent = { Text(subtitle) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onChange) }
-    )
+private fun SettingsScreen(onOpenDebug: () -> Unit) {
+    var tick by remember { mutableStateOf(0) }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(26.dp)
+    ) {
+        SettingsGroup(null) {
+            SettingToggle("Show device statuses", "Battery and connection on each device card",
+                RowPos.Single,
+                DeviceStore.flag(FLAG_STATUSES, true)) { DeviceStore.setFlag(FLAG_STATUSES, it); tick++ }
+        }
+
+        SettingsGroup("Bluetooth identity") {
+            SettingToggle("Act as Apple device",
+                "Advertise the phone as Apple so AirPods stay connected to it and other devices at " +
+                    "once. Takes effect after Bluetooth is restarted. While on, the phone identifies " +
+                    "as Apple to all Bluetooth devices.",
+                RowPos.Single,
+                DeviceStore.flag(FLAG_ACT_AS_APPLE, false)) { DeviceStore.setFlag(FLAG_ACT_AS_APPLE, it); tick++ }
+        }
+
+        SettingsGroup("Debug") {
+            SettingToggle("Show unverified controls", "Reveal controls whose bytes aren't hardware-confirmed",
+                RowPos.First,
+                DeviceStore.flag(FLAG_UNVERIFIED, false)) { DeviceStore.setFlag(FLAG_UNVERIFIED, it); tick++ }
+            SettingToggle("Show in-app-only controls", "Controls with no native page surface (sliders, composite)",
+                RowPos.Middle,
+                DeviceStore.flag(FLAG_INAPP, false)) { DeviceStore.setFlag(FLAG_INAPP, it); tick++ }
+            SettingToggle("Show device MAC", "Display the Bluetooth address on device cards",
+                RowPos.Middle,
+                DeviceStore.flag(FLAG_MAC, false)) { DeviceStore.setFlag(FLAG_MAC, it); tick++ }
+            SettingNav("Debug & logs", "Live event log, catalog and runtime info",
+                RowPos.Last, onOpenDebug)
+        }
+        if (tick < 0) Text("")
+    }
+}
+
+/** Titled group of connected settings rows (primary-colored header, 3dp inner gaps). */
+@Composable
+private fun SettingsGroup(title: String?, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        if (title != null) {
+            Text(title, style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 6.dp, bottom = 13.dp))
+        }
+        content()
+    }
+}
+
+@Composable
+private fun SettingRowScaffold(
+    title: String,
+    subtitle: String,
+    pos: RowPos,
+    onClick: (() -> Unit)?,
+    trailing: @Composable () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(rowShape(pos))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(horizontal = 22.dp, vertical = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge.copy(
+                fontSize = 20.sp, lineHeight = 26.sp))
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        trailing()
+    }
+}
+
+@Composable
+private fun SettingToggle(
+    title: String, subtitle: String, pos: RowPos,
+    checked: Boolean, onChange: (Boolean) -> Unit,
+) {
+    SettingRowScaffold(title, subtitle, pos, onClick = { onChange(!checked) }) {
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+private fun SettingNav(title: String, subtitle: String, pos: RowPos, onClick: () -> Unit) {
+    SettingRowScaffold(title, subtitle, pos, onClick = onClick) {
+        Icon(Icons.Filled.ChevronRight, contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 // ---------- Debug screen ----------
