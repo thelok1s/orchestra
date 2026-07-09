@@ -15,8 +15,15 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -29,6 +36,7 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -48,8 +56,10 @@ import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.BugReport
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Extension
@@ -59,19 +69,40 @@ import androidx.compose.material.icons.filled.Headphones
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Tune
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.Headphones
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.BlurEffect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.TileMode
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.layer.GraphicsLayer
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.layer.drawLayer
+import androidx.compose.ui.graphics.rememberGraphicsLayer
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import io.github.thelok1s.orchestra.BuildConfig
 import io.github.thelok1s.orchestra.DeviceStore
@@ -123,10 +154,10 @@ private const val FLAG_INAPP = "show_inapp"
 private const val FLAG_MAC = "show_mac"
 private const val FLAG_ACT_AS_APPLE = "act_as_apple"
 
-private enum class Dest(val label: String, val icon: ImageVector) {
-    STATUS("Status", Icons.Filled.CheckCircle),
-    DEVICES("Devices", Icons.Filled.Headphones),
-    SETTINGS("Settings", Icons.Filled.Tune),
+private enum class Dest(val label: String, val icon: ImageVector, val iconOutlined: ImageVector) {
+    STATUS("Status", Icons.Filled.CheckCircle, Icons.Outlined.CheckCircle),
+    DEVICES("Devices", Icons.Filled.Headphones, Icons.Outlined.Headphones),
+    SETTINGS("Settings", Icons.Filled.Tune, Icons.Outlined.Tune),
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
@@ -158,19 +189,14 @@ fun OrchestraApp(refreshKey: Int) {
             DeviceControlsScreen(opened, onBack = { openDeviceMac = null })
         } else {
             Box(Modifier.fillMaxSize()) {
+                // Screen content is recorded into a layer so the floating nav bar can re-draw a
+                // blurred copy of whatever scrolls beneath it (backdrop blur, no library).
+                val contentLayer = rememberGraphicsLayer()
                 Scaffold(
                     topBar = { TopAppBar(title = { Text("Orchestra") }) },
-                    bottomBar = {
-                        NavigationBar {
-                            Dest.entries.forEach { d ->
-                                NavigationBarItem(
-                                    selected = dest == d,
-                                    onClick = { dest = d },
-                                    icon = { Icon(d.icon, contentDescription = d.label) },
-                                    label = { Text(d.label) },
-                                )
-                            }
-                        }
+                    modifier = Modifier.drawWithContent {
+                        contentLayer.record { this@drawWithContent.drawContent() }
+                        drawLayer(contentLayer)
                     },
                 ) { padding ->
                     AnimatedContent(
@@ -189,6 +215,14 @@ fun OrchestraApp(refreshKey: Int) {
                         }
                     }
                 }
+                BottomBlurStrip(
+                    contentLayer = contentLayer,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
+                FloatingNavBar(
+                    dest = dest,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                ) { dest = it }
 
                 // Debug as an overlay screen, dismissed by the predictive back gesture (animated).
                 AnimatedVisibility(
@@ -215,6 +249,143 @@ fun OrchestraApp(refreshKey: Int) {
                         color = MaterialTheme.colorScheme.surface,
                     ) {
                         DebugScreen(refreshKey, onBack = { debugOpen = false })
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Full-width blur strip pinned to the bottom edge (behind the floating nav pill): re-draws
+ * [contentLayer] (the recorded screen content) through a [BlurEffect], alpha-masked by a
+ * vertical gradient so the blur fades in toward the screen bottom — Telegram-style. Covers
+ * the gesture-navigation area too. Draw-only; never intercepts touches.
+ */
+@Composable
+private fun BottomBlurStrip(contentLayer: GraphicsLayer, modifier: Modifier = Modifier) {
+    var bounds by remember { mutableStateOf(Rect.Zero) }
+    val navPad = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(navPad + 116.dp)
+            .onGloballyPositioned { bounds = it.boundsInRoot() }
+            .graphicsLayer {
+                renderEffect = BlurEffect(28f, 28f, TileMode.Clamp)
+                compositingStrategy = CompositingStrategy.Offscreen
+            }
+            .drawBehind {
+                translate(-bounds.left, -bounds.top) {
+                    drawLayer(contentLayer)
+                }
+                // Fade the blur out toward the top of the strip (DstIn alpha mask).
+                drawRect(
+                    brush = Brush.verticalGradient(
+                        0f to Color.Transparent,
+                        0.45f to Color.Black,
+                        1f to Color.Black,
+                    ),
+                    blendMode = BlendMode.DstIn,
+                )
+            }
+    )
+}
+
+/**
+ * Detached, fully-rounded, elevated bottom nav (M3 Expressive floating pill).
+ *
+ * One SHARED active indicator translates between slots (spring — retargeting mid-flight
+ * redirects with preserved velocity instead of restarting), while each item crossfades its
+ * outlined/filled icon and tints in lockstep with the 220ms screen crossfade. Frame-hot values
+ * are deferred out of composition: the pill offset via the lambda [offset] overload (layout
+ * phase) and icon alphas via [graphicsLayer] blocks (draw phase), so animation frames don't
+ * recompose the navbar tree at all.
+ */
+@Composable
+private fun FloatingNavBar(
+    dest: Dest,
+    modifier: Modifier = Modifier,
+    onSelect: (Dest) -> Unit,
+) {
+    Surface(
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .navigationBarsPadding()
+            .padding(start = 16.dp, end = 16.dp, bottom = 16.dp)
+            .fillMaxWidth(),
+    ) {
+        BoxWithConstraints(Modifier.padding(horizontal = 8.dp, vertical = 10.dp)) {
+            val slot = maxWidth / Dest.entries.size
+            val indicatorX by animateDpAsState(
+                targetValue = slot * dest.ordinal + (slot - 64.dp) / 2,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = Spring.StiffnessMediumLow,
+                ),
+                label = "navPillX",
+            )
+            // The single moving pill, behind the items. Lambda offset = placement-only updates.
+            Box(
+                Modifier
+                    .offset { IntOffset(indicatorX.roundToPx(), 0) }
+                    .width(64.dp).height(32.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+            )
+            Row(Modifier.fillMaxWidth()) {
+                Dest.entries.forEach { d ->
+                    val selected = dest == d
+                    // 0 → 1 selection progress; duration matches the screen crossfade (220ms).
+                    val progress by animateFloatAsState(
+                        targetValue = if (selected) 1f else 0f,
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        label = "navSel",
+                    )
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .clickable(
+                                interactionSource = remember { MutableInteractionSource() },
+                                indication = null,
+                            ) { onSelect(d) },
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        val tint = lerp(
+                            MaterialTheme.colorScheme.onSurfaceVariant,
+                            MaterialTheme.colorScheme.onSecondaryContainer,
+                            progress,
+                        )
+                        Box(
+                            Modifier.width(64.dp).height(32.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            // Outlined ↔ filled crossfade; alphas resolve at draw time.
+                            Icon(
+                                d.iconOutlined,
+                                contentDescription = d.label,
+                                tint = tint,
+                                modifier = Modifier.graphicsLayer { alpha = 1f - progress },
+                            )
+                            Icon(
+                                d.icon,
+                                contentDescription = null,
+                                tint = tint,
+                                modifier = Modifier.graphicsLayer { alpha = progress },
+                            )
+                        }
+                        Text(
+                            d.label,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = lerp(
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                                MaterialTheme.colorScheme.onSurface,
+                                progress,
+                            ),
+                        )
                     }
                 }
             }
@@ -358,6 +529,7 @@ internal fun btTech(context: Context): Pair<String, List<Pair<String, Boolean>>>
 
 // ---------- Status ----------
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun StatusScreen(refreshKey: Int) {
     val context = LocalContext.current
@@ -369,70 +541,186 @@ private fun StatusScreen(refreshKey: Int) {
     val (btVersion, btTechList) = remember(refreshKey) { btTech(context) }
 
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 108.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        StatusCard(
-            icon = if (moduleActive) Icons.Filled.Extension else Icons.Filled.Cancel,
-            statusColor = if (moduleActive) StatusGood else StatusBad,
-            title = "LSPosed module",
-            value = if (moduleActive)
-                (if (apiLevel > 0) "Active · API $apiLevel" else "Active")
-            else "Not active",
-            detail = if (moduleActive) "Hooks loaded — controls are live."
-            else "Enable Orchestra in LSPosed with scope: System UI, Settings, Orchestra. Then restart System UI."
-        )
-        StatusCard(
-            icon = if (bt) Icons.Filled.Bluetooth else Icons.Filled.BluetoothDisabled,
-            statusColor = if (bt) StatusGood else StatusIdle,
-            iconTint = if (bt) BluetoothBlue else null,
-            title = "Bluetooth",
-            value = if (bt) "On" else "Off",
-            detail = "${supported.count { it.connected }} of ${supported.size} supported device(s) connected."
-        )
-        StatusCard(
-            icon = Icons.Filled.Headphones,
-            statusColor = if (hookedCount > 0) StatusGood else StatusIdle,
-            title = "Hooked devices",
-            value = hookedCount.toString(),
-            detail = "Devices you've switched on in Devices. Each gets native controls."
-        )
+        Rise(0) { HeroCard(moduleActive, hookedCount) }
+
+        Rise(1) {
+            Row(
+                Modifier.height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                StatTile(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    icon = if (moduleActive) Icons.Filled.Extension else Icons.Filled.Cancel,
+                    iconTint = null,
+                    shape = MaterialShapes.Clover4Leaf.asShape(),
+                    label = if (apiLevel > 0) "LSPosed · API $apiLevel" else "LSPosed module",
+                    value = if (moduleActive) "Active" else "Off",
+                    good = moduleActive,
+                )
+                StatTile(
+                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                    icon = if (bt) Icons.Filled.Bluetooth else Icons.Filled.BluetoothDisabled,
+                    iconTint = if (bt) BluetoothBlue else null,
+                    shape = MaterialShapes.Pill.asShape(),
+                    label = "${supported.count { it.connected }}/${supported.size} device(s) connected",
+                    value = if (bt) "On" else "Off",
+                    good = bt,
+                )
+            }
+        }
+
+        Rise(2) {
+            StatusCard(
+                icon = Icons.Filled.Headphones,
+                statusColor = if (hookedCount > 0) StatusGood else StatusIdle,
+                shape = MaterialShapes.Cookie4Sided.asShape(),
+                title = "Hooked devices",
+                value = hookedCount.toString(),
+                detail = "Devices you've switched on in Devices. Each gets native controls."
+            )
+        }
         // Android tile — tap to expand radio capabilities.
         var androidExpanded by rememberSaveable { mutableStateOf(false) }
-        StatusCard(
-            icon = Icons.Filled.Android,
-            statusColor = StatusGood,
-            iconTint = Color(0xFF3DDC84), // Android green
-            title = "Android",
-            value = "${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}",
-            detail = "Orchestra ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · tap for radio info",
-            onClick = { androidExpanded = !androidExpanded },
-            trailing = {
-                Icon(if (androidExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            },
-            expanded = androidExpanded,
-            expandedContent = {
-                Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(btVersion, style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    btTechList.forEach { (label, supp) ->
-                        Row(verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Icon(
-                                if (supp) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
-                                contentDescription = null,
-                                tint = if (supp) StatusGood else MaterialTheme.colorScheme.outline,
-                                modifier = Modifier.size(18.dp)
-                            )
-                            Text(label, style = MaterialTheme.typography.bodyMedium,
-                                color = if (supp) MaterialTheme.colorScheme.onSurface
-                                else MaterialTheme.colorScheme.onSurfaceVariant)
+        Rise(3) {
+            StatusCard(
+                icon = Icons.Filled.Android,
+                statusColor = StatusGood,
+                shape = MaterialShapes.PixelCircle.asShape(),
+                iconTint = Color(0xFF3DDC84), // Android green
+                title = "Android",
+                value = "${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}",
+                detail = "Orchestra ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · tap for radio info",
+                onClick = { androidExpanded = !androidExpanded },
+                trailing = {
+                    Icon(if (androidExpanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                },
+                expanded = androidExpanded,
+                expandedContent = {
+                    Column(Modifier.padding(top = 4.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text(btVersion, style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        btTechList.forEach { (label, supp) ->
+                            Row(verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Icon(
+                                    if (supp) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+                                    contentDescription = null,
+                                    tint = if (supp) StatusGood else MaterialTheme.colorScheme.outline,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(label, style = MaterialTheme.typography.bodyMedium,
+                                    color = if (supp) MaterialTheme.colorScheme.onSurface
+                                    else MaterialTheme.colorScheme.onSurfaceVariant)
+                            }
                         }
                     }
                 }
+            )
+        }
+    }
+}
+
+/** Big "all systems go" hero: morphing cog badge + oversized decorative shape off the corner. */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun HeroCard(moduleActive: Boolean, hookedCount: Int) {
+    val container = if (moduleActive) MaterialTheme.colorScheme.primaryContainer
+    else MaterialTheme.colorScheme.errorContainer
+    val onContainer = if (moduleActive) MaterialTheme.colorScheme.onPrimaryContainer
+    else MaterialTheme.colorScheme.onErrorContainer
+    val accent = if (moduleActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+    val onAccent = if (moduleActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onError
+
+    // Slow breathe: gentle rotate + scale on the badge (design: orch-breathe 5s).
+    val breathe = rememberInfiniteTransition(label = "breathe")
+    val angle by breathe.animateFloat(0f, 180f,
+        infiniteRepeatable(tween(2500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "angle")
+    val scale by breathe.animateFloat(1f, 1.06f,
+        infiniteRepeatable(tween(2500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale")
+
+    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(container)) {
+        // Oversized decorative shape bleeding off the top-right corner. Wrapped in a
+        // matchParentSize box so its 150dp doesn't participate in the card's measurement —
+        // the card is sized by the content row alone.
+        Box(Modifier.matchParentSize()) {
+            Box(
+                Modifier.align(Alignment.TopEnd).offset(x = 38.dp, y = (-38).dp).size(150.dp)
+                    .clip(MaterialShapes.Sunny.asShape())
+                    .background(accent.copy(alpha = 0.22f))
+            )
+        }
+        Row(
+            Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
+            horizontalArrangement = Arrangement.spacedBy(18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                Modifier.size(72.dp)
+                    .graphicsLayer { rotationZ = angle; scaleX = scale; scaleY = scale }
+                    .clip(MaterialShapes.Cookie12Sided.asShape())
+                    .background(accent),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    if (moduleActive) Icons.Filled.Check else Icons.Filled.Close,
+                    contentDescription = null, tint = onAccent, modifier = Modifier.size(36.dp),
+                )
             }
-        )
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    if (moduleActive) "All systems go" else "Module not active",
+                    style = MaterialTheme.typography.headlineSmall, color = onContainer,
+                )
+                Text(
+                    if (moduleActive) {
+                        "Module active · $hookedCount device${if (hookedCount == 1) "" else "s"} hooked"
+                    } else {
+                        "Enable Orchestra in LSPosed with scope: System UI, Settings, Orchestra. " +
+                            "Then restart System UI."
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = onContainer.copy(alpha = 0.78f),
+                )
+            }
+        }
+    }
+}
+
+/** Compact bento tile: big shape chip, bold value, small label. */
+@Composable
+private fun StatTile(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    iconTint: Color?,
+    shape: Shape,
+    label: String,
+    value: String,
+    good: Boolean,
+) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .padding(18.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        val chipBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+            .compositeOver(MaterialTheme.colorScheme.surfaceContainerHighest)
+        val tint = iconTint
+            ?: if (good) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+        ShapeChip(shape = shape, size = 52.dp, color = chipBg) {
+            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(26.dp))
+        }
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(value, style = MaterialTheme.typography.headlineSmall)
+            Text(label, style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
     }
 }
 
@@ -442,6 +730,7 @@ private fun StatusScreen(refreshKey: Int) {
 private fun StatusCard(
     icon: ImageVector,
     statusColor: Color,
+    shape: Shape,
     title: String,
     value: String,
     detail: String,
@@ -452,6 +741,7 @@ private fun StatusCard(
     expandedContent: (@Composable () -> Unit)? = null,
 ) {
     Card(
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(containerColor = statusColor.copy(alpha = 0.10f)),
         modifier = Modifier.fillMaxWidth().animateContentSize(
             animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
@@ -462,10 +752,9 @@ private fun StatusCard(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    Modifier.size(46.dp).clip(CircleShape).background(statusColor.copy(alpha = 0.20f)),
-                    contentAlignment = Alignment.Center
-                ) { Icon(icon, contentDescription = null, tint = iconTint ?: statusColor) }
+                ShapeChip(shape = shape, size = 48.dp, color = statusColor.copy(alpha = 0.20f)) {
+                    Icon(icon, contentDescription = null, tint = iconTint ?: statusColor)
+                }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(title, style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -505,7 +794,7 @@ private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         if (supported.isEmpty()) {
@@ -528,8 +817,9 @@ private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
         }
         if (available.isNotEmpty()) {
             SectionHeader("Available to hook", "${available.size}")
-            Card(colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+            Card(shape = RoundedCornerShape(28.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
                 Column {
                     available.forEach { d ->
                         AvailableRow(
@@ -656,7 +946,11 @@ private fun HookedDeviceCard(
     val rest = controls.filter { it.status != "UNAVAILABLE" }
     val verified = rest.filter { it.verified }
     val unverified = rest.filter { !it.verified }
-    val activeCount = controls.count { it.status == "ACTIVE" }
+    // In-app-only controls (status UNAVAILABLE) never inject, but they work in-app — count them
+    // as enabled unless the user toggled one off, so the header reads 7/7 rather than 4/7.
+    val activeCount = controls.count { c ->
+        c.status == "ACTIVE" || (c.status == "UNAVAILABLE" && (!c.toggleable || c.enabled))
+    }
 
     // Ear-detection: only for AAP devices (those with an ear_detection capability in their manifest).
     val isAacpDevice = caps.any { it.id == "ear_detection" }
@@ -677,6 +971,7 @@ private fun HookedDeviceCard(
     }
 
     Card(
+        shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
         modifier = Modifier.fillMaxWidth().animateContentSize(
@@ -688,10 +983,10 @@ private fun HookedDeviceCard(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    Modifier.size(48.dp).clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.secondaryContainer),
-                    contentAlignment = Alignment.Center
+                ShapeChip(
+                    shape = remember(d.mac) { shapeForSeed(d.mac) },
+                    size = 48.dp,
+                    color = MaterialTheme.colorScheme.secondaryContainer,
                 ) {
                     Icon(Icons.Filled.Headphones, contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -772,12 +1067,6 @@ private fun HookedDeviceCard(
                     }
                 }
                 Switch(checked = true, onCheckedChange = { onUnhook() })
-                // Only AAP (AirPods-protocol) devices have a dedicated in-app control screen today.
-                if (isAacpDevice) {
-                    IconButton(onClick = onOpen) {
-                        Icon(Icons.Filled.ChevronRight, contentDescription = "Open device controls")
-                    }
-                }
                 Icon(if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
                     contentDescription = "Expand")
             }
@@ -810,6 +1099,24 @@ private fun HookedDeviceCard(
                                     DeviceStore.setCapabilityEnabled(d.mac, c.id, !c.enabled); onChange()
                                 })
                             }
+                        }
+                    }
+                    // Only AAP (AirPods-protocol) devices have a dedicated in-app control screen
+                    // today. Lives here (not in the header) to keep the header row uncluttered.
+                    if (isAacpDevice) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        Row(
+                            Modifier.fillMaxWidth().clickable { onOpen() }
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Device controls", style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.weight(1f))
+                            Icon(Icons.Filled.ChevronRight,
+                                contentDescription = "Open device controls",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -913,10 +1220,10 @@ private fun AvailableRow(
     ListItem(
         colors = ListItemDefaults.colors(containerColor = Color.Transparent),
         leadingContent = {
-            Box(
-                Modifier.size(40.dp).clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.secondaryContainer),
-                contentAlignment = Alignment.Center
+            ShapeChip(
+                shape = remember(d.mac) { shapeForSeed(d.mac) },
+                size = 40.dp,
+                color = MaterialTheme.colorScheme.secondaryContainer,
             ) {
                 Icon(Icons.Filled.Headphones, contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSecondaryContainer)
@@ -976,52 +1283,116 @@ private fun AvailableRow(
 
 // ---------- Settings ----------
 
-@Composable
-private fun SettingsScreen(onOpenDebug: () -> Unit) {
-    var tick by remember { mutableStateOf(0) }
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp)
-    ) {
-        SectionHeader("Display", "")
-        SettingToggle("Show device statuses", "Battery and connection on each device card",
-            DeviceStore.flag(FLAG_STATUSES, true)) { DeviceStore.setFlag(FLAG_STATUSES, it); tick++ }
+/** Connected-corner position of a row within its settings group. */
+private enum class RowPos { Single, First, Middle, Last }
 
-        SectionHeader("Bluetooth identity", "")
-        SettingToggle("Act as Apple device",
-            "Advertise the phone as Apple so AirPods stay connected to it and other devices at " +
-                "once. Takes effect after Bluetooth is restarted. While on, the phone identifies " +
-                "as Apple to all Bluetooth devices.",
-            DeviceStore.flag(FLAG_ACT_AS_APPLE, false)) { DeviceStore.setFlag(FLAG_ACT_AS_APPLE, it); tick++ }
-
-        SectionHeader("Debug", "")
-        SettingToggle("Show unverified controls", "Reveal controls whose bytes aren't hardware-confirmed",
-            DeviceStore.flag(FLAG_UNVERIFIED, false)) { DeviceStore.setFlag(FLAG_UNVERIFIED, it); tick++ }
-        SettingToggle("Show in-app-only controls", "Controls with no native page surface (sliders, composite)",
-            DeviceStore.flag(FLAG_INAPP, false)) { DeviceStore.setFlag(FLAG_INAPP, it); tick++ }
-        SettingToggle("Show device MAC", "Display the Bluetooth address on device cards",
-            DeviceStore.flag(FLAG_MAC, false)) { DeviceStore.setFlag(FLAG_MAC, it); tick++ }
-        ListItem(
-            modifier = Modifier.clickable { onOpenDebug() },
-            colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-            leadingContent = { Icon(Icons.Filled.BugReport, contentDescription = null) },
-            headlineContent = { Text("Debug & logs") },
-            supportingContent = { Text("Live event log, catalog and runtime info") },
-            trailingContent = { Icon(Icons.Filled.ExpandMore, contentDescription = null,
-                modifier = Modifier.rotate(-90f)) }
-        )
-        if (tick < 0) Text("")
+private fun rowShape(pos: RowPos): RoundedCornerShape {
+    val o = 28.dp
+    val i = 6.dp
+    return when (pos) {
+        RowPos.Single -> RoundedCornerShape(o)
+        RowPos.First -> RoundedCornerShape(o, o, i, i)
+        RowPos.Middle -> RoundedCornerShape(i)
+        RowPos.Last -> RoundedCornerShape(i, i, o, o)
     }
 }
 
 @Composable
-private fun SettingToggle(title: String, subtitle: String, checked: Boolean, onChange: (Boolean) -> Unit) {
-    ListItem(
-        colors = ListItemDefaults.colors(containerColor = Color.Transparent),
-        headlineContent = { Text(title) },
-        supportingContent = { Text(subtitle) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onChange) }
-    )
+private fun SettingsScreen(onOpenDebug: () -> Unit) {
+    var tick by remember { mutableStateOf(0) }
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
+        verticalArrangement = Arrangement.spacedBy(26.dp)
+    ) {
+        SettingsGroup(null) {
+            SettingToggle("Show device statuses", "Battery and connection on each device card",
+                RowPos.Single,
+                DeviceStore.flag(FLAG_STATUSES, true)) { DeviceStore.setFlag(FLAG_STATUSES, it); tick++ }
+        }
+
+        SettingsGroup("Bluetooth identity") {
+            SettingToggle("Act as Apple device",
+                "Advertise the phone as Apple so AirPods stay connected to it and other devices at " +
+                    "once. Takes effect after Bluetooth is restarted. While on, the phone identifies " +
+                    "as Apple to all Bluetooth devices.",
+                RowPos.Single,
+                DeviceStore.flag(FLAG_ACT_AS_APPLE, false)) { DeviceStore.setFlag(FLAG_ACT_AS_APPLE, it); tick++ }
+        }
+
+        SettingsGroup("Debug") {
+            SettingToggle("Show unverified controls", "Reveal controls whose bytes aren't hardware-confirmed",
+                RowPos.First,
+                DeviceStore.flag(FLAG_UNVERIFIED, false)) { DeviceStore.setFlag(FLAG_UNVERIFIED, it); tick++ }
+            SettingToggle("Show in-app-only controls", "Controls with no native page surface (sliders, composite)",
+                RowPos.Middle,
+                DeviceStore.flag(FLAG_INAPP, false)) { DeviceStore.setFlag(FLAG_INAPP, it); tick++ }
+            SettingToggle("Show device MAC", "Display the Bluetooth address on device cards",
+                RowPos.Middle,
+                DeviceStore.flag(FLAG_MAC, false)) { DeviceStore.setFlag(FLAG_MAC, it); tick++ }
+            SettingNav("Debug & logs", "Live event log, catalog and runtime info",
+                RowPos.Last, onOpenDebug)
+        }
+        if (tick < 0) Text("")
+    }
+}
+
+/** Titled group of connected settings rows (primary-colored header, 3dp inner gaps). */
+@Composable
+private fun SettingsGroup(title: String?, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        if (title != null) {
+            Text(title, style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 6.dp, bottom = 13.dp))
+        }
+        content()
+    }
+}
+
+@Composable
+private fun SettingRowScaffold(
+    title: String,
+    subtitle: String,
+    pos: RowPos,
+    onClick: (() -> Unit)?,
+    trailing: @Composable () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth()
+            .clip(rowShape(pos))
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .padding(horizontal = 22.dp, vertical = 20.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Text(title, style = MaterialTheme.typography.titleLarge.copy(
+                fontSize = 20.sp, lineHeight = 26.sp))
+            Text(subtitle, style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        trailing()
+    }
+}
+
+@Composable
+private fun SettingToggle(
+    title: String, subtitle: String, pos: RowPos,
+    checked: Boolean, onChange: (Boolean) -> Unit,
+) {
+    SettingRowScaffold(title, subtitle, pos, onClick = { onChange(!checked) }) {
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+private fun SettingNav(title: String, subtitle: String, pos: RowPos, onClick: () -> Unit) {
+    SettingRowScaffold(title, subtitle, pos, onClick = onClick) {
+        Icon(Icons.Filled.ChevronRight, contentDescription = null,
+            tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
 }
 
 // ---------- Debug screen ----------
@@ -1175,7 +1546,7 @@ private fun DebugScreen(refreshKey: Int, onBack: () -> Unit) {
 private fun DebugCard(text: String) {
     Card(colors = CardDefaults.cardColors(
         containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        shape = RoundedCornerShape(16.dp)) {
+        shape = RoundedCornerShape(28.dp)) {
         SelectionContainer {
             Text(text, modifier = Modifier.padding(16.dp),
                 fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
