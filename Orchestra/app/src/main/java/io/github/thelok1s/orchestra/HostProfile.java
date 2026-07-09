@@ -94,8 +94,7 @@ public final class HostProfile {
 
     private static String systemProp(String key) {
         try {
-            Class<?> sp = Class.forName("android.os.SystemProperties");
-            return (String) sp.getMethod("get", String.class).invoke(null, key);
+            return (String) org.lsposed.hiddenapibypass.HiddenApiBypass.invoke(Class.forName("android.os.SystemProperties"), null, "get", key);
         } catch (Exception e) {
             Log.w(DeviceDef.TAG, "systemProp(" + key + ") failed: " + e);
             return "";

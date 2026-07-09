@@ -41,6 +41,7 @@
         android:icon="@mipmap/orchestra"
         android:roundIcon="@mipmap/orchestra"
         android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true"
         android:enableOnBackInvokedCallback="true"
         android:theme="@style/Theme.Orchestra">
@@ -94,7 +95,9 @@
         </receiver>
 
         <!-- Applies an ANC mode by toggle index (fired by the volume-panel hook). -->
-        <receiver android:name=".VolumeApplyReceiver" android:exported="true">
+        <receiver android:name=".VolumeApplyReceiver"
+                  android:exported="true"
+                  android:permission="android.permission.BLUETOOTH_PRIVILEGED">
             <intent-filter>
                 <action android:name="io.github.thelok1s.orchestra.APPLY_INDEX" />
             </intent-filter>

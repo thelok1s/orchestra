@@ -3,6 +3,7 @@ package io.github.thelok1s.orchestra.xposed;
 import android.app.AndroidAppHelper;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
 import android.content.Context;
 import android.content.Intent;
 
@@ -394,18 +395,17 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                     cc = cur.getInt(cur.getColumnIndexOrThrow("case_charging")) == 1;
                 }
             }
-            Method set = BluetoothDevice.class.getMethod("setMetadata", int.class, byte[].class);
-            set.invoke(device, 6, "true".getBytes(StandardCharsets.UTF_8));
-            set.invoke(device, 17, "Untethered Headset".getBytes(StandardCharsets.UTF_8));
+            XposedHelpers.callMethod(device, "setMetadata", 6, "true".getBytes(StandardCharsets.UTF_8));
+            XposedHelpers.callMethod(device, "setMetadata", 17, "Untethered Headset".getBytes(StandardCharsets.UTF_8));
             // Always write 10/11/12: a valid 0-100 string shows the component; an empty (invalid)
             // value clears a previously-written key so a disconnected component HIDES (the keys are
             // persistent — skipping a stale key would leave the old value on the header).
-            set.invoke(device, 10, battBytes(left));
-            set.invoke(device, 11, battBytes(right));
-            set.invoke(device, 12, battBytes(caseLvl));
-            set.invoke(device, 13, (lc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
-            set.invoke(device, 14, (rc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
-            set.invoke(device, 15, (cc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
+            XposedHelpers.callMethod(device, "setMetadata", 10, battBytes(left));
+            XposedHelpers.callMethod(device, "setMetadata", 11, battBytes(right));
+            XposedHelpers.callMethod(device, "setMetadata", 12, battBytes(caseLvl));
+            XposedHelpers.callMethod(device, "setMetadata", 13, (lc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
+            XposedHelpers.callMethod(device, "setMetadata", 14, (rc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
+            XposedHelpers.callMethod(device, "setMetadata", 15, (cc ? "true" : "false").getBytes(StandardCharsets.UTF_8));
             XposedBridge.log("[MX] battery write " + device.getAddress()
                     + " L=" + left + " R=" + right + " C=" + caseLvl);
         } catch (Throwable t) {
@@ -445,7 +445,8 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                     try {
                         String mac = i.getStringExtra("mac");
                         if (mac == null) return;
-                        BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+                        BluetoothManager bm = (BluetoothManager) c.getSystemService(Context.BLUETOOTH_SERVICE);
+                        BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
                         if (adapter == null) return;
                         BluetoothDevice d = adapter.getRemoteDevice(mac);
                         if (isAapDevice(d)) writeBattery(d); // re-query ContentProvider + write keys
@@ -456,8 +457,13 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                     new android.content.IntentFilter("io.github.thelok1s.orchestra.BATTERY_CHANGED");
             // broadcastPermission: only Orchestra (same signer, self-holds it) can deliver.
             // RECEIVER_EXPORTED: allow delivery from a different uid (Orchestra app process).
-            app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
-                    null, Context.RECEIVER_EXPORTED);
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
+                        null, Context.RECEIVER_EXPORTED);
+            } else {
+                app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
+                        null);
+            }
             batteryReceiverRegistered = true;
             XposedBridge.log("[MX] battery-changed receiver registered");
         } catch (Throwable t) {
@@ -481,7 +487,10 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
     private void assertTagsForBondedDevices() {
         ensureBatteryReceiver(); // idempotent; currentApplication() is non-null here (onResume)
         try {
-            BluetoothAdapter adapter = BluetoothAdapter.getDefaultAdapter();
+            android.app.Application app = AndroidAppHelper.currentApplication();
+            if (app == null) return;
+            BluetoothManager bm = (BluetoothManager) app.getSystemService(Context.BLUETOOTH_SERVICE);
+            BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
             if (adapter == null || !adapter.isEnabled()) return;
             Set<BluetoothDevice> bonded = adapter.getBondedDevices();
             if (bonded == null) return;
@@ -523,8 +532,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
             updated = updated.replaceAll(
                     "<HEARABLE_CONTROL_SLICE_WITH_WIDTH>.*?</HEARABLE_CONTROL_SLICE_WITH_WIDTH>", "");
             if (updated.equals(existing)) return; // already correct
-            Method set = BluetoothDevice.class.getMethod("setMetadata", int.class, byte[].class);
-            Object res = set.invoke(device, KEY25, updated.getBytes(StandardCharsets.UTF_8));
+            Object res = XposedHelpers.callMethod(device, "setMetadata", KEY25, updated.getBytes(StandardCharsets.UTF_8));
             boolean ok = !(res instanceof Boolean) || (Boolean) res;
             mx("key25 write " + (ok ? "ok" : "FAILED") + " (hooked) for " + device.getAddress());
         } catch (Throwable t) {
@@ -570,8 +578,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                     .replaceAll("<DEVICE_SETTINGS_CONFIG_CLASS>.*?</DEVICE_SETTINGS_CONFIG_CLASS>", "")
                     .replaceAll("<DEVICE_SETTINGS_CONFIG_ACTION>.*?</DEVICE_SETTINGS_CONFIG_ACTION>", "");
             if (updated.equals(existing)) return; // our tags weren't present
-            Method set = BluetoothDevice.class.getMethod("setMetadata", int.class, byte[].class);
-            set.invoke(device, KEY25, updated.getBytes(StandardCharsets.UTF_8));
+            XposedHelpers.callMethod(device, "setMetadata", KEY25, updated.getBytes(StandardCharsets.UTF_8));
             mx("key25 cleared (un-hooked) for " + device.getAddress());
         } catch (Throwable t) {
             XposedBridge.log("[MX] clearConfigTags failed: " + t);
@@ -580,9 +587,8 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
 
     private static String readKey25(BluetoothDevice device) {
         try {
-            Method get = BluetoothDevice.class.getMethod("getMetadata", int.class);
-            Object res = get.invoke(device, KEY25);
-            if (res instanceof byte[]) return new String((byte[]) res, StandardCharsets.UTF_8);
+            byte[] res = (byte[]) XposedHelpers.callMethod(device, "getMetadata", KEY25);
+            if (res != null) return new String(res, StandardCharsets.UTF_8);
         } catch (Throwable ignore) {}
         return null;
     }

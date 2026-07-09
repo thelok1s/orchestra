@@ -2,6 +2,7 @@ package io.github.thelok1s.orchestra.aap;
 
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
@@ -111,16 +112,20 @@ public final class AapBroker {
                     String name = i.getStringExtra("name");
                     if (mac == null || op == null) return;
                     if ("rename".equals(op)) {
-                        CMD_EXECUTOR.execute(() -> handleRename(mac, name));
+                        CMD_EXECUTOR.execute(() -> handleRename(c, mac, name));
                         return;
                     }
-                    CMD_EXECUTOR.execute(() -> handleCommand(mac, op, value, feature));
+                    CMD_EXECUTOR.execute(() -> handleCommand(c, mac, op, value, feature));
                 } catch (Throwable t) {
                     Log.w(TAG, "AapBroker CMD receiver dispatch failed: " + t);
                 }
             }
         };
-        ctx.registerReceiver(cmd, new IntentFilter(ACTION_CMD), Context.RECEIVER_EXPORTED);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            ctx.registerReceiver(cmd, new IntentFilter(ACTION_CMD), Context.RECEIVER_EXPORTED);
+        } else {
+            ctx.registerReceiver(cmd, new IntentFilter(ACTION_CMD));
+        }
         Log.i(TAG, "AapBroker started (AAP_CMD receiver registered)");
 
         BroadcastReceiver acl = new BroadcastReceiver() {
@@ -151,16 +156,28 @@ public final class AapBroker {
         IntentFilter aclFilter = new IntentFilter();
         aclFilter.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
         aclFilter.addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED);
-        ctx.registerReceiver(acl, aclFilter, Context.RECEIVER_EXPORTED);
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            ctx.registerReceiver(acl, aclFilter, Context.RECEIVER_EXPORTED);
+        } else {
+            ctx.registerReceiver(acl, aclFilter);
+        }
         Log.i(TAG, "AapBroker started (ACL receiver registered)");
 
         connectKnown(ctx);
     }
 
     static void connectKnown(Context ctx) {
-        BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
-        if (a == null || a.getBondedDevices() == null) return;
-        for (BluetoothDevice d : a.getBondedDevices()) {
+        BluetoothManager bm = (BluetoothManager) ctx.getSystemService(Context.BLUETOOTH_SERVICE);
+        BluetoothAdapter a = bm != null ? bm.getAdapter() : null;
+        if (a == null) return;
+        java.util.Set<BluetoothDevice> bonded = null;
+        try {
+            bonded = a.getBondedDevices();
+        } catch (SecurityException e) {
+            Log.e(TAG, "Missing Bluetooth permission for getBondedDevices", e);
+        }
+        if (bonded == null) return;
+        for (BluetoothDevice d : bonded) {
             if (!isAap(d)) continue;
             registerAndConnect(ctx, a, d.getAddress().toUpperCase(Locale.ROOT));
         }
@@ -238,7 +255,8 @@ public final class AapBroker {
     private static final Map<String, Object> RECONNECT_LOCKS = new ConcurrentHashMap<>();
 
     private static void onAclConnected(Context ctx, String mac) {
-        BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
+        BluetoothManager bm = (BluetoothManager) ctx.getSystemService(Context.BLUETOOTH_SERVICE);
+        BluetoothAdapter a = bm != null ? bm.getAdapter() : null;
         if (a == null) return;
         AacpEngine.registerListener(mac, "broker", () -> publishState(ctx, mac));
         AacpEngine.registerSpeechListener(mac, level -> onSpeechLevel(ctx, mac, level));
@@ -273,7 +291,7 @@ public final class AapBroker {
         ctx.sendBroadcast(i);
     }
 
-    static void handleCommand(String mac, String op, int value, int feature) {
+    static void handleCommand(Context ctx, String mac, String op, int value, int feature) {
         try {
             // autopause/caduck are LOCAL cache updates (the app process persisted the enable in
             // DeviceStore and is just pushing it here); they never touch the AAP socket, so handle
@@ -293,7 +311,8 @@ public final class AapBroker {
             // EXPORTED (see the manifest) with no permission, so any zero-permission app can supply
             // an arbitrary MAC here — this keeps a hostile broadcast from driving connect attempts
             // at random devices.
-            BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
+            BluetoothManager bm = (BluetoothManager) ctx.getSystemService(Context.BLUETOOTH_SERVICE);
+            BluetoothAdapter a = bm != null ? bm.getAdapter() : null;
             if (a == null) return;
             BluetoothDevice device;
             try {
@@ -302,7 +321,13 @@ public final class AapBroker {
                 Log.w(TAG, "handleCommand: invalid MAC " + mac + ": " + e);
                 return;
             }
-            if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
+            int bondState = BluetoothDevice.BOND_NONE;
+            try {
+                bondState = device.getBondState();
+            } catch (SecurityException e) {
+                Log.e(TAG, "Missing Bluetooth permission for getBondState", e);
+            }
+            if (bondState != BluetoothDevice.BOND_BONDED) {
                 Log.w(TAG, "handleCommand: " + mac + " not bonded, dropping op=" + op);
                 return;
             }
@@ -333,13 +358,14 @@ public final class AapBroker {
      * {@link #handleCommand} since the {@code AAP_CMD} receiver is EXPORTED with no permission —
      * any zero-permission app can supply an arbitrary MAC + name here.
      */
-    static void handleRename(String mac, String name) {
+    static void handleRename(Context ctx, String mac, String name) {
         try {
             if (name == null || name.trim().isEmpty()) {
                 Log.w(TAG, "handleRename: empty name for " + mac + ", dropping");
                 return;
             }
-            BluetoothAdapter a = BluetoothAdapter.getDefaultAdapter();
+            BluetoothManager bm = (BluetoothManager) ctx.getSystemService(Context.BLUETOOTH_SERVICE);
+            BluetoothAdapter a = bm != null ? bm.getAdapter() : null;
             if (a == null) return;
             BluetoothDevice device;
             try {
@@ -348,7 +374,13 @@ public final class AapBroker {
                 Log.w(TAG, "handleRename: invalid MAC " + mac + ": " + e);
                 return;
             }
-            if (device.getBondState() != BluetoothDevice.BOND_BONDED) {
+            int renameBondState = BluetoothDevice.BOND_NONE;
+            try {
+                renameBondState = device.getBondState();
+            } catch (SecurityException e) {
+                Log.e(TAG, "Missing Bluetooth permission for getBondState", e);
+            }
+            if (renameBondState != BluetoothDevice.BOND_BONDED) {
                 Log.w(TAG, "handleRename: " + mac + " not bonded, dropping");
                 return;
             }

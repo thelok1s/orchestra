@@ -60,7 +60,11 @@ private fun DeviceControlRow(mac: String, f: DeviceDef.Func, liveTick: Int) {
     // The engine is resolved per-function from its transport (RFCOMM / AACP / …), so this screen is
     // device-agnostic — it drives Soundcore level/slider controls exactly like AirPods ones.
     val def = remember(mac) { DeviceDef.forAddress(mac) }
-    val adapter = remember { android.bluetooth.BluetoothAdapter.getDefaultAdapter() }
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val adapter = remember(context) {
+        val bm = context.getSystemService(android.content.Context.BLUETOOTH_SERVICE) as? android.bluetooth.BluetoothManager
+        bm?.adapter
+    }
     val engine = remember(f.id) { io.github.thelok1s.orchestra.ControlEngine.forFunc(f) }
     when {
         f.isInfoRow -> {

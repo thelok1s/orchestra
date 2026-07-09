@@ -299,7 +299,7 @@ final class ShokzEngine {
             byte[] b = new byte[6];
             for (int i = 0; i < 6; i++) b[i] = (byte) (Integer.parseInt(parts[i], 16) & 0xff);
             return b;
-        } catch (Exception e) {
+        } catch (Throwable e) {
             Log.w(TAG, "[Shokz] host MAC lookup failed: " + e);
             return null;
         }

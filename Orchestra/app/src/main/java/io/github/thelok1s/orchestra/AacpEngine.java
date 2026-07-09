@@ -223,7 +223,7 @@ public final class AacpEngine {
                     else if (a instanceof ParcelUuid) types[i] = ParcelUuid.class;
                     else types[i] = a.getClass();
                 }
-                Constructor<?> ctor = BluetoothSocket.class.getDeclaredConstructor(types);
+                Constructor<?> ctor = (Constructor<?>) org.lsposed.hiddenapibypass.HiddenApiBypass.getDeclaredConstructor(BluetoothSocket.class, types);
                 ctor.setAccessible(true);
                 BluetoothSocket sock = (BluetoothSocket) ctor.newInstance(args);
                 Log.i(TAG, "AACP L2CAP socket via ctor spec #" + (idx + 1) + " " + java.util.Arrays.toString(types));
