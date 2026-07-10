@@ -893,38 +893,49 @@ private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
                     .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                var animIndex = 0
                 if (supported.isEmpty()) {
-                    Text(
-                        "No supported devices paired. Pair your headphones, then return here.",
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier.padding(8.dp)
-                    )
+                    Rise(animIndex++) {
+                        Text(
+                            "No supported devices paired. Pair your headphones, then return here.",
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
                 }
                 if (hooked.isNotEmpty()) {
-                    SectionHeader("Hooked", "${hooked.size}")
+                    Rise(animIndex++) {
+                        SectionHeader("Hooked", "${hooked.size}")
+                    }
                     hooked.forEach { d ->
-                        HookedDeviceCard(
-                            d, refreshKey, tick, showStatuses, showUnverified, showInApp, showMac,
-                            onUnhook = { DeviceStore.setEnabled(d.mac, d.deviceId, false); tick++ },
-                            onChange = { tick++ },
-                            onManifestUpdated = { tick++ },
-                            onOpen = { onOpenDevice(d.mac) })
+                        Rise(animIndex++) {
+                            HookedDeviceCard(
+                                d, refreshKey, tick, showStatuses, showUnverified, showInApp, showMac,
+                                onUnhook = { DeviceStore.setEnabled(d.mac, d.deviceId, false); tick++ },
+                                onChange = { tick++ },
+                                onManifestUpdated = { tick++ },
+                                onOpen = { onOpenDevice(d.mac) })
+                        }
                     }
                 }
                 if (available.isNotEmpty()) {
-                    SectionHeader("Available to hook", "${available.size}")
-                    Card(shape = RoundedCornerShape(28.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-                        Column {
-                            available.forEach { d ->
-                                AvailableRow(
-                                    d = d,
-                                    showStatuses = showStatuses,
-                                    showMac = showMac,
-                                    onHook = { DeviceStore.setEnabled(d.mac, d.deviceId, true); tick++ },
-                                    onManifestDownloaded = { tick++ },
-                                )
+                    Rise(animIndex++) {
+                        SectionHeader("Available to hook", "${available.size}")
+                    }
+                    Rise(animIndex++) {
+                        Card(shape = RoundedCornerShape(28.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                            Column {
+                                available.forEach { d ->
+                                    AvailableRow(
+                                        d = d,
+                                        showStatuses = showStatuses,
+                                        showMac = showMac,
+                                        onHook = { DeviceStore.setEnabled(d.mac, d.deviceId, true); tick++ },
+                                        onManifestDownloaded = { tick++ },
+                                    )
+                                }
                             }
                         }
                     }
@@ -964,46 +975,52 @@ private fun BluetoothDisabledPlaceholder(
             val chipBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
             val tint = if (btState == BtState.TURNING_ON) BluetoothBlue else MaterialTheme.colorScheme.onSurfaceVariant
 
-            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(84.dp)) {
-                if (btState == BtState.TURNING_ON) {
-                    CircularWavyProgressIndicator(
-                        modifier = Modifier.size(84.dp),
-                        color = tint
-                    )
+            Rise(0) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.size(84.dp)) {
+                    if (btState == BtState.TURNING_ON) {
+                        CircularWavyProgressIndicator(
+                            modifier = Modifier.size(84.dp),
+                            color = tint
+                        )
+                    }
+                    ShapeChip(shape = animatedShape, size = 72.dp, color = chipBg) {
+                        Icon(
+                            if (btState == BtState.TURNING_ON) Icons.Filled.Bluetooth else Icons.Filled.BluetoothDisabled,
+                            contentDescription = null,
+                            tint = tint,
+                            modifier = Modifier.size(36.dp)
+                        )
+                    }
                 }
-                ShapeChip(shape = animatedShape, size = 72.dp, color = chipBg) {
-                    Icon(
-                        if (btState == BtState.TURNING_ON) Icons.Filled.Bluetooth else Icons.Filled.BluetoothDisabled,
-                        contentDescription = null,
-                        tint = tint,
-                        modifier = Modifier.size(36.dp)
+            }
+
+            Rise(1) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = if (btState == BtState.TURNING_ON) "Enabling Bluetooth..." else "Bluetooth is disabled",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        text = if (btState == BtState.TURNING_ON) "Please wait a moment" else "Orchestra requires Bluetooth to scan and manage devices",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
                     )
                 }
             }
 
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    text = if (btState == BtState.TURNING_ON) "Enabling Bluetooth..." else "Bluetooth is disabled",
-                    style = MaterialTheme.typography.titleLarge
-                )
-                Text(
-                    text = if (btState == BtState.TURNING_ON) "Please wait a moment" else "Orchestra requires Bluetooth to scan and manage devices",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-
-            Button(
-                onClick = onEnable,
-                enabled = btState == BtState.OFF,
-                modifier = Modifier.height(48.dp),
-                shape = CircleShape
-            ) {
-                Text(if (btState == BtState.TURNING_ON) "Enabling..." else "Enable")
+            Rise(2) {
+                Button(
+                    onClick = onEnable,
+                    enabled = btState == BtState.OFF,
+                    modifier = Modifier.height(48.dp),
+                    shape = CircleShape
+                ) {
+                    Text(if (btState == BtState.TURNING_ON) "Enabling..." else "Enable")
+                }
             }
         }
     }
@@ -1494,33 +1511,39 @@ private fun SettingsScreen(onOpenDebug: () -> Unit) {
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
         verticalArrangement = Arrangement.spacedBy(26.dp)
     ) {
-        SettingsGroup(null) {
-            SettingToggle("Show device statuses", "Battery and connection on each device card",
-                RowPos.Single,
-                DeviceStore.flag(FLAG_STATUSES, true)) { DeviceStore.setFlag(FLAG_STATUSES, it); tick++ }
+        Rise(0) {
+            SettingsGroup(null) {
+                SettingToggle("Show device statuses", "Battery and connection on each device card",
+                    RowPos.Single,
+                    DeviceStore.flag(FLAG_STATUSES, true)) { DeviceStore.setFlag(FLAG_STATUSES, it); tick++ }
+            }
         }
 
-        SettingsGroup("Bluetooth identity") {
-            SettingToggle("Act as Apple device",
-                "Advertise the phone as Apple so AirPods stay connected to it and other devices at " +
-                    "once. Takes effect after Bluetooth is restarted. While on, the phone identifies " +
-                    "as Apple to all Bluetooth devices.",
-                RowPos.Single,
-                DeviceStore.flag(FLAG_ACT_AS_APPLE, false)) { DeviceStore.setFlag(FLAG_ACT_AS_APPLE, it); tick++ }
+        Rise(1) {
+            SettingsGroup("Bluetooth identity") {
+                SettingToggle("Act as Apple device",
+                    "Advertise the phone as Apple so AirPods stay connected to it and other devices at " +
+                        "once. Takes effect after Bluetooth is restarted. While on, the phone identifies " +
+                        "as Apple to all Bluetooth devices.",
+                    RowPos.Single,
+                    DeviceStore.flag(FLAG_ACT_AS_APPLE, false)) { DeviceStore.setFlag(FLAG_ACT_AS_APPLE, it); tick++ }
+            }
         }
 
-        SettingsGroup("Debug") {
-            SettingToggle("Show unverified controls", "Reveal controls whose bytes aren't hardware-confirmed",
-                RowPos.First,
-                DeviceStore.flag(FLAG_UNVERIFIED, false)) { DeviceStore.setFlag(FLAG_UNVERIFIED, it); tick++ }
-            SettingToggle("Show in-app-only controls", "Controls with no native page surface (sliders, composite)",
-                RowPos.Middle,
-                DeviceStore.flag(FLAG_INAPP, false)) { DeviceStore.setFlag(FLAG_INAPP, it); tick++ }
-            SettingToggle("Show device MAC", "Display the Bluetooth address on device cards",
-                RowPos.Middle,
-                DeviceStore.flag(FLAG_MAC, false)) { DeviceStore.setFlag(FLAG_MAC, it); tick++ }
-            SettingNav("Debug & logs", "Live event log, catalog and runtime info",
-                RowPos.Last, onOpenDebug)
+        Rise(2) {
+            SettingsGroup("Debug") {
+                SettingToggle("Show unverified controls", "Reveal controls whose bytes aren't hardware-confirmed",
+                    RowPos.First,
+                    DeviceStore.flag(FLAG_UNVERIFIED, false)) { DeviceStore.setFlag(FLAG_UNVERIFIED, it); tick++ }
+                SettingToggle("Show in-app-only controls", "Controls with no native page surface (sliders, composite)",
+                    RowPos.Middle,
+                    DeviceStore.flag(FLAG_INAPP, false)) { DeviceStore.setFlag(FLAG_INAPP, it); tick++ }
+                SettingToggle("Show device MAC", "Display the Bluetooth address on device cards",
+                    RowPos.Middle,
+                    DeviceStore.flag(FLAG_MAC, false)) { DeviceStore.setFlag(FLAG_MAC, it); tick++ }
+                SettingNav("Debug & logs", "Live event log, catalog and runtime info",
+                    RowPos.Last, onOpenDebug)
+            }
         }
         if (tick < 0) Text("")
     }
