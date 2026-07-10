@@ -70,6 +70,11 @@ android {
         jniLibs {
             useLegacyPackaging = true
         }
+        // Keep the modern-libxposed discovery files (module.prop/java_init.list/scope.list) in the
+        // APK — the merge rule stops the default resource de-dup from dropping them.
+        resources {
+            merges += "META-INF/xposed/*"
+        }
     }
 
     compileOptions {
@@ -94,6 +99,9 @@ tasks.named("preBuild") { dependsOn("syncManifests") }
 dependencies {
     // Xposed API — compileOnly: LSPosed provides it at runtime, must NOT be bundled.
     compileOnly("de.robv.android.xposed:api:82")
+    // Modern libxposed API — compileOnly: the framework provides it at runtime (must NOT be bundled).
+    // Enables the ModernModuleEntry path for frameworks that drop the legacy de.robv bridge.
+    compileOnly("io.github.libxposed:api:102.0.0")
     // ShadowHook (BSD) — self-installing inline hook engine for the DID hook (see NativeBridge).
     // Ships prebuilt libshadowhook.so + a CMake/prefab package; consumed from
     // app/src/main/cpp/CMakeLists.txt via find_package(shadowhook REQUIRED CONFIG).
