@@ -27,6 +27,7 @@ import com.android.settingslib.bluetooth.devicesettings.ToggleInfo;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -216,6 +217,9 @@ public class SettingProviderService extends Service {
         BluetoothAdapter adapter = adapter();
         if (adapter == null) return;
         ConcurrentHashMap<Integer, Integer> cache = cacheFor(address);
+        // Try one batched status read first (Soundcore reports ~all controls in one packet): funcId
+        // -> optId. Engines that don't batch return null and we fall back to per-function reads.
+        Map<String, String> batch = batchRead(adapter, address, def, injected);
         for (DeviceDef.Func f : injected) {
             if (f.isInfoRow()) continue; // info rows carry no cached index; summary read at push
             // LOCAL behavior toggles (no AAP command): read the persisted enable straight from
@@ -229,7 +233,15 @@ public class SettingProviderService extends Service {
             if (engine == null) continue;
             // The freshly-read authoritative value (null if the read failed or is unsupported).
             Integer authoritative = null;
-            if (f.isToggle()) {
+            String batchOpt = batch != null ? batch.get(f.id) : null;
+            if (batchOpt != null) {
+                if (f.isToggle()) {
+                    authoritative = "on".equalsIgnoreCase(batchOpt) ? 1 : 0;
+                } else {
+                    int i = f.indexOfOption(batchOpt);
+                    if (i >= 0) authoritative = i;
+                }
+            } else if (f.isToggle()) {
                 Boolean on = engine.readToggle(adapter, address, def, f);
                 if (on != null) authoritative = on ? 1 : 0;
             } else {
@@ -262,6 +274,17 @@ public class SettingProviderService extends Service {
         if (sessionCached != null) return sessionCached;  // else keep what we already know this session
         if (persisted >= 0) return persisted;             // else the last value we set/saw (optimistic)
         return null;                                      // truly unknown -> leave unset
+    }
+
+    /** One batched status read for the device via the first injected function's engine, or null. */
+    private Map<String, String> batchRead(BluetoothAdapter adapter, String address, DeviceDef def,
+                                          List<DeviceDef.Func> injected) {
+        for (DeviceDef.Func f : injected) {
+            if (f.isInfoRow() || isLocalBehavior(f)) continue;
+            ControlEngine e = ControlEngine.forFunc(f);
+            if (e != null) return e.readStatus(adapter, address, def, injected);
+        }
+        return null;
     }
 
     /** Build a DeviceSetting for every injected function from the cached indices (one IPC push). */
