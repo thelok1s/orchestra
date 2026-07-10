@@ -17,6 +17,17 @@ public interface ControlEngine {
     void registerListener(String mac, String key, Runnable onChange);
     void unregisterListener(String mac, String key);
 
+    /**
+     * Optional batched read: funcId → current optId ("on"/"off" for toggles) for many functions in
+     * one device exchange. Returns null if this engine doesn't batch, and the caller falls back to
+     * per-function reads. Lets a device that reports all state in one status packet be pre-checked
+     * cheaply. Default: no batch.
+     */
+    default java.util.Map<String, String> readStatus(BluetoothAdapter a, String mac, DeviceDef def,
+                                                     java.util.List<DeviceDef.Func> funcs) {
+        return null;
+    }
+
     ControlEngine RFCOMM = new ControlEngine() {
         public boolean applyMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, String optId) {
             return RfcommEngine.applyMode(a, mac, def, f, optId);
@@ -41,6 +52,10 @@ public interface ControlEngine {
         }
         @Override public void registerListener(String mac, String key, Runnable onChange) { /* no push channel */ }
         @Override public void unregisterListener(String mac, String key) { /* no-op */ }
+        @Override public java.util.Map<String, String> readStatus(BluetoothAdapter a, String mac,
+                DeviceDef def, java.util.List<DeviceDef.Func> funcs) {
+            return RfcommEngine.readStatus(a, mac, def, funcs); // one status packet -> many controls
+        }
     };
 
     // AAP is brokered: the SystemUI-resident AapBroker owns the socket. This app-process engine

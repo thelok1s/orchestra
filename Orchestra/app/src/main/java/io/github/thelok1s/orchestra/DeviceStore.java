@@ -35,6 +35,9 @@ public final class DeviceStore {
     // (e.g. the SystemUI AAP broker) gates at runtime rather than an AAP/RFCOMM command — auto-pause
     // on ear removal is the first one. JSON { "<MAC>": { "auto_pause": true|false } }. Default FALSE.
     private static final String KEY_BEHAVIORS = "behaviors";
+    // Last known/applied setting index per control, an optimistic fallback shown when a live device
+    // read isn't available (unverified/unsupported reads). JSON { "<MAC>": { "<funcId>": <index> } }.
+    private static final String KEY_LAST_STATE = "last_state";
 
     private DeviceStore() {}
 
@@ -240,6 +243,37 @@ public final class DeviceStore {
             prefs().edit().putString(KEY_BEHAVIORS, root.toString()).apply();
         } catch (Exception e) {
             Log.w(DeviceDef.TAG, "setBehaviorEnabled failed: " + e);
+        }
+    }
+
+    // ---- last known/applied control state (optimistic fallback across process restarts) ----
+
+    /** Last known/applied setting index for {@code funcId} on {@code mac}, or {@code dflt} if none. */
+    public static int lastIndex(String mac, String funcId, int dflt) {
+        if (mac == null || funcId == null) return dflt;
+        try {
+            JSONObject root = new JSONObject(prefs().getString(KEY_LAST_STATE, "{}"));
+            JSONObject dev = root.optJSONObject(mac.toUpperCase(Locale.ROOT));
+            if (dev != null && dev.has(funcId)) return dev.optInt(funcId, dflt);
+        } catch (Exception e) {
+            Log.w(DeviceDef.TAG, "lastIndex failed: " + e);
+        }
+        return dflt;
+    }
+
+    /** Persist the last known/applied index for {@code funcId} on {@code mac}. */
+    public static void setLastIndex(String mac, String funcId, int index) {
+        if (mac == null || funcId == null) return;
+        try {
+            String key = mac.toUpperCase(Locale.ROOT);
+            JSONObject root = new JSONObject(prefs().getString(KEY_LAST_STATE, "{}"));
+            JSONObject dev = root.optJSONObject(key);
+            if (dev == null) dev = new JSONObject();
+            dev.put(funcId, index);
+            root.put(key, dev);
+            prefs().edit().putString(KEY_LAST_STATE, root.toString()).apply();
+        } catch (Exception e) {
+            Log.w(DeviceDef.TAG, "setLastIndex failed: " + e);
         }
     }
 

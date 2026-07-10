@@ -3,6 +3,9 @@ package io.github.thelok1s.orchestra;
 import android.bluetooth.BluetoothAdapter;
 import android.util.Log;
 
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -113,29 +116,71 @@ final class RfcommEngine {
     /** Read the current mode option id of a SPECIFIC function, or null on failure. */
     static String readMode(BluetoothAdapter adapter, String mac, DeviceDef def, DeviceDef.Func f) {
         if (f == null || f.readCommand == null) return null;
-        final boolean useMatch = !f.readMatch.isEmpty();
-        final int needIdx = useMatch ? maxMatchIndex(f) : f.stateByteIndex;
+        final int needIdx = maxNeededIndex(f);
         final String readCommand = f.readCommand;
         final byte[] frame = buildFrame(readCommand, null);
         return SppTransport.withSession(adapter, mac, def, null, (in, out) -> {
-            SppTransport.Rx rx = SppTransport.sendAndAwait(in, out, frame, 2000, (acc, len) -> {
-                int s = findResponseStart(acc, len, readCommand);
-                return (s >= 0 && s + needIdx < len) ? s : -1; // packet + the bytes we need have arrived
-            });
-            if (rx == null) { Log.w(TAG, "no state packet"); return null; }
-            String optId;
-            if (useMatch) {
-                optId = matchOption(rx.buf, rx.len, rx.start, f);
-                Log.i(TAG, "readMode (match) -> " + optId);
-            } else {
-                int idx = rx.start + f.stateByteIndex;
-                if (idx >= rx.len) { Log.w(TAG, "state byte beyond packet"); return null; }
-                String valHex = String.format("%02x", rx.buf[idx] & 0xff);
-                optId = f.valueMap.get(valHex);
-                Log.i(TAG, "readMode value=" + valHex + " -> " + optId);
-            }
-            return optId;
+            SppTransport.Rx rx = SppTransport.sendAndAwait(in, out, frame, 2000,
+                    (acc, len) -> matchStart(acc, len, readCommand, needIdx));
+            if (rx == null) { Log.w(TAG, "no state packet for " + f.id); return null; }
+            return decodeOption(rx.buf, rx.len, rx.start, f);
         });
+    }
+
+    /**
+     * Batched status read: send each DISTINCT read command among {@code funcs} once and decode every
+     * function's current value from the shared response — so a device that reports all state in one
+     * status packet (Soundcore {@code 0101}: ~18 functions) is read in a single exchange instead of
+     * N. Returns funcId → optId ("on"/"off" for toggles), omitting functions that don't decode; null
+     * if nothing was read. This is the read-side plumbing for pre-checking the whole About page.
+     */
+    static Map<String, String> readStatus(BluetoothAdapter adapter, String mac, DeviceDef def,
+                                           List<DeviceDef.Func> funcs) {
+        // Group by read command; compute how many bytes each group needs before it's decodable.
+        Map<String, List<DeviceDef.Func>> byCmd = new LinkedHashMap<>();
+        for (DeviceDef.Func f : funcs) {
+            if (f == null || f.readCommand == null) continue;
+            byCmd.computeIfAbsent(f.readCommand, k -> new ArrayList<>()).add(f);
+        }
+        if (byCmd.isEmpty()) return null;
+        return SppTransport.withSession(adapter, mac, def, null, (in, out) -> {
+            Map<String, String> out2 = new LinkedHashMap<>();
+            for (Map.Entry<String, List<DeviceDef.Func>> e : byCmd.entrySet()) {
+                final String cmd = e.getKey();
+                int need = 0;
+                for (DeviceDef.Func f : e.getValue()) need = Math.max(need, maxNeededIndex(f));
+                final int needIdx = need;
+                SppTransport.Rx rx = SppTransport.sendAndAwait(in, out, buildFrame(cmd, null), 2000,
+                        (acc, len) -> matchStart(acc, len, cmd, needIdx));
+                if (rx == null) { Log.w(TAG, "no status packet for read cmd " + cmd); continue; }
+                for (DeviceDef.Func f : e.getValue()) {
+                    String optId = decodeOption(rx.buf, rx.len, rx.start, f);
+                    if (optId != null) out2.put(f.id, optId);
+                }
+            }
+            return out2.isEmpty() ? null : out2;
+        });
+    }
+
+    /** Matcher: the response packet for {@code cmd} has started AND enough bytes for {@code needIdx}. */
+    private static int matchStart(byte[] acc, int len, String cmd, int needIdx) {
+        int s = findResponseStart(acc, len, cmd);
+        return (s >= 0 && s + needIdx < len) ? s : -1;
+    }
+
+    /** Bytes-from-response-start this function needs to decode (multi-byte match, or its state byte). */
+    private static int maxNeededIndex(DeviceDef.Func f) {
+        return !f.readMatch.isEmpty() ? maxMatchIndex(f) : f.stateByteIndex;
+    }
+
+    /** Decode a function's option id from a response buffer at {@code start}, or null. Pure. */
+    static String decodeOption(byte[] acc, int len, int start, DeviceDef.Func f) {
+        if (start < 0) return null;
+        if (!f.readMatch.isEmpty()) return matchOption(acc, len, start, f);
+        if (f.stateByteIndex < 0) return null;
+        int idx = start + f.stateByteIndex;
+        if (idx >= len) return null;
+        return f.valueMap.get(String.format("%02x", acc[idx] & 0xff));
     }
 
     // ---- set / read (level / slider) ----
