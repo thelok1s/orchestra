@@ -1,10 +1,10 @@
 {
   "schema_version": 4,
-  "revision": 1,
-  "revision_date": "2026-07-08",
+  "revision": 2,
+  "revision_date": "2026-07-11",
   "id": "airpods-4",
   "name": "AirPods 4",
-  "device_type": "earbuds_2",
+  "device_type": "tws",
   "manufacturer": "Apple",
   "model_code": "A3053",
   "match": {

@@ -1,10 +1,10 @@
 {
   "schema_version": 3,
-  "revision": 1,
-  "revision_date": "2026-07-08",
+  "revision": 2,
+  "revision_date": "2026-07-11",
   "id": "soundcore-liberty-3-pro",
   "name": "Soundcore Liberty 3 Pro",
-  "device_type": "earbuds_2",
+  "device_type": "tws",
   "manufacturer": "Anker / Soundcore",
   "model_code": "3952",
   "re_model": "A3952",

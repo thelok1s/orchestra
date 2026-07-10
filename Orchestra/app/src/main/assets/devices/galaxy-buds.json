@@ -1,10 +1,10 @@
 {
   "schema_version": 3,
-  "revision": 1,
-  "revision_date": "2026-07-08",
+  "revision": 2,
+  "revision_date": "2026-07-11",
   "id": "galaxy-buds",
   "name": "Galaxy Buds (2019)",
-  "device_type": "earbuds_2",
+  "device_type": "tws",
   "manufacturer": "Samsung",
   "model_code": "buds",
   "re_model": "Buds",

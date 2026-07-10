@@ -1173,14 +1173,15 @@ private fun battIcon(pct: Int, charging: Boolean): ImageVector = when {
     else -> Icons.Filled.BatteryFull
 }
 
-/** Map a manifest device_type to its Devices-list icon. Unknown/null -> Headphones. */
+/** Map a manifest device_type (real form factor) to the most applicable existing icon.
+ *  Legacy aliases (earbuds/earbuds_2/headset_mic) are still accepted. Unknown/null -> Headphones. */
 @Composable
 fun iconForType(type: String?): ImageVector = when (type) {
     "speaker" -> Icons.Filled.Speaker
-    "earbuds" -> Icons.Filled.Earbuds
-    "earbuds_2" -> ImageVector.vectorResource(R.drawable.earbuds_2_24px)
-    "headset_mic" -> Icons.Filled.HeadsetMic
-    else -> Icons.Filled.Headphones
+    "neckband", "earbuds" -> Icons.Filled.Earbuds                                // cabled/open-ear (Shokz, Sony WI)
+    "tws", "earbuds_2" -> ImageVector.vectorResource(R.drawable.earbuds_2_24px)   // true-wireless
+    "headset", "headset_mic" -> Icons.Filled.HeadsetMic
+    else -> Icons.Filled.Headphones                                              // "headphones" + fallback
 }
 
 /** Resolve a hooked/eligible device's icon from its manifest device_type (loaded once per id). */

@@ -31,8 +31,8 @@ public final class DeviceDef {
 
     final String id;
     final String name;
-    // Physical form factor, drives the Devices-list icon: speaker | headphones | earbuds
-    // (cabled/open-ear, e.g. Shokz) | earbuds_2 (TWS) | headset_mic. Never null (defaulted in parse).
+    // Physical form factor, drives the Devices-list icon: speaker | headphones | neckband
+    // (cabled/open-ear, e.g. Shokz) | tws (true-wireless) | headset. Never null (defaulted in parse).
     final String deviceType;
     // transport (back-compat: derived from default_channel for RfcommEngine)
     final String transportUuid;
@@ -367,14 +367,16 @@ public final class DeviceDef {
                 platforms, functions);
     }
 
-    /** Recognised form factors (drive the Devices-list icon). */
+    /** Recognised real form factors + legacy aliases (older manifests / cached OTA), which the app's
+     *  icon mapping still understands. Drives the Devices-list icon. */
     static final java.util.Set<String> DEVICE_TYPES = new java.util.HashSet<>(java.util.Arrays.asList(
-            "speaker", "headphones", "earbuds", "earbuds_2", "headset_mic"));
+            "speaker", "headphones", "neckband", "tws", "headset",
+            "earbuds", "earbuds_2", "headset_mic")); // legacy aliases
 
     /**
      * The device's form factor. Uses the manifest's {@code device_type} when it's a recognised value;
-     * otherwise infers from a clue — a per-bud (TWS) battery layout implies {@code earbuds_2} — and
-     * finally falls back to {@code headphones}. Never null.
+     * otherwise infers from a clue — a per-bud (TWS) battery layout implies {@code tws} — and finally
+     * falls back to {@code headphones}. Never null.
      */
     private static String resolveDeviceType(JSONObject root, String id) {
         String dt = root.optString("device_type", null);
@@ -386,7 +388,7 @@ public final class DeviceDef {
                 JSONObject fn = funcs.optJSONObject(i);
                 if (fn == null || !"battery".equals(fn.optString("type"))) continue;
                 JSONArray layout = fn.optJSONArray("battery_layout");
-                if (layout != null && layout.length() > 1) return "earbuds_2";
+                if (layout != null && layout.length() > 1) return "tws";
             }
         }
         return "headphones";

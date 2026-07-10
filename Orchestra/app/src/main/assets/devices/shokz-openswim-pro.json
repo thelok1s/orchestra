@@ -1,10 +1,10 @@
 {
   "schema_version": 3,
-  "revision": 2,
-  "revision_date": "2026-07-07",
+  "revision": 3,
+  "revision_date": "2026-07-11",
   "id": "shokz-openswim-pro",
   "name": "Shokz OpenSwim Pro",
-  "device_type": "earbuds",
+  "device_type": "neckband",
   "manufacturer": "Shokz",
   "model_code": "S180",
   "_capture_note": "All commands verified live 2026-07-06 via btsnoop HCI capture (btsnoop.pcapng). Phone: Pixel 8 Pro Max Ultra+ (MAC c8:17:ec:7b:33:5c). Headphone: OpenSwim Pro by Shokz (MAC a0:0c:e2:49:22:05, Company ID 0x0cac). Control channel: L2CAP over RFCOMM (PSM 0x0003), custom shokz_v1 protocol. Two packet formats: A (53 ff ... 2d) for persistent settings writes; B (53 ef ... 31) for immediate action commands.",

@@ -1,6 +1,6 @@
 {
   "index_schema": 1,
-  "generated": "2026-07-08T11:47:03.910Z",
+  "generated": "2026-07-10T21:05:13.172Z",
   "repo": "orchestra-manifests",
   "manufacturers": [
     {
@@ -11,7 +11,7 @@
           "id": "soundcore-liberty-3-pro",
           "name": "Soundcore Liberty 3 Pro",
           "schema_version": 3,
-          "revision": 1,
+          "revision": 2,
           "match": {
             "name_regex": "(?i)soundcore Liberty 3 Pro",
             "service_uuids_any": [
@@ -30,13 +30,13 @@
             "verified": 0
           },
           "url": "manifests/anker-soundcore/soundcore-liberty-3-pro.json",
-          "sha256": "e4fee704eecbda0df0c61ff94cb23fd93b1142850ca993fc9920b9dacf6bf5e4"
+          "sha256": "d41725b3d30f9e9e639960f4272c2abd85923f8cfeec8589bbc2402a58c2614d"
         },
         {
           "id": "soundcore-liberty-4-pro",
           "name": "Soundcore Liberty 4 Pro",
           "schema_version": 3,
-          "revision": 1,
+          "revision": 2,
           "match": {
             "name_regex": "(?i)soundcore Liberty 4 Pro",
             "service_uuids_any": [
@@ -55,7 +55,7 @@
             "verified": 6
           },
           "url": "manifests/anker-soundcore/soundcore-liberty-4-pro.json",
-          "sha256": "403009f9946d601b712fe4b3d97b3d74b41811a9ae263ea643ee6bd33807e1ca"
+          "sha256": "2526151a8a8881716ba93620694c0095578198246a503958d70940bd2449baa3"
         },
         {
           "id": "soundcore-life-q30",
@@ -80,7 +80,7 @@
             "verified": 0
           },
           "url": "manifests/anker-soundcore/soundcore-life-q30.json",
-          "sha256": "7b4e5484ddb8543340b99f7362f3fd679d996c0b726f393c95fdd42d6bd70769"
+          "sha256": "991cc7e76b55a79a5692f4577cc9ac9259eccef5d5f2759eaf03c33a7c6014f9"
         },
         {
           "id": "soundcore-life-q35",
@@ -105,13 +105,13 @@
             "verified": 0
           },
           "url": "manifests/anker-soundcore/soundcore-life-q35.json",
-          "sha256": "965a90b32a84a9479af2f7d62bfb9fda2e27770238b3b655965e93b5dc78fc08"
+          "sha256": "805198340dcb3e00cf4a5fbe6ba00c3946797fb86b73c223fe96b6c3d9325cf5"
         },
         {
           "id": "soundcore-space-a40",
           "name": "Soundcore Space A40",
           "schema_version": 3,
-          "revision": 1,
+          "revision": 2,
           "match": {
             "name_regex": "(?i)soundcore Space A40",
             "service_uuids_any": [
@@ -130,7 +130,7 @@
             "verified": 0
           },
           "url": "manifests/anker-soundcore/soundcore-space-a40.json",
-          "sha256": "88f93719adbf446c9edb9c332fde9c69b4aa7ef5af5f5c1366cfb9eff1bf88d9"
+          "sha256": "ff22f1d0f020111e60aa6580d03bc17b92226eaeb0d0625ffcddef3917c05349"
         },
         {
           "id": "soundcore-space-one-pro",
@@ -156,7 +156,7 @@
             "verified": 10
           },
           "url": "manifests/anker-soundcore/soundcore-space-one-pro.json",
-          "sha256": "07b163e86c3900825cab41a5408679de40b142b20183d624a1ce96bec03e15a9"
+          "sha256": "7356424e7c876a747684f4287539edacc1318459829d718a104022ae11890895"
         },
         {
           "id": "soundcore-space-q45",
@@ -181,7 +181,7 @@
             "verified": 0
           },
           "url": "manifests/anker-soundcore/soundcore-space-q45.json",
-          "sha256": "804531ec66a3bb4e8bc51ae42e82c0a75777f4589cd3babc00205e6086a5ece9"
+          "sha256": "448f99b220d92e56bc1b89e1fdce63176ca3b85e1eb0cb4131545db9e59f91ce"
         }
       ]
     },
@@ -190,10 +190,102 @@
       "name": "Apple",
       "devices": [
         {
+          "id": "airpods-3",
+          "name": "AirPods 3",
+          "schema_version": 4,
+          "revision": 2,
+          "match": {
+            "name_regex": "(?i)AirPods 3",
+            "service_uuids_any": [
+              "74ec2172-0bad-4d01-8f77-997b2be0722a"
+            ]
+          },
+          "transports": [
+            "aacp"
+          ],
+          "platforms": [],
+          "counts": {
+            "capabilities": 4,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/apple/airpods-3.json",
+          "sha256": "bbc64fd1df939e0938c4c1627d31a8304b6fe21b87f220bdc5e549b55025a98d"
+        },
+        {
+          "id": "airpods-4-anc",
+          "name": "AirPods 4 (ANC)",
+          "schema_version": 4,
+          "revision": 2,
+          "match": {
+            "name_regex": "(?i)AirPods 4 with Active Noise Cancellation",
+            "service_uuids_any": [
+              "74ec2172-0bad-4d01-8f77-997b2be0722a"
+            ]
+          },
+          "transports": [
+            "aacp"
+          ],
+          "platforms": [],
+          "counts": {
+            "capabilities": 5,
+            "injectable": 2,
+            "verified": 0
+          },
+          "url": "manifests/apple/airpods-4-anc.json",
+          "sha256": "0fb032f74a81b363168eee2c4116b4a3f71a6ddf495e6793b6fb1c9ac2adfa23"
+        },
+        {
+          "id": "airpods-4",
+          "name": "AirPods 4",
+          "schema_version": 4,
+          "revision": 2,
+          "match": {
+            "name_regex": "(?i)AirPods 4(?! with Active Noise Cancellation)",
+            "service_uuids_any": [
+              "74ec2172-0bad-4d01-8f77-997b2be0722a"
+            ]
+          },
+          "transports": [
+            "aacp"
+          ],
+          "platforms": [],
+          "counts": {
+            "capabilities": 4,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/apple/airpods-4.json",
+          "sha256": "683d034a643b33c4075d408d8a8b1e9ed4d87a5c01ffe8d7d617d9dd15db4243"
+        },
+        {
+          "id": "airpods-max",
+          "name": "AirPods Max",
+          "schema_version": 4,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)AirPods Max",
+            "service_uuids_any": [
+              "74ec2172-0bad-4d01-8f77-997b2be0722a"
+            ]
+          },
+          "transports": [
+            "aacp"
+          ],
+          "platforms": [],
+          "counts": {
+            "capabilities": 5,
+            "injectable": 2,
+            "verified": 0
+          },
+          "url": "manifests/apple/airpods-max.json",
+          "sha256": "a61db66eb989116951f4e23453fe0ef16b9f36a6734bc9bb2dc8f0d1a2c0325d"
+        },
+        {
           "id": "airpods-pro-2",
           "name": "AirPods Pro 2",
           "schema_version": 4,
-          "revision": 9,
+          "revision": 10,
           "match": {
             "name_regex": "(?i)airpods pro",
             "service_uuids_any": [
@@ -210,7 +302,53 @@
             "verified": 8
           },
           "url": "manifests/apple/airpods-pro-2.json",
-          "sha256": "a5922fdb668fbf491a789f5519f236739e3e5575073ff3e00668bae2c5c2024b"
+          "sha256": "68adeb5fe2d7204e87d151835f648de29169bc72b6ce11bcf12d38fc58eb659a"
+        },
+        {
+          "id": "airpods-pro",
+          "name": "AirPods Pro",
+          "schema_version": 4,
+          "revision": 2,
+          "match": {
+            "name_regex": "(?i)AirPods Pro(?! 2)",
+            "service_uuids_any": [
+              "74ec2172-0bad-4d01-8f77-997b2be0722a"
+            ]
+          },
+          "transports": [
+            "aacp"
+          ],
+          "platforms": [],
+          "counts": {
+            "capabilities": 5,
+            "injectable": 2,
+            "verified": 0
+          },
+          "url": "manifests/apple/airpods-pro.json",
+          "sha256": "baae7aacf9c9ccbfc130a87ff1104188e92d57cbbe24635966cb6ede86faa9a0"
+        },
+        {
+          "id": "airpods",
+          "name": "AirPods (1st/2nd Gen)",
+          "schema_version": 4,
+          "revision": 2,
+          "match": {
+            "name_regex": "(?i)AirPods(?! (Pro|Max|3|4))",
+            "service_uuids_any": [
+              "74ec2172-0bad-4d01-8f77-997b2be0722a"
+            ]
+          },
+          "transports": [
+            "aacp"
+          ],
+          "platforms": [],
+          "counts": {
+            "capabilities": 4,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/apple/airpods.json",
+          "sha256": "dd2830059dbd7e1832e979fbeb4020e008ad8836a93ad09a1e6ce2f8e6623818"
         }
       ]
     },
@@ -241,7 +379,7 @@
             "verified": 0
           },
           "url": "manifests/bose/bose-nc700.json",
-          "sha256": "8255de5885f77c5d6e576c70e3d897a99ff8c2c229de8e38442b87a546281f1d"
+          "sha256": "0c1983e4c86dcdce90d544778db7f003432402d0f83bc37e92e4520f3012ae75"
         },
         {
           "id": "bose-qc35",
@@ -266,7 +404,7 @@
             "verified": 0
           },
           "url": "manifests/bose/bose-qc35.json",
-          "sha256": "e68732c5ed2b861d15ca287139a5e5b1540c565ce182c2af6b7215c22197a74d"
+          "sha256": "43ec50a28421b19f93527e1c93c59da7c843793a691fe3d38c8d65eb50a1ee6b"
         },
         {
           "id": "bose-qc45",
@@ -291,7 +429,7 @@
             "verified": 0
           },
           "url": "manifests/bose/bose-qc45.json",
-          "sha256": "6f1fab45fc0af91efb86160715fecbc260ec460ea92a174dec6f445640e99afa"
+          "sha256": "a96eed74e524a3373f41f771de450cc206b9dac8971e8ed22c68492016f70ed7"
         }
       ]
     },
@@ -303,7 +441,7 @@
           "id": "galaxy-buds-live",
           "name": "Galaxy Buds Live",
           "schema_version": 3,
-          "revision": 1,
+          "revision": 2,
           "match": {
             "name_regex": "(?i)Galaxy Buds Live",
             "service_uuids_any": [
@@ -322,13 +460,13 @@
             "verified": 0
           },
           "url": "manifests/samsung/galaxy-buds-live.json",
-          "sha256": "299f056b927d8adafc8d4404f5cb805a087dbe100e0e4484786bc91fe35e6148"
+          "sha256": "818327e63adc5045441e49e0068cfcadf023f04872dc17806bb413466c2d4c13"
         },
         {
           "id": "galaxy-buds-plus",
           "name": "Galaxy Buds+",
           "schema_version": 3,
-          "revision": 1,
+          "revision": 2,
           "match": {
             "name_regex": "(?i)Galaxy Buds\\+",
             "service_uuids_any": [
@@ -347,13 +485,13 @@
             "verified": 0
           },
           "url": "manifests/samsung/galaxy-buds-plus.json",
-          "sha256": "5f9b4586a55d1936ef5b745a3be4c93573393c5bd339f87e4c05293ec6b6cb0a"
+          "sha256": "f08bb87b969ab4fa85bdfc0d442f0ebba6f3351a1a24c69238fceca090bf3000"
         },
         {
           "id": "galaxy-buds-pro",
           "name": "Galaxy Buds Pro",
           "schema_version": 3,
-          "revision": 1,
+          "revision": 2,
           "match": {
             "name_regex": "(?i)Galaxy Buds Pro",
             "service_uuids_any": [
@@ -372,13 +510,13 @@
             "verified": 0
           },
           "url": "manifests/samsung/galaxy-buds-pro.json",
-          "sha256": "b7dc891a0f40ad5228dbfb764fcea4853c2d542d81307eb00130e0993d20a116"
+          "sha256": "0d18aeaed5ea24d98d3e6b8cd39adfa8478038ee4eeba50de93f22ed0e212fcb"
         },
         {
           "id": "galaxy-buds",
           "name": "Galaxy Buds (2019)",
           "schema_version": 3,
-          "revision": 1,
+          "revision": 2,
           "match": {
             "name_regex": "(?i)Galaxy Buds(?! (Live|Pro|\\+|2|3))",
             "service_uuids_any": [
@@ -397,13 +535,13 @@
             "verified": 0
           },
           "url": "manifests/samsung/galaxy-buds.json",
-          "sha256": "2b05efea78d90f2ce2d30acae77abad8ec9192862276827f173665a6d7d9becf"
+          "sha256": "fb6aa4ddf0de702d94f162f0fdd56f7559603b03c9c4e59135ef9db99de441f2"
         },
         {
           "id": "galaxy-buds2-pro",
           "name": "Galaxy Buds 2 Pro",
           "schema_version": 3,
-          "revision": 1,
+          "revision": 2,
           "match": {
             "name_regex": "(?i)Galaxy Buds2 Pro",
             "service_uuids_any": [
@@ -422,13 +560,13 @@
             "verified": 0
           },
           "url": "manifests/samsung/galaxy-buds2-pro.json",
-          "sha256": "3595c51037052a1fa0d8ba51897180646c8ac3fec853de5a4ec6c149f55e542a"
+          "sha256": "6c5ccad8c07e39bf731a18d7374c9d33403216b847752ca04898254a24228c44"
         },
         {
           "id": "galaxy-buds2",
           "name": "Galaxy Buds 2",
           "schema_version": 3,
-          "revision": 1,
+          "revision": 2,
           "match": {
             "name_regex": "(?i)Galaxy Buds2(?! Pro)",
             "service_uuids_any": [
@@ -447,7 +585,7 @@
             "verified": 0
           },
           "url": "manifests/samsung/galaxy-buds2.json",
-          "sha256": "ec8a6d8c3fcd47037175cdac77f55c0d1976ddd33ea501770ebc56aa489b05a3"
+          "sha256": "3f9060081c7b8766abd17b283ac8024a429d49b4f4c63ce5587c9e5c5742a92a"
         }
       ]
     },
@@ -459,7 +597,7 @@
           "id": "shokz-openswim-pro",
           "name": "Shokz OpenSwim Pro",
           "schema_version": 3,
-          "revision": 2,
+          "revision": 3,
           "match": {
             "name_regex": "(?i)(OpenSwim Pro|Shokz.OpenSwim.Pro)",
             "service_uuids_any": [
@@ -480,7 +618,7 @@
             "verified": 11
           },
           "url": "manifests/shokz/shokz-openswim-pro.json",
-          "sha256": "67b851e57888f18322472a2bc6799753714a3da1a2f2e47e57771ed5e6741772"
+          "sha256": "58a3287edb03d59ba404e9ef02594c2366921fa66503864e74d2c7c761a395bd"
         }
       ]
     }
