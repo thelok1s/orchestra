@@ -462,9 +462,9 @@ internal fun bondedSupported(context: Context): List<BondedDevice> {
 }
 
 @Composable
-private fun rememberBondedSupported(refreshKey: Int, vararg keys: Any?): List<BondedDevice> {
+private fun rememberBondedSupported(refreshKey: Int, vararg keys: Any?): List<BondedDevice>? {
     val context = LocalContext.current
-    var supported by remember(refreshKey) { mutableStateOf<List<BondedDevice>>(emptyList()) }
+    var supported by remember(refreshKey) { mutableStateOf<List<BondedDevice>?>(null) }
     LaunchedEffect(refreshKey, *keys) {
         supported = withContext(Dispatchers.IO) {
             bondedSupported(context)
@@ -564,7 +564,7 @@ private fun StatusScreen(refreshKey: Int) {
     val apiLevel = remember(refreshKey) { runCatching { XposedSelf.apiLevel() }.getOrDefault(-1) }
     val btState = rememberBluetoothState()
     val bt = btState == BtState.ON
-    val supported = rememberBondedSupported(refreshKey, bt)
+    val supported = rememberBondedSupported(refreshKey, bt) ?: emptyList()
     val hookedCount = remember(refreshKey) { DeviceStore.enabledMap().size }
     val (btVersion, btTechList) = remember(refreshKey) { btTech(context) }
 
@@ -885,11 +885,6 @@ private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
         context.sendBroadcast(intent)
     }
 
-    // Hooked: enabled + has a local manifest (can load DeviceDef safely).
-    val hooked = supported.filter { enabled.containsKey(it.mac.uppercase()) && it.hasLocalManifest }
-    // Available: not currently hooked. Includes both local-catalog devices and index-only devices.
-    val available = supported.filter { !enabled.containsKey(it.mac.uppercase()) }
-
     AnimatedContent(
         targetState = btState == BtState.ON,
         transitionSpec = {
@@ -905,48 +900,52 @@ private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
                     .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                var animIndex = 0
-                if (supported.isEmpty()) {
-                    Rise(animIndex++) {
-                        Text(
-                            "No supported devices paired. Pair your headphones, then return here.",
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.padding(8.dp)
-                        )
-                    }
-                }
-                if (hooked.isNotEmpty()) {
-                    Rise(animIndex++) {
-                        SectionHeader("Hooked", "${hooked.size}")
-                    }
-                    hooked.forEach { d ->
+                if (supported != null) {
+                    val hooked = supported.filter { enabled.containsKey(it.mac.uppercase()) && it.hasLocalManifest }
+                    val available = supported.filter { !enabled.containsKey(it.mac.uppercase()) }
+                    var animIndex = 0
+                    if (supported.isEmpty()) {
                         Rise(animIndex++) {
-                            HookedDeviceCard(
-                                d, refreshKey, tick, showStatuses, showUnverified, showInApp, showMac,
-                                onUnhook = { DeviceStore.setEnabled(d.mac, d.deviceId, false); tick++ },
-                                onChange = { tick++ },
-                                onManifestUpdated = { tick++ },
-                                onOpen = { onOpenDevice(d.mac) })
+                            Text(
+                                "No supported devices paired. Pair your headphones, then return here.",
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier.padding(8.dp)
+                            )
                         }
                     }
-                }
-                if (available.isNotEmpty()) {
-                    Rise(animIndex++) {
-                        SectionHeader("Available to hook", "${available.size}")
+                    if (hooked.isNotEmpty()) {
+                        Rise(animIndex++) {
+                            SectionHeader("Hooked", "${hooked.size}")
+                        }
+                        hooked.forEach { d ->
+                            Rise(animIndex++) {
+                                HookedDeviceCard(
+                                    d, refreshKey, tick, showStatuses, showUnverified, showInApp, showMac,
+                                    onUnhook = { DeviceStore.setEnabled(d.mac, d.deviceId, false); tick++ },
+                                    onChange = { tick++ },
+                                    onManifestUpdated = { tick++ },
+                                    onOpen = { onOpenDevice(d.mac) })
+                            }
+                        }
                     }
-                    Rise(animIndex++) {
-                        Card(shape = RoundedCornerShape(28.dp),
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-                            Column {
-                                available.forEach { d ->
-                                    AvailableRow(
-                                        d = d,
-                                        showStatuses = showStatuses,
-                                        showMac = showMac,
-                                        onHook = { DeviceStore.setEnabled(d.mac, d.deviceId, true); tick++ },
-                                        onManifestDownloaded = { tick++ },
-                                    )
+                    if (available.isNotEmpty()) {
+                        Rise(animIndex++) {
+                            SectionHeader("Available to hook", "${available.size}")
+                        }
+                        Rise(animIndex++) {
+                            Card(shape = RoundedCornerShape(28.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                                Column {
+                                    available.forEach { d ->
+                                        AvailableRow(
+                                            d = d,
+                                            showStatuses = showStatuses,
+                                            showMac = showMac,
+                                            onHook = { DeviceStore.setEnabled(d.mac, d.deviceId, true); tick++ },
+                                            onManifestDownloaded = { tick++ },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1628,7 +1627,7 @@ private fun DebugScreen(refreshKey: Int, onBack: () -> Unit) {
     var tick by remember { mutableIntStateOf(0) }
     val moduleActive = remember(refreshKey, tick) { runCatching { XposedSelf.active() }.getOrDefault(false) }
     val apiLevel = remember(refreshKey, tick) { runCatching { XposedSelf.apiLevel() }.getOrDefault(-1) }
-    val supported = rememberBondedSupported(refreshKey, tick)
+    val supported = rememberBondedSupported(refreshKey, tick) ?: emptyList()
     val enabled = remember(refreshKey, tick) { DeviceStore.enabledMap() }
     val catalog = remember(refreshKey, tick) { DeviceStore.catalog() }
     val log = remember(tick) { Logbook.lines().asReversed() }
