@@ -49,6 +49,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.text.style.TextAlign
 import androidx.graphics.shapes.Morph
 import androidx.compose.material3.CircularWavyProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -196,6 +197,12 @@ fun OrchestraApp(refreshKey: Int) {
         var openDeviceMac by rememberSaveable { mutableStateOf<String?>(null) }
         var dest by rememberSaveable { mutableStateOf(Dest.STATUS) }
         var debugOpen by rememberSaveable { mutableStateOf(false) }
+        var tick by rememberSaveable { mutableIntStateOf(0) }
+
+        val btState = rememberBluetoothState()
+        val bt = btState == BtState.ON
+        val supported = rememberBondedSupported(refreshKey, dest, tick, bt)
+
         val opened = openDeviceMac
         // System/gesture back on the device-controls screen must return to the tabs, not exit the
         // activity — plain (non-predictive) since this screen replaces content wholesale rather
@@ -209,7 +216,25 @@ fun OrchestraApp(refreshKey: Int) {
                 // blurred copy of whatever scrolls beneath it (backdrop blur, no library).
                 val contentLayer = rememberGraphicsLayer()
                 Scaffold(
-                    topBar = { TopAppBar(title = { Text("Orchestra") }) },
+                    topBar = {
+                        Column {
+                            TopAppBar(title = { Text("Orchestra") })
+                            Box(Modifier.fillMaxWidth().height(4.dp), contentAlignment = Alignment.BottomCenter) {
+                                if (supported == null) {
+                                    LinearWavyProgressIndicator(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                } else {
+                                    HorizontalDivider(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        thickness = 1.dp,
+                                        color = MaterialTheme.colorScheme.outlineVariant
+                                    )
+                                }
+                            }
+                        }
+                    },
                     modifier = Modifier.drawWithContent {
                         contentLayer.record { this@drawWithContent.drawContent() }
                         drawLayer(contentLayer)
@@ -225,8 +250,14 @@ fun OrchestraApp(refreshKey: Int) {
                         modifier = Modifier.padding(padding)
                     ) { d ->
                         when (d) {
-                            Dest.STATUS -> StatusScreen(refreshKey)
-                            Dest.DEVICES -> DevicesScreen(refreshKey, onOpenDevice = { openDeviceMac = it })
+                            Dest.STATUS -> StatusScreen(refreshKey, supported ?: emptyList())
+                            Dest.DEVICES -> DevicesScreen(
+                                refreshKey = refreshKey,
+                                tick = tick,
+                                supported = supported,
+                                onRefresh = { tick++ },
+                                onOpenDevice = { openDeviceMac = it }
+                            )
                             Dest.SETTINGS -> SettingsScreen(onOpenDebug = { debugOpen = true })
                         }
                     }
@@ -264,7 +295,7 @@ fun OrchestraApp(refreshKey: Int) {
                         },
                         color = MaterialTheme.colorScheme.surface,
                     ) {
-                        DebugScreen(refreshKey, onBack = { debugOpen = false })
+                        DebugScreen(refreshKey, supported = supported ?: emptyList(), onBack = { debugOpen = false })
                     }
                 }
             }
@@ -558,13 +589,12 @@ internal fun btTech(context: Context): Pair<String, List<Pair<String, Boolean>>>
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun StatusScreen(refreshKey: Int) {
+private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
     val context = LocalContext.current
     val moduleActive = remember(refreshKey) { runCatching { XposedSelf.active() }.getOrDefault(false) }
     val apiLevel = remember(refreshKey) { runCatching { XposedSelf.apiLevel() }.getOrDefault(-1) }
     val btState = rememberBluetoothState()
     val bt = btState == BtState.ON
-    val supported = rememberBondedSupported(refreshKey, bt) ?: emptyList()
     val hookedCount = remember(refreshKey) { DeviceStore.enabledMap().size }
     val (btVersion, btTechList) = remember(refreshKey) { btTech(context) }
 
@@ -869,11 +899,15 @@ private fun StatusCard(
 // ---------- Devices ----------
 
 @Composable
-private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
+private fun DevicesScreen(
+    refreshKey: Int,
+    tick: Int,
+    supported: List<BondedDevice>?,
+    onRefresh: () -> Unit,
+    onOpenDevice: (String) -> Unit
+) {
     val context = LocalContext.current
     val btState = rememberBluetoothState()
-    var tick by remember { mutableIntStateOf(0) }
-    val supported = rememberBondedSupported(refreshKey, tick, btState)
     val enabled = remember(refreshKey, tick) { DeviceStore.enabledMap() }
     val showStatuses = DeviceStore.flag(FLAG_STATUSES, true)
     val showUnverified = DeviceStore.flag(FLAG_UNVERIFIED, false)
@@ -921,9 +955,9 @@ private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
                             Rise(animIndex++) {
                                 HookedDeviceCard(
                                     d, refreshKey, tick, showStatuses, showUnverified, showInApp, showMac,
-                                    onUnhook = { DeviceStore.setEnabled(d.mac, d.deviceId, false); tick++ },
-                                    onChange = { tick++ },
-                                    onManifestUpdated = { tick++ },
+                                    onUnhook = { DeviceStore.setEnabled(d.mac, d.deviceId, false); onRefresh() },
+                                    onChange = { onRefresh() },
+                                    onManifestUpdated = { onRefresh() },
                                     onOpen = { onOpenDevice(d.mac) })
                             }
                         }
@@ -942,8 +976,8 @@ private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
                                             d = d,
                                             showStatuses = showStatuses,
                                             showMac = showMac,
-                                            onHook = { DeviceStore.setEnabled(d.mac, d.deviceId, true); tick++ },
-                                            onManifestDownloaded = { tick++ },
+                                            onHook = { DeviceStore.setEnabled(d.mac, d.deviceId, true); onRefresh() },
+                                            onManifestDownloaded = { onRefresh() },
                                         )
                                     }
                                 }
@@ -1622,12 +1656,11 @@ private fun SettingNav(title: String, subtitle: String, pos: RowPos, onClick: ()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun DebugScreen(refreshKey: Int, onBack: () -> Unit) {
+private fun DebugScreen(refreshKey: Int, supported: List<BondedDevice>, onBack: () -> Unit) {
     val context = LocalContext.current
     var tick by remember { mutableIntStateOf(0) }
     val moduleActive = remember(refreshKey, tick) { runCatching { XposedSelf.active() }.getOrDefault(false) }
     val apiLevel = remember(refreshKey, tick) { runCatching { XposedSelf.apiLevel() }.getOrDefault(-1) }
-    val supported = rememberBondedSupported(refreshKey, tick) ?: emptyList()
     val enabled = remember(refreshKey, tick) { DeviceStore.enabledMap() }
     val catalog = remember(refreshKey, tick) { DeviceStore.catalog() }
     val log = remember(tick) { Logbook.lines().asReversed() }
