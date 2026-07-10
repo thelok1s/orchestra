@@ -33,12 +33,20 @@ public class VolumeApplyReceiver extends BroadcastReceiver {
                     Log.w(DeviceDef.TAG, "APPLY_INDEX: no def/bad index for " + address + " idx=" + index);
                     return;
                 }
-                String optId = def.soundMode.options.get(index).id;
+                DeviceDef.Func anc = def.soundMode;
+                String optId = anc.options.get(index).id;
                 BluetoothManager bm = (BluetoothManager) app.getSystemService(Context.BLUETOOTH_SERVICE);
                 BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
                 if (adapter == null) return;
+                // Route by the ANC function's engine, not a hardcoded RFCOMM — an AirPods/Shokz/etc.
+                // device surfaces ANC on the volume tile too and must apply over its own protocol.
+                ControlEngine engine = ControlEngine.forFunc(anc);
+                if (engine == null) { Log.w(DeviceDef.TAG, "APPLY_INDEX: no engine for " + address); return; }
                 Log.i(DeviceDef.TAG, "APPLY_INDEX " + address + " -> " + optId + " (idx " + index + ")");
-                RfcommEngine.applyMode(adapter, address, def, optId);
+                engine.applyMode(adapter, address, def, anc, optId);
+                // Persist last-known so the About-page cache and the volume tile stay in sync (the
+                // provider's resolveIndex falls back to this when a live read isn't available).
+                DeviceStore.setLastIndex(address, anc.id, index);
             } finally {
                 pr.finish();
             }
