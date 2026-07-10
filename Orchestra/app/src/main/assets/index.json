@@ -1,6 +1,6 @@
 {
   "index_schema": 1,
-  "generated": "2026-07-07T23:37:54.964Z",
+  "generated": "2026-07-08T11:47:03.910Z",
   "repo": "orchestra-manifests",
   "manufacturers": [
     {
@@ -211,6 +211,243 @@
           },
           "url": "manifests/apple/airpods-pro-2.json",
           "sha256": "a5922fdb668fbf491a789f5519f236739e3e5575073ff3e00668bae2c5c2024b"
+        }
+      ]
+    },
+    {
+      "slug": "bose",
+      "name": "Bose",
+      "devices": [
+        {
+          "id": "bose-nc700",
+          "name": "Bose Noise Cancelling 700",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)Bose NC700",
+            "service_uuids_any": [
+              "00001101-0000-1000-8000-00805f9b34fb"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 2,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/bose/bose-nc700.json",
+          "sha256": "8255de5885f77c5d6e576c70e3d897a99ff8c2c229de8e38442b87a546281f1d"
+        },
+        {
+          "id": "bose-qc35",
+          "name": "Bose QuietComfort 35",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)Bose QC35",
+            "service_uuids_any": [
+              "00001101-0000-1000-8000-00805f9b34fb"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 2,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/bose/bose-qc35.json",
+          "sha256": "e68732c5ed2b861d15ca287139a5e5b1540c565ce182c2af6b7215c22197a74d"
+        },
+        {
+          "id": "bose-qc45",
+          "name": "Bose QuietComfort 45",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)Bose QC45",
+            "service_uuids_any": [
+              "00001101-0000-1000-8000-00805f9b34fb"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 2,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/bose/bose-qc45.json",
+          "sha256": "6f1fab45fc0af91efb86160715fecbc260ec460ea92a174dec6f445640e99afa"
+        }
+      ]
+    },
+    {
+      "slug": "samsung",
+      "name": "Samsung",
+      "devices": [
+        {
+          "id": "galaxy-buds-live",
+          "name": "Galaxy Buds Live",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)Galaxy Buds Live",
+            "service_uuids_any": [
+              "00001101-0000-1000-8000-00805f9b34fb"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 2,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/samsung/galaxy-buds-live.json",
+          "sha256": "299f056b927d8adafc8d4404f5cb805a087dbe100e0e4484786bc91fe35e6148"
+        },
+        {
+          "id": "galaxy-buds-plus",
+          "name": "Galaxy Buds+",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)Galaxy Buds\\+",
+            "service_uuids_any": [
+              "00001101-0000-1000-8000-00805f9b34fb"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 2,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/samsung/galaxy-buds-plus.json",
+          "sha256": "5f9b4586a55d1936ef5b745a3be4c93573393c5bd339f87e4c05293ec6b6cb0a"
+        },
+        {
+          "id": "galaxy-buds-pro",
+          "name": "Galaxy Buds Pro",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)Galaxy Buds Pro",
+            "service_uuids_any": [
+              "00001101-0000-1000-8000-00805f9b34fb"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 2,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/samsung/galaxy-buds-pro.json",
+          "sha256": "b7dc891a0f40ad5228dbfb764fcea4853c2d542d81307eb00130e0993d20a116"
+        },
+        {
+          "id": "galaxy-buds",
+          "name": "Galaxy Buds (2019)",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)Galaxy Buds(?! (Live|Pro|\\+|2|3))",
+            "service_uuids_any": [
+              "00001101-0000-1000-8000-00805f9b34fb"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 2,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/samsung/galaxy-buds.json",
+          "sha256": "2b05efea78d90f2ce2d30acae77abad8ec9192862276827f173665a6d7d9becf"
+        },
+        {
+          "id": "galaxy-buds2-pro",
+          "name": "Galaxy Buds 2 Pro",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)Galaxy Buds2 Pro",
+            "service_uuids_any": [
+              "00001101-0000-1000-8000-00805f9b34fb"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 2,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/samsung/galaxy-buds2-pro.json",
+          "sha256": "3595c51037052a1fa0d8ba51897180646c8ac3fec853de5a4ec6c149f55e542a"
+        },
+        {
+          "id": "galaxy-buds2",
+          "name": "Galaxy Buds 2",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)Galaxy Buds2(?! Pro)",
+            "service_uuids_any": [
+              "00001101-0000-1000-8000-00805f9b34fb"
+            ]
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [
+            "pixelos"
+          ],
+          "counts": {
+            "capabilities": 2,
+            "injectable": 1,
+            "verified": 0
+          },
+          "url": "manifests/samsung/galaxy-buds2.json",
+          "sha256": "ec8a6d8c3fcd47037175cdac77f55c0d1976ddd33ea501770ebc56aa489b05a3"
         }
       ]
     },

@@ -270,6 +270,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                 if (app == null) { XposedBridge.log("[MX] broker: no SystemUI context, giving up"); return; }
                 if (brokerStarted) return;
                 brokerStarted = true;
+                ensureBluetoothReceiver(app);
                 io.github.thelok1s.orchestra.aap.AapBroker.start(app);
                 XposedBridge.log("[MX] AAP broker started in SystemUI");
             } catch (Throwable t) {
@@ -471,6 +472,40 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
         }
     }
 
+    private static volatile boolean btReceiverRegistered = false;
+
+    private void ensureBluetoothReceiver(android.app.Application app) {
+        if (btReceiverRegistered) return;
+        try {
+            android.content.BroadcastReceiver r = new android.content.BroadcastReceiver() {
+                @Override public void onReceive(android.content.Context c, android.content.Intent i) {
+                    try {
+                        BluetoothManager bm = (BluetoothManager) c.getSystemService(Context.BLUETOOTH_SERVICE);
+                        BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
+                        if (adapter != null) {
+                            @SuppressWarnings("deprecation")
+                            boolean ok = adapter.enable();
+                            XposedBridge.log("[MX] bt receiver trigger enable, ok=" + ok);
+                        }
+                    } catch (Throwable t) { XposedBridge.log("[MX] bt receiver: " + t); }
+                }
+            };
+            android.content.IntentFilter f =
+                    new android.content.IntentFilter("io.github.thelok1s.orchestra.ENABLE_BLUETOOTH");
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
+                        null, Context.RECEIVER_EXPORTED);
+            } else {
+                app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
+                        null);
+            }
+            btReceiverRegistered = true;
+            XposedBridge.log("[MX] bluetooth-enable receiver registered");
+        } catch (Throwable t) {
+            XposedBridge.log("[MX] bluetooth receiver register failed: " + t);
+        }
+    }
+
     private static final java.util.UUID AAP_UUID =
             java.util.UUID.fromString("74ec2172-0bad-4d01-8f77-997b2be0722a");
 
@@ -489,6 +524,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
         try {
             android.app.Application app = AndroidAppHelper.currentApplication();
             if (app == null) return;
+            ensureBluetoothReceiver(app);
             BluetoothManager bm = (BluetoothManager) app.getSystemService(Context.BLUETOOTH_SERVICE);
             BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
             if (adapter == null || !adapter.isEnabled()) return;

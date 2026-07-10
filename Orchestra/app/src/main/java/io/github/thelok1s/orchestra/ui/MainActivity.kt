@@ -1,6 +1,7 @@
 package io.github.thelok1s.orchestra.ui
 
 import android.Manifest
+import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.pm.PackageManager
@@ -33,11 +34,21 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
+import android.content.Intent
+import android.content.IntentFilter
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.ui.text.style.TextAlign
+import androidx.graphics.shapes.Morph
+import androidx.compose.material3.CircularWavyProgressIndicator
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -66,6 +77,9 @@ import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Headphones
+import androidx.compose.material.icons.filled.Speaker
+import androidx.compose.material.icons.filled.Earbuds
+import androidx.compose.material.icons.filled.HeadsetMic
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Tune
@@ -99,45 +113,51 @@ import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import io.github.thelok1s.orchestra.AacpEngine
+import io.github.thelok1s.orchestra.AapState
 import io.github.thelok1s.orchestra.BuildConfig
+import io.github.thelok1s.orchestra.DeviceDef
 import io.github.thelok1s.orchestra.DeviceStore
 import io.github.thelok1s.orchestra.Logbook
 import io.github.thelok1s.orchestra.ManifestRepository
 import io.github.thelok1s.orchestra.ManifestUpdater
+import io.github.thelok1s.orchestra.R
 import io.github.thelok1s.orchestra.XposedSelf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONObject
 import kotlin.coroutines.cancellation.CancellationException
+import androidx.core.graphics.toColorInt
 
 class MainActivity : ComponentActivity() {
 
-    private val refresh = mutableStateOf(0)
+    private val refresh = mutableIntStateOf(0)
 
     private val permLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
-    ) { refresh.value++ }
+    ) { refresh.intValue++ }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        if (Build.VERSION.SDK_INT >= 31 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT)
             != PackageManager.PERMISSION_GRANTED
         ) {
             permLauncher.launch(Manifest.permission.BLUETOOTH_CONNECT)
         }
-        setContent { OrchestraApp(refresh.value) }
+        setContent { OrchestraApp(refresh.intValue) }
     }
 
     override fun onResume() {
         super.onResume()
-        refresh.value++
+        refresh.intValue++
     }
 }
 
@@ -145,7 +165,7 @@ class MainActivity : ComponentActivity() {
 private val StatusGood = Color(0xFF2E7D32)   // green 800
 private val StatusBad = Color(0xFFC62828)    // red 700
 private val StatusIdle = Color(0xFFF9A825)   // amber 800
-private val BluetoothBlue = Color(0xFF1A8FFF) // brand-ish BT blue
+private val BluetoothBlue = Color("#00B2FC".toColorInt())
 
 // Display-flag pref keys.
 private const val FLAG_STATUSES = "show_statuses"
@@ -166,11 +186,7 @@ fun OrchestraApp(refreshKey: Int) {
     val context = LocalContext.current
     val dark = isSystemInDarkTheme()
     val colorScheme = remember(dark) {
-        if (Build.VERSION.SDK_INT >= 31) {
-            if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        } else {
-            if (dark) darkColorScheme() else lightColorScheme()
-        }
+        if (dark) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
     }
     // Kick off a background TTL-check for the manifest index on first composition.
     LaunchedEffect(Unit) {
@@ -230,12 +246,12 @@ fun OrchestraApp(refreshKey: Int) {
                     enter = slideInHorizontally(tween(260)) { it } + fadeIn(tween(260)),
                     exit = slideOutHorizontally(tween(220)) { it } + fadeOut(tween(220)),
                 ) {
-                    var backProgress by remember { mutableStateOf(0f) }
+                    var backProgress by remember { mutableFloatStateOf(0f) }
                     PredictiveBackHandler(enabled = debugOpen) { flow ->
                         try {
                             flow.collect { e -> backProgress = e.progress }
                             debugOpen = false; backProgress = 0f
-                        } catch (c: CancellationException) {
+                        } catch (_: CancellationException) {
                             backProgress = 0f
                         }
                     }
@@ -429,8 +445,7 @@ private const val META_MODEL_NAME = 3
 internal fun bondedSupported(context: Context): List<BondedDevice> {
     return try {
         val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
-        if (Build.VERSION.SDK_INT >= 31 &&
-            ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT)
             != PackageManager.PERMISSION_GRANTED
         ) return emptyList()
         adapter?.bondedDevices.orEmpty().mapNotNull { d ->
@@ -441,14 +456,14 @@ internal fun bondedSupported(context: Context): List<BondedDevice> {
             val hasLocal = ManifestRepository.sourceOf(id) != null
             BondedDevice(name, d.address, isConnected(d), readBattery(d), id, hasLocal)
         }.sortedBy { it.name }
-    } catch (t: Throwable) {
+    } catch (_: Throwable) {
         emptyList()
     }
 }
 
-private fun isConnected(device: android.bluetooth.BluetoothDevice): Boolean = try {
+private fun isConnected(device: BluetoothDevice): Boolean = try {
     (device.javaClass.getMethod("isConnected").invoke(device) as? Boolean) ?: false
-} catch (t: Throwable) { false }
+} catch (_: Throwable) { false }
 
 // BluetoothDevice metadata keys (per-bud battery is what the native Fast-Pair header reads).
 private const val META_IS_UNTETHERED = 6
@@ -461,22 +476,22 @@ private const val META_CASE_CHG = 15
 private const val META_MAIN_BATT = 18
 private const val META_MAIN_CHG = 19
 
-private fun meta(device: android.bluetooth.BluetoothDevice, key: Int): String? = try {
+private fun meta(device: BluetoothDevice, key: Int): String? = try {
     val m = device.javaClass.getMethod("getMetadata", Int::class.javaPrimitiveType)
     (m.invoke(device, key) as? ByteArray)?.let { String(it) }
-} catch (t: Throwable) { null }
+} catch (_: Throwable) { null }
 
-private fun metaInt(d: android.bluetooth.BluetoothDevice, key: Int): Int =
+private fun metaInt(d: BluetoothDevice, key: Int): Int =
     meta(d, key)?.trim()?.toIntOrNull()?.takeIf { it in 0..100 } ?: -1
 
-private fun metaBool(d: android.bluetooth.BluetoothDevice, key: Int): Boolean =
+private fun metaBool(d: BluetoothDevice, key: Int): Boolean =
     meta(d, key)?.trim().equals("true", ignoreCase = true)
 
-private fun batteryLevel(device: android.bluetooth.BluetoothDevice): Int = try {
+private fun batteryLevel(device: BluetoothDevice): Int = try {
     (device.javaClass.getMethod("getBatteryLevel").invoke(device) as? Int)?.takeIf { it in 0..100 } ?: -1
-} catch (t: Throwable) { -1 }
+} catch (_: Throwable) { -1 }
 
-private fun readBattery(d: android.bluetooth.BluetoothDevice): Batt {
+private fun readBattery(d: BluetoothDevice): Batt {
     val tws = meta(d, META_IS_UNTETHERED)?.trim().equals("true", ignoreCase = true)
     val l = metaInt(d, META_L_BATT); val r = metaInt(d, META_R_BATT); val c = metaInt(d, META_CASE_BATT)
     var main = metaInt(d, META_MAIN_BATT)
@@ -488,7 +503,7 @@ private fun readBattery(d: android.bluetooth.BluetoothDevice): Batt {
 
 internal fun btEnabled(context: Context): Boolean = try {
     (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter?.isEnabled == true
-} catch (t: Throwable) { false }
+} catch (_: Throwable) { false }
 
 private const val FEATURE_SUPPORTED = 10 // BluetoothStatusCodes.FEATURE_SUPPORTED
 
@@ -498,7 +513,7 @@ internal fun btTech(context: Context): Pair<String, List<Pair<String, Boolean>>>
     val adapter = (context.getSystemService(Context.BLUETOOTH_SERVICE) as BluetoothManager).adapter
     fun ok(block: () -> Any?): Boolean = try {
         when (val v = block()) { is Boolean -> v; is Int -> v == FEATURE_SUPPORTED; else -> false }
-    } catch (t: Throwable) { false }
+    } catch (_: Throwable) { false }
 
     val classic = pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH)
     val ble = pm.hasSystemFeature(PackageManager.FEATURE_BLUETOOTH_LE)
@@ -535,10 +550,26 @@ private fun StatusScreen(refreshKey: Int) {
     val context = LocalContext.current
     val moduleActive = remember(refreshKey) { runCatching { XposedSelf.active() }.getOrDefault(false) }
     val apiLevel = remember(refreshKey) { runCatching { XposedSelf.apiLevel() }.getOrDefault(-1) }
-    val bt = remember(refreshKey) { btEnabled(context) }
-    val supported = remember(refreshKey) { bondedSupported(context) }
+    val btState = rememberBluetoothState()
+    val bt = btState == BtState.ON
+    val supported = remember(refreshKey, bt) { bondedSupported(context) }
     val hookedCount = remember(refreshKey) { DeviceStore.enabledMap().size }
     val (btVersion, btTechList) = remember(refreshKey) { btTech(context) }
+
+    val circlePoly = remember { MaterialShapes.Circle }
+    val pillPoly = remember { MaterialShapes.Pill }
+    val morph = remember { Morph(circlePoly, pillPoly) }
+    val shapeProgress by animateFloatAsState(
+        targetValue = if (btState == BtState.ON) 1f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
+        label = "btShape"
+    )
+    val animatedShape = remember(shapeProgress) { MorphShape(morph, shapeProgress) }
+
+    val enableBluetooth = {
+        val intent = Intent("io.github.thelok1s.orchestra.ENABLE_BLUETOOTH")
+        context.sendBroadcast(intent)
+    }
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
@@ -556,19 +587,27 @@ private fun StatusScreen(refreshKey: Int) {
                     modifier = Modifier.weight(1f).fillMaxHeight(),
                     icon = if (moduleActive) Icons.Filled.Extension else Icons.Filled.Cancel,
                     iconTint = null,
-                    shape = MaterialShapes.Clover4Leaf.asShape(),
+                    shape = MaterialShapes.Square.asShape(),
                     label = if (apiLevel > 0) "LSPosed · API $apiLevel" else "LSPosed module",
                     value = if (moduleActive) "Active" else "Off",
                     good = moduleActive,
                 )
                 StatTile(
                     modifier = Modifier.weight(1f).fillMaxHeight(),
-                    icon = if (bt) Icons.Filled.Bluetooth else Icons.Filled.BluetoothDisabled,
-                    iconTint = if (bt) BluetoothBlue else null,
-                    shape = MaterialShapes.Pill.asShape(),
-                    label = "${supported.count { it.connected }}/${supported.size} device(s) connected",
-                    value = if (bt) "On" else "Off",
-                    good = bt,
+                    icon = if (btState == BtState.OFF) Icons.Filled.BluetoothDisabled else Icons.Filled.Bluetooth,
+                    iconTint = if (btState != BtState.OFF) BluetoothBlue else null,
+                    shape = animatedShape,
+                    pillColor = Color(0xFF7EC4CF),
+                    label = when (btState) {
+                        BtState.ON -> "${supported.count { it.connected }}/${supported.size} device(s) connected"
+                        BtState.TURNING_ON -> "Enabling Bluetooth..."
+                        BtState.TURNING_OFF -> "Disabling Bluetooth..."
+                        BtState.OFF -> "Tap here to enable"
+                    },
+                    value = if (btState == BtState.ON) "Bluetooth On" else "Bluetooth Off",
+                    good = btState == BtState.ON,
+                    showLoading = btState == BtState.TURNING_ON,
+                    onClick = if (btState == BtState.OFF) { { enableBluetooth() } } else null
                 )
             }
         }
@@ -589,7 +628,7 @@ private fun StatusScreen(refreshKey: Int) {
             StatusCard(
                 icon = Icons.Filled.Android,
                 statusColor = StatusGood,
-                shape = MaterialShapes.PixelCircle.asShape(),
+                shape = MaterialShapes.Sunny.asShape(),
                 iconTint = Color(0xFF3DDC84), // Android green
                 title = "Android",
                 value = "${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}",
@@ -636,6 +675,20 @@ private fun HeroCard(moduleActive: Boolean, hookedCount: Int) {
     val accent = if (moduleActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
     val onAccent = if (moduleActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onError
 
+    val earbuds2 = ImageVector.vectorResource(id = R.drawable.outline_earbuds_2_24)
+    val availableIcons = remember(earbuds2) {
+        listOf(
+            Icons.Filled.Speaker,
+            Icons.Filled.Earbuds,
+            earbuds2,
+            Icons.Filled.HeadsetMic,
+            Icons.Filled.Headphones
+        )
+    }
+    var iconIndex by rememberSaveable { mutableIntStateOf(-1) }
+    val defaultIcon = if (moduleActive) Icons.Filled.Check else Icons.Filled.Close
+    val iconToShow = if (iconIndex == -1) defaultIcon else availableIcons[iconIndex]
+
     // Slow breathe: gentle rotate + scale on the badge (design: orch-breathe 5s).
     val breathe = rememberInfiniteTransition(label = "breathe")
     val angle by breathe.animateFloat(0f, 180f,
@@ -643,7 +696,21 @@ private fun HeroCard(moduleActive: Boolean, hookedCount: Int) {
     val scale by breathe.animateFloat(1f, 1.06f,
         infiniteRepeatable(tween(2500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale")
 
-    Box(Modifier.fillMaxWidth().clip(RoundedCornerShape(28.dp)).background(container)) {
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(28.dp))
+            .background(container)
+            .combinedClickable(
+                onDoubleClick = {
+                    val eligibleIndices = availableIcons.indices.filter { availableIcons[it] != iconToShow }
+                    if (eligibleIndices.isNotEmpty()) {
+                        iconIndex = eligibleIndices.random()
+                    }
+                },
+                onClick = {}
+            )
+    ) {
         // Oversized decorative shape bleeding off the top-right corner. Wrapped in a
         // matchParentSize box so its 150dp doesn't participate in the card's measurement —
         // the card is sized by the content row alone.
@@ -667,7 +734,7 @@ private fun HeroCard(moduleActive: Boolean, hookedCount: Int) {
                 contentAlignment = Alignment.Center,
             ) {
                 Icon(
-                    if (moduleActive) Icons.Filled.Check else Icons.Filled.Close,
+                    iconToShow,
                     contentDescription = null, tint = onAccent, modifier = Modifier.size(36.dp),
                 )
             }
@@ -698,23 +765,36 @@ private fun StatTile(
     icon: ImageVector,
     iconTint: Color?,
     shape: Shape,
+    pillColor: Color? = null,
     label: String,
     value: String,
     good: Boolean,
+    showLoading: Boolean = false,
+    onClick: (() -> Unit)? = null,
 ) {
     Column(
         modifier
             .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
+            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
-        val chipBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+        val chipBg = pillColor?.copy(alpha = 0.22f)
+            ?: MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
             .compositeOver(MaterialTheme.colorScheme.surfaceContainerHighest)
-        val tint = iconTint
+        val tint = iconTint ?: pillColor
             ?: if (good) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-        ShapeChip(shape = shape, size = 52.dp, color = chipBg) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(26.dp))
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.size(62.dp)) {
+            if (showLoading) {
+                CircularWavyProgressIndicator(
+                    modifier = Modifier.size(62.dp),
+                    color = tint
+                )
+            }
+            ShapeChip(shape = shape, size = 52.dp, color = chipBg) {
+                Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(26.dp))
+            }
         }
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(value, style = MaterialTheme.typography.headlineSmall)
@@ -779,58 +859,151 @@ private fun StatusCard(
 @Composable
 private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
     val context = LocalContext.current
-    var tick by remember { mutableStateOf(0) }
-    val supported = remember(refreshKey, tick) { bondedSupported(context) }
+    val btState = rememberBluetoothState()
+    var tick by remember { mutableIntStateOf(0) }
+    val supported = remember(refreshKey, tick, btState) { bondedSupported(context) }
     val enabled = remember(refreshKey, tick) { DeviceStore.enabledMap() }
     val showStatuses = DeviceStore.flag(FLAG_STATUSES, true)
     val showUnverified = DeviceStore.flag(FLAG_UNVERIFIED, false)
     val showInApp = DeviceStore.flag(FLAG_INAPP, false)
     val showMac = DeviceStore.flag(FLAG_MAC, false)
 
+    val enableBluetooth = {
+        val intent = Intent("io.github.thelok1s.orchestra.ENABLE_BLUETOOTH")
+        context.sendBroadcast(intent)
+    }
+
     // Hooked: enabled + has a local manifest (can load DeviceDef safely).
     val hooked = supported.filter { enabled.containsKey(it.mac.uppercase()) && it.hasLocalManifest }
     // Available: not currently hooked. Includes both local-catalog devices and index-only devices.
     val available = supported.filter { !enabled.containsKey(it.mac.uppercase()) }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-            .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        if (supported.isEmpty()) {
-            Text(
-                "No supported devices paired. Pair your Soundcore headphones, then return here.",
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.padding(8.dp)
-            )
-        }
-        if (hooked.isNotEmpty()) {
-            SectionHeader("Hooked", "${hooked.size}")
-            hooked.forEach { d ->
-                HookedDeviceCard(
-                    d, refreshKey, tick, showStatuses, showUnverified, showInApp, showMac,
-                    onUnhook = { DeviceStore.setEnabled(d.mac, d.deviceId, false); tick++ },
-                    onChange = { tick++ },
-                    onManifestUpdated = { tick++ },
-                    onOpen = { onOpenDevice(d.mac) })
-            }
-        }
-        if (available.isNotEmpty()) {
-            SectionHeader("Available to hook", "${available.size}")
-            Card(shape = RoundedCornerShape(28.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-                Column {
-                    available.forEach { d ->
-                        AvailableRow(
-                            d = d,
-                            showStatuses = showStatuses,
-                            showMac = showMac,
-                            onHook = { DeviceStore.setEnabled(d.mac, d.deviceId, true); tick++ },
-                            onManifestDownloaded = { tick++ },
-                        )
+    AnimatedContent(
+        targetState = btState == BtState.ON,
+        transitionSpec = {
+            (fadeIn(tween(300)) + slideInVertically { it / 8 })
+                .togetherWith(fadeOut(tween(200)) + slideOutVertically { -it / 8 })
+        },
+        label = "devicesTransition",
+        modifier = Modifier.fillMaxSize()
+    ) { isBluetoothOn ->
+        if (isBluetoothOn) {
+            Column(
+                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                if (supported.isEmpty()) {
+                    Text(
+                        "No supported devices paired. Pair your headphones, then return here.",
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
+                if (hooked.isNotEmpty()) {
+                    SectionHeader("Hooked", "${hooked.size}")
+                    hooked.forEach { d ->
+                        HookedDeviceCard(
+                            d, refreshKey, tick, showStatuses, showUnverified, showInApp, showMac,
+                            onUnhook = { DeviceStore.setEnabled(d.mac, d.deviceId, false); tick++ },
+                            onChange = { tick++ },
+                            onManifestUpdated = { tick++ },
+                            onOpen = { onOpenDevice(d.mac) })
                     }
                 }
+                if (available.isNotEmpty()) {
+                    SectionHeader("Available to hook", "${available.size}")
+                    Card(shape = RoundedCornerShape(28.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                        Column {
+                            available.forEach { d ->
+                                AvailableRow(
+                                    d = d,
+                                    showStatuses = showStatuses,
+                                    showMac = showMac,
+                                    onHook = { DeviceStore.setEnabled(d.mac, d.deviceId, true); tick++ },
+                                    onManifestDownloaded = { tick++ },
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        } else {
+            BluetoothDisabledPlaceholder(btState, onEnable = { enableBluetooth() })
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun BluetoothDisabledPlaceholder(
+    btState: BtState,
+    onEnable: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val circlePoly = remember { MaterialShapes.Circle }
+    val pillPoly = remember { MaterialShapes.Pill }
+    val morph = remember { Morph(circlePoly, pillPoly) }
+    val shapeProgress by animateFloatAsState(
+        targetValue = if (btState == BtState.ON) 1f else 0f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = Spring.StiffnessMediumLow),
+        label = "placeholderShape"
+    )
+    val animatedShape = remember(shapeProgress) { MorphShape(morph, shapeProgress) }
+
+    Box(
+        modifier = modifier.fillMaxSize().padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            val chipBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+            val tint = if (btState == BtState.TURNING_ON) BluetoothBlue else MaterialTheme.colorScheme.onSurfaceVariant
+
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.size(84.dp)) {
+                if (btState == BtState.TURNING_ON) {
+                    CircularWavyProgressIndicator(
+                        modifier = Modifier.size(84.dp),
+                        color = tint
+                    )
+                }
+                ShapeChip(shape = animatedShape, size = 72.dp, color = chipBg) {
+                    Icon(
+                        if (btState == BtState.TURNING_ON) Icons.Filled.Bluetooth else Icons.Filled.BluetoothDisabled,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = if (btState == BtState.TURNING_ON) "Enabling Bluetooth..." else "Bluetooth is disabled",
+                    style = MaterialTheme.typography.titleLarge
+                )
+                Text(
+                    text = if (btState == BtState.TURNING_ON) "Please wait a moment" else "Orchestra requires Bluetooth to scan and manage devices",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+
+            Button(
+                onClick = onEnable,
+                enabled = btState == BtState.OFF,
+                modifier = Modifier.height(48.dp),
+                shape = CircleShape
+            ) {
+                Text(if (btState == BtState.TURNING_ON) "Enabling..." else "Enable")
             }
         }
     }
@@ -859,6 +1032,8 @@ private fun battColor(pct: Int): Color = when {
     else -> StatusGood
 }
 
+
+
 private fun battIcon(pct: Int, charging: Boolean): ImageVector = when {
     charging -> Icons.Filled.BatteryChargingFull
     pct < 0 -> Icons.Filled.BatteryAlert
@@ -867,6 +1042,21 @@ private fun battIcon(pct: Int, charging: Boolean): ImageVector = when {
     pct <= 90 -> Icons.Filled.Battery5Bar
     else -> Icons.Filled.BatteryFull
 }
+
+/** Map a manifest device_type to its Devices-list icon. Unknown/null -> Headphones. */
+@Composable
+fun iconForType(type: String?): ImageVector = when (type) {
+    "speaker" -> Icons.Filled.Speaker
+    "earbuds" -> Icons.Filled.Earbuds
+    "earbuds_2" -> ImageVector.vectorResource(id = R.drawable.outline_earbuds_2_24)
+    "headset_mic" -> Icons.Filled.HeadsetMic
+    else -> Icons.Filled.Headphones
+}
+
+/** Resolve a hooked/eligible device's icon from its manifest device_type (loaded once per id). */
+@Composable
+private fun iconForDevice(deviceId: String): ImageVector =
+    iconForType(DeviceDef.loadById(deviceId)?.deviceType)
 
 /** One battery chip: icon (colored by level) + percentage. */
 @Composable
@@ -954,10 +1144,9 @@ private fun HookedDeviceCard(
 
     // Ear-detection: only for AAP devices (those with an ear_detection capability in their manifest).
     val isAacpDevice = caps.any { it.id == "ear_detection" }
-    var liveTick by remember(d.mac) { mutableStateOf(0) }
-    val context = LocalContext.current
+    var liveTick by remember(d.mac) { mutableIntStateOf(0) }
     val earStatus = remember(refreshKey, tick, liveTick, d.mac) {
-        if (isAacpDevice) io.github.thelok1s.orchestra.AapState.forMac(d.mac).earSummary() ?: "—"
+        if (isAacpDevice) AapState.forMac(d.mac).earSummary() ?: "—"
         else null
     }
     if (isAacpDevice) {
@@ -965,8 +1154,8 @@ private fun HookedDeviceCard(
         // subscribe to the app-side listener registry — AacpClientBridge fires it on AAP_STATE, so
         // the live ear-detection preview still updates.
         DisposableEffect(d.mac) {
-            io.github.thelok1s.orchestra.AacpEngine.registerListener(d.mac, "ui-ear") { liveTick++ }
-            onDispose { io.github.thelok1s.orchestra.AacpEngine.unregisterListener(d.mac, "ui-ear") }
+            AacpEngine.registerListener(d.mac, "ui-ear") { liveTick++ }
+            onDispose { AacpEngine.unregisterListener(d.mac, "ui-ear") }
         }
     }
 
@@ -988,7 +1177,7 @@ private fun HookedDeviceCard(
                     size = 48.dp,
                     color = MaterialTheme.colorScheme.secondaryContainer,
                 ) {
-                    Icon(Icons.Filled.Headphones, contentDescription = null,
+                    Icon(iconForDevice(d.deviceId), contentDescription = null,
                         tint = MaterialTheme.colorScheme.onSecondaryContainer)
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -1225,7 +1414,7 @@ private fun AvailableRow(
                 size = 40.dp,
                 color = MaterialTheme.colorScheme.secondaryContainer,
             ) {
-                Icon(Icons.Filled.Headphones, contentDescription = null,
+                Icon(iconForDevice(d.deviceId), contentDescription = null,
                     tint = MaterialTheme.colorScheme.onSecondaryContainer)
             }
         },
@@ -1299,7 +1488,7 @@ private fun rowShape(pos: RowPos): RoundedCornerShape {
 
 @Composable
 private fun SettingsScreen(onOpenDebug: () -> Unit) {
-    var tick by remember { mutableStateOf(0) }
+    var tick by remember { mutableIntStateOf(0) }
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState())
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
@@ -1401,7 +1590,7 @@ private fun SettingNav(title: String, subtitle: String, pos: RowPos, onClick: ()
 @Composable
 private fun DebugScreen(refreshKey: Int, onBack: () -> Unit) {
     val context = LocalContext.current
-    var tick by remember { mutableStateOf(0) }
+    var tick by remember { mutableIntStateOf(0) }
     val moduleActive = remember(refreshKey, tick) { runCatching { XposedSelf.active() }.getOrDefault(false) }
     val apiLevel = remember(refreshKey, tick) { runCatching { XposedSelf.apiLevel() }.getOrDefault(-1) }
     val supported = remember(refreshKey, tick) { bondedSupported(context) }
@@ -1422,7 +1611,7 @@ private fun DebugScreen(refreshKey: Int, onBack: () -> Unit) {
             val body = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
             if (body != null) {
                 runCatching {
-                    val obj = org.json.JSONObject(body)
+                    val obj = JSONObject(body)
                     val id = obj.optString("id").ifEmpty { error("manifest has no id") }
                     require(obj.optInt("schema_version") in 3..3) { "unsupported schema_version" }
                     ManifestRepository.saveSideload(id, body)
@@ -1440,7 +1629,7 @@ private fun DebugScreen(refreshKey: Int, onBack: () -> Unit) {
     // Manifest sources: enumerate across sideload + downloaded + bundled catalog.
     // Computed off main thread on tick changes.
     data class ManifestSource(val id: String, val source: String, val revision: Int)
-    val manifestSources by produceState<List<ManifestSource>>(initialValue = emptyList(), refreshKey, tick) {
+    val manifestSources by produceState(initialValue = emptyList(), refreshKey, tick) {
         value = withContext(Dispatchers.IO) {
             val seen = linkedSetOf<String>()
             // Sideloaded (highest precedence).
@@ -1553,3 +1742,37 @@ private fun DebugCard(text: String) {
         }
     }
 }
+
+private enum class BtState {
+    OFF, TURNING_ON, ON, TURNING_OFF
+}
+
+@Composable
+private fun rememberBluetoothState(): BtState {
+    val context = LocalContext.current
+    var state by remember {
+        mutableStateOf(if (btEnabled(context)) BtState.ON else BtState.OFF)
+    }
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context, intent: Intent) {
+                if (intent.action == BluetoothAdapter.ACTION_STATE_CHANGED) {
+                    when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                        BluetoothAdapter.STATE_OFF -> state = BtState.OFF
+                        BluetoothAdapter.STATE_TURNING_ON -> state = BtState.TURNING_ON
+                        BluetoothAdapter.STATE_ON -> state = BtState.ON
+                        BluetoothAdapter.STATE_TURNING_OFF -> state = BtState.TURNING_OFF
+                    }
+                }
+            }
+        }
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        context.registerReceiver(receiver, filter)
+        onDispose {
+            context.unregisterReceiver(receiver)
+        }
+    }
+    return state
+}
+
+

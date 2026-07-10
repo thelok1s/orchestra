@@ -30,7 +30,7 @@ fun DeviceControlsScreen(mac: String, onBack: () -> Unit) {
     // SystemUI broker does), so it subscribes to the app-side AACP listener registry and bumps
     // liveTick on each push. Soundcore/RFCOMM has no push channel, so its rows stay optimistic and
     // we skip the (AAP-specific) listener entirely.
-    var liveTick by remember(mac) { mutableStateOf(0) }
+    var liveTick by remember(mac) { mutableIntStateOf(0) }
     val isAap = remember(mac) { def?.usesAacp() == true }
     DisposableEffect(mac, isAap) {
         if (isAap) io.github.thelok1s.orchestra.AacpEngine.registerListener(mac, "controls-screen") { liveTick++ }

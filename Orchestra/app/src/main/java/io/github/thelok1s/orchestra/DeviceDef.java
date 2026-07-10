@@ -31,6 +31,9 @@ public final class DeviceDef {
 
     final String id;
     final String name;
+    // Physical form factor, drives the Devices-list icon: speaker | headphones | earbuds
+    // (cabled/open-ear, e.g. Shokz) | earbuds_2 (TWS) | headset_mic. Never null (defaulted in parse).
+    final String deviceType;
     // transport (back-compat: derived from default_channel for RfcommEngine)
     final String transportUuid;
     final boolean secure;
@@ -60,11 +63,12 @@ public final class DeviceDef {
         }
     }
 
-    private DeviceDef(String id, String name, int schemaVersion, int revision,
+    private DeviceDef(String id, String name, String deviceType, int schemaVersion, int revision,
                       Map<String, Channel> channels, String defaultChannel,
                       org.json.JSONObject platforms, List<Func> functions) {
         this.id = id;
         this.name = name;
+        this.deviceType = deviceType;
         this.schemaVersion = schemaVersion;
         this.revision = revision;
         this.channels = channels;
@@ -84,6 +88,9 @@ public final class DeviceDef {
 
     /** Device display name (public: read from the Kotlin {@code ui} subpackage). */
     public String getName() { return name; }
+
+    /** Form factor for the Devices-list icon (public: read from the Kotlin {@code ui} subpackage). */
+    public String getDeviceType() { return deviceType; }
 
     /** Look up a function by its device-setting id (for routing updates). */
     Func funcBySettingId(int settingId) {
@@ -300,7 +307,7 @@ public final class DeviceDef {
         return out;
     }
 
-    static DeviceDef loadById(String deviceId) {
+    public static DeviceDef loadById(String deviceId) {
         if (deviceId == null || deviceId.isEmpty()) return null;
         try {
             String raw = DeviceStore.rawDeviceJson(deviceId);
@@ -328,6 +335,7 @@ public final class DeviceDef {
         String id = root.optString("id", "unknown");
         String name = root.optString("name", id);
         int revision = root.optInt("revision", 1);
+        String deviceType = resolveDeviceType(root, id);
 
         Map<String, Channel> channels = new LinkedHashMap<>();
         JSONObject chs = root.getJSONObject("channels");
@@ -355,8 +363,33 @@ public final class DeviceDef {
                 }
             }
         }
-        return new DeviceDef(id, name, schemaVersion, revision, channels, defaultChannel,
+        return new DeviceDef(id, name, deviceType, schemaVersion, revision, channels, defaultChannel,
                 platforms, functions);
+    }
+
+    /** Recognised form factors (drive the Devices-list icon). */
+    static final java.util.Set<String> DEVICE_TYPES = new java.util.HashSet<>(java.util.Arrays.asList(
+            "speaker", "headphones", "earbuds", "earbuds_2", "headset_mic"));
+
+    /**
+     * The device's form factor. Uses the manifest's {@code device_type} when it's a recognised value;
+     * otherwise infers from a clue — a per-bud (TWS) battery layout implies {@code earbuds_2} — and
+     * finally falls back to {@code headphones}. Never null.
+     */
+    private static String resolveDeviceType(JSONObject root, String id) {
+        String dt = root.optString("device_type", null);
+        if (dt != null && DEVICE_TYPES.contains(dt)) return dt;
+        // Clue: a battery function that reports more than one component (left/right/case) is TWS.
+        JSONArray funcs = root.optJSONArray("functions");
+        if (funcs != null) {
+            for (int i = 0; i < funcs.length(); i++) {
+                JSONObject fn = funcs.optJSONObject(i);
+                if (fn == null || !"battery".equals(fn.optString("type"))) continue;
+                JSONArray layout = fn.optJSONArray("battery_layout");
+                if (layout != null && layout.length() > 1) return "earbuds_2";
+            }
+        }
+        return "headphones";
     }
 
     /** Test seam: exposes the private {@link #parseFunc} parse path to unit tests (no channels

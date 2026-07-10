@@ -26,8 +26,10 @@ import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.LayoutDirection
+import androidx.graphics.shapes.Morph
 import androidx.graphics.shapes.RoundedPolygon
 import androidx.graphics.shapes.toPath
+import android.graphics.Path as AndroidPath
 
 /** M3 Expressive spring curve — overshoots and settles (design token --md-easing-spring). */
 internal val SpringEasing = CubicBezierEasing(0.34f, 1.56f, 0.64f, 1f)
@@ -47,6 +49,18 @@ private class PolygonShape(private val polygon: RoundedPolygon) : Shape {
     }
 }
 
+class MorphShape(private val morph: Morph, private val progress: Float) : Shape {
+    override fun createOutline(size: Size, layoutDirection: LayoutDirection, density: Density): Outline {
+        val androidPath = AndroidPath()
+        morph.toPath(progress, androidPath)
+        val path = androidPath.asComposePath()
+        val matrix = Matrix()
+        matrix.scale(size.width, size.height, 1f)
+        path.transform(matrix)
+        return Outline.Generic(path)
+    }
+}
+
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 internal fun RoundedPolygon.asShape(): Shape = PolygonShape(this)
 
@@ -54,11 +68,12 @@ internal fun RoundedPolygon.asShape(): Shape = PolygonShape(this)
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 private val ShapePool: List<Shape> by lazy {
     listOf(
-        MaterialShapes.Square, MaterialShapes.Slanted, MaterialShapes.Arch,
-        MaterialShapes.PixelCircle, MaterialShapes.Bun, MaterialShapes.Cookie4Sided,
-        MaterialShapes.Sunny, MaterialShapes.SoftBurst, MaterialShapes.Pentagon,
-        MaterialShapes.Cookie12Sided, MaterialShapes.Clover4Leaf, MaterialShapes.Flower,
-        MaterialShapes.Fan,
+        MaterialShapes.Square, MaterialShapes.Circle,
+        MaterialShapes.Slanted, MaterialShapes.Gem,
+        MaterialShapes.Pentagon, MaterialShapes.Sunny,
+        MaterialShapes.Cookie7Sided, MaterialShapes.Cookie4Sided,
+        MaterialShapes.Cookie6Sided, MaterialShapes.Clover4Leaf,
+        MaterialShapes.Clover8Leaf
     ).map { it.asShape() }
 }
 
