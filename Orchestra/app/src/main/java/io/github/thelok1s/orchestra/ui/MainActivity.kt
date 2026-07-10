@@ -87,7 +87,6 @@ import androidx.compose.material.icons.filled.HeadsetMic
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Headphones
 import androidx.compose.material.icons.filled.SettingsApplications
 import androidx.compose.material.icons.outlined.SettingsApplications
 import androidx.compose.material3.*
@@ -1294,8 +1293,7 @@ private fun HookedDeviceCard(
         shape = RoundedCornerShape(28.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
-        modifier = Modifier.fillMaxWidth().animateContentSize(
-            animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+        modifier = Modifier.fillMaxWidth()
     ) {
         Column {
             Row(
