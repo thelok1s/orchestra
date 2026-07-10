@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.PredictiveBackHandler
@@ -602,6 +603,7 @@ internal fun btTech(context: Context): Pair<String, List<Pair<String, Boolean>>>
 @Composable
 private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val moduleActive = remember(refreshKey) { runCatching { XposedSelf.active() }.getOrDefault(false) }
     val apiLevel = remember(refreshKey) { runCatching { XposedSelf.apiLevel() }.getOrDefault(-1) }
     val btState = rememberBluetoothState()
@@ -644,6 +646,21 @@ private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
                     label = if (apiLevel > 0) "LSPosed · API $apiLevel" else "LSPosed module",
                     value = if (moduleActive) "Active" else "Off",
                     good = moduleActive,
+                    onClick = {
+                        Toast.makeText(context, "Tap again to open manager", Toast.LENGTH_SHORT).show()
+                    },
+                    onDoubleClick = {
+                        scope.launch(Dispatchers.IO) {
+                            try {
+                                Runtime.getRuntime().exec(arrayOf(
+                                    "su", "-c",
+                                    "am start-activity -a android.intent.action.MAIN -p com.android.shell -n com.android.shell/.BugreportWarningActivity -c org.lsposed.manager.LAUNCH_MANAGER"
+                                )).waitFor()
+                            } catch (e: Exception) {
+                                e.printStackTrace()
+                            }
+                        }
+                    }
                 )
                 StatTile(
                     modifier = Modifier.weight(1f).fillMaxHeight(),
@@ -837,12 +854,22 @@ private fun StatTile(
     good: Boolean,
     showLoading: Boolean = false,
     onClick: (() -> Unit)? = null,
+    onDoubleClick: (() -> Unit)? = null,
 ) {
+    val clickModifier = if (onDoubleClick != null) {
+        Modifier.combinedClickable(
+            onDoubleClick = onDoubleClick,
+            onClick = { onClick?.invoke() }
+        )
+    } else {
+        Modifier.clickable { onClick?.invoke() }
+    }
+
     Column(
         modifier
             .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .clickable { onClick?.invoke() }
+            .then(clickModifier)
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
