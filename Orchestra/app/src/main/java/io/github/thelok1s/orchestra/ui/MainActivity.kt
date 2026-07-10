@@ -753,71 +753,73 @@ private fun HeroCard(moduleActive: Boolean, hookedCount: Int) {
     val scale by breathe.animateFloat(1f, 1.06f,
         infiniteRepeatable(tween(2500, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "scale")
 
-    Box(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(28.dp))
-            .background(container)
-            .combinedClickable(
-                interactionSource = interactionSource,
-                indication = LocalIndication.current,
-                onDoubleClick = {
-                    val eligibleIndices = availableIcons.indices.filter { availableIcons[it] != iconToShow }
-                    if (eligibleIndices.isNotEmpty()) {
-                        iconIndex = eligibleIndices.random()
-                    }
-                    scope.launch {
-                        val press = PressInteraction.Press(Offset.Unspecified)
-                        interactionSource.emit(press)
-                        delay(120)
-                        interactionSource.emit(PressInteraction.Release(press))
-                    }
-                },
-                onClick = {}
-            )
-    ) {
-        // Oversized decorative shape bleeding off the top-right corner. Wrapped in a
-        // matchParentSize box so its 150dp doesn't participate in the card's measurement —
-        // the card is sized by the content row alone.
-        Box(Modifier.matchParentSize()) {
-            Box(
-                Modifier.align(Alignment.TopEnd).offset(x = 38.dp, y = (-38).dp).size(150.dp)
-                    .clip(MaterialShapes.Sunny.asShape())
-                    .background(accent.copy(alpha = 0.22f))
-            )
-        }
-        Row(
-            Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
-            horizontalArrangement = Arrangement.spacedBy(18.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    CompositionLocalProvider(LocalContentColor provides onContainer) {
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(28.dp))
+                .background(container)
+                .combinedClickable(
+                    interactionSource = interactionSource,
+                    indication = LocalIndication.current,
+                    onDoubleClick = {
+                        val eligibleIndices = availableIcons.indices.filter { availableIcons[it] != iconToShow }
+                        if (eligibleIndices.isNotEmpty()) {
+                            iconIndex = eligibleIndices.random()
+                        }
+                        scope.launch {
+                            val press = PressInteraction.Press(Offset.Unspecified)
+                            interactionSource.emit(press)
+                            delay(120)
+                            interactionSource.emit(PressInteraction.Release(press))
+                        }
+                    },
+                    onClick = {}
+                )
         ) {
-            Box(
-                Modifier.size(72.dp)
-                    .graphicsLayer { rotationZ = angle; scaleX = scale; scaleY = scale }
-                    .clip(MaterialShapes.Cookie12Sided.asShape())
-                    .background(accent),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    iconToShow,
-                    contentDescription = null, tint = onAccent, modifier = Modifier.size(36.dp),
+            // Oversized decorative shape bleeding off the top-right corner. Wrapped in a
+            // matchParentSize box so its 150dp doesn't participate in the card's measurement —
+            // the card is sized by the content row alone.
+            Box(Modifier.matchParentSize()) {
+                Box(
+                    Modifier.align(Alignment.TopEnd).offset(x = 38.dp, y = (-38).dp).size(150.dp)
+                        .clip(MaterialShapes.Sunny.asShape())
+                        .background(accent.copy(alpha = 0.22f))
                 )
             }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    if (moduleActive) "All systems go" else "Module not active",
-                    style = MaterialTheme.typography.headlineSmall, color = onContainer,
-                )
-                Text(
-                    if (moduleActive) {
-                        "Module active · $hookedCount device${if (hookedCount == 1) "" else "s"} hooked"
-                    } else {
-                        "Enable Orchestra in LSPosed with scope: System UI, Settings, Orchestra. " +
-                            "Then restart System UI."
-                    },
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = onContainer.copy(alpha = 0.78f),
-                )
+            Row(
+                Modifier.padding(horizontal = 22.dp, vertical = 22.dp),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    Modifier.size(72.dp)
+                        .graphicsLayer { rotationZ = angle; scaleX = scale; scaleY = scale }
+                        .clip(MaterialShapes.Cookie12Sided.asShape())
+                        .background(accent),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        iconToShow,
+                        contentDescription = null, tint = onAccent, modifier = Modifier.size(36.dp),
+                    )
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(
+                        if (moduleActive) "All systems go" else "Module not active",
+                        style = MaterialTheme.typography.headlineSmall, color = onContainer,
+                    )
+                    Text(
+                        if (moduleActive) {
+                            "Module active · $hookedCount device${if (hookedCount == 1) "" else "s"} hooked"
+                        } else {
+                            "Enable Orchestra in LSPosed with scope: System UI, Settings, Orchestra. " +
+                                "Then restart System UI."
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = onContainer.copy(alpha = 0.78f),
+                    )
+                }
             }
         }
     }
@@ -890,6 +892,7 @@ private fun StatusCard(
         colors = CardDefaults.cardColors(containerColor = statusColor.copy(alpha = 0.10f)),
         modifier = Modifier.fillMaxWidth().animateContentSize(
             animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
+            .clip(RoundedCornerShape(28.dp))
             .clickable { onClick?.invoke() },
     ) {
         Column(Modifier.padding(16.dp)) {
