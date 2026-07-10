@@ -225,12 +225,6 @@ fun OrchestraApp(refreshKey: Int) {
                                         modifier = Modifier.fillMaxWidth(),
                                         color = MaterialTheme.colorScheme.primary
                                     )
-                                } else {
-                                    HorizontalDivider(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        thickness = 1.dp,
-                                        color = MaterialTheme.colorScheme.outlineVariant
-                                    )
                                 }
                             }
                         }
@@ -929,56 +923,51 @@ private fun DevicesScreen(
         modifier = Modifier.fillMaxSize()
     ) { isBluetoothOn ->
         if (isBluetoothOn) {
-            Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState())
-                    .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                if (supported != null) {
-                    val hooked = supported.filter { enabled.containsKey(it.mac.uppercase()) && it.hasLocalManifest }
-                    val available = supported.filter { !enabled.containsKey(it.mac.uppercase()) }
-                    var animIndex = 0
-                    if (supported.isEmpty()) {
-                        Rise(animIndex++) {
-                            Text(
-                                "No supported devices paired. Pair your headphones, then return here.",
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier.padding(8.dp)
-                            )
-                        }
-                    }
-                    if (hooked.isNotEmpty()) {
-                        Rise(animIndex++) {
-                            SectionHeader("Hooked", "${hooked.size}")
-                        }
-                        hooked.forEach { d ->
+            if (supported != null && supported.isEmpty()) {
+                NoDevicesPlaceholder()
+            } else {
+                Column(
+                    Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 108.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    if (supported != null) {
+                        val hooked = supported.filter { enabled.containsKey(it.mac.uppercase()) && it.hasLocalManifest }
+                        val available = supported.filter { !enabled.containsKey(it.mac.uppercase()) }
+                        var animIndex = 0
+                        if (hooked.isNotEmpty()) {
                             Rise(animIndex++) {
-                                HookedDeviceCard(
-                                    d, refreshKey, tick, showStatuses, showUnverified, showInApp, showMac,
-                                    onUnhook = { DeviceStore.setEnabled(d.mac, d.deviceId, false); onRefresh() },
-                                    onChange = { onRefresh() },
-                                    onManifestUpdated = { onRefresh() },
-                                    onOpen = { onOpenDevice(d.mac) })
+                                SectionHeader("Hooked", "${hooked.size}")
+                            }
+                            hooked.forEach { d ->
+                                Rise(animIndex++) {
+                                    HookedDeviceCard(
+                                        d, refreshKey, tick, showStatuses, showUnverified, showInApp, showMac,
+                                        onUnhook = { DeviceStore.setEnabled(d.mac, d.deviceId, false); onRefresh() },
+                                        onChange = { onRefresh() },
+                                        onManifestUpdated = { onRefresh() },
+                                        onOpen = { onOpenDevice(d.mac) })
+                                }
                             }
                         }
-                    }
-                    if (available.isNotEmpty()) {
-                        Rise(animIndex++) {
-                            SectionHeader("Available to hook", "${available.size}")
-                        }
-                        Rise(animIndex++) {
-                            Card(shape = RoundedCornerShape(28.dp),
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
-                                Column {
-                                    available.forEach { d ->
-                                        AvailableRow(
-                                            d = d,
-                                            showStatuses = showStatuses,
-                                            showMac = showMac,
-                                            onHook = { DeviceStore.setEnabled(d.mac, d.deviceId, true); onRefresh() },
-                                            onManifestDownloaded = { onRefresh() },
-                                        )
+                        if (available.isNotEmpty()) {
+                            Rise(animIndex++) {
+                                SectionHeader("Available to hook", "${available.size}")
+                            }
+                            Rise(animIndex++) {
+                                Card(shape = RoundedCornerShape(28.dp),
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = MaterialTheme.colorScheme.surfaceContainer)) {
+                                    Column {
+                                        available.forEach { d ->
+                                            AvailableRow(
+                                                d = d,
+                                                showStatuses = showStatuses,
+                                                showMac = showMac,
+                                                onHook = { DeviceStore.setEnabled(d.mac, d.deviceId, true); onRefresh() },
+                                                onManifestDownloaded = { onRefresh() },
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1010,7 +999,7 @@ private fun BluetoothDisabledPlaceholder(
     val animatedShape = remember(shapeProgress) { MorphShape(morph, shapeProgress) }
 
     Box(
-        modifier = modifier.fillMaxSize().padding(16.dp),
+        modifier = modifier.fillMaxSize().padding(bottom = 108.dp).padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -1065,6 +1054,54 @@ private fun BluetoothDisabledPlaceholder(
                     shape = CircleShape
                 ) {
                     Text(if (btState == BtState.TURNING_ON) "Enabling..." else "Enable")
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun NoDevicesPlaceholder(modifier: Modifier = Modifier) {
+    val shape = remember { MaterialShapes.Clover4Leaf.asShape() }
+    Box(
+        modifier = modifier.fillMaxSize().padding(bottom = 108.dp).padding(16.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp),
+            modifier = Modifier.widthIn(max = 320.dp)
+        ) {
+            val chipBg = MaterialTheme.colorScheme.primary.copy(alpha = 0.22f)
+            val tint = MaterialTheme.colorScheme.onSurfaceVariant
+
+            Rise(0) {
+                ShapeChip(shape = shape, size = 72.dp, color = chipBg) {
+                    Icon(
+                        Icons.Filled.Headphones,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(36.dp)
+                    )
+                }
+            }
+
+            Rise(1) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "No supported devices",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Text(
+                        text = "Pair your headphones in system settings, then return here to configure controls",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
                 }
             }
         }
