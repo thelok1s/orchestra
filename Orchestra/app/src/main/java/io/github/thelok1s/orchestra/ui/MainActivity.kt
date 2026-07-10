@@ -44,7 +44,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.PressInteraction
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.ui.text.style.TextAlign
 import androidx.graphics.shapes.Morph
@@ -133,6 +136,7 @@ import io.github.thelok1s.orchestra.XposedSelf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 import kotlin.coroutines.cancellation.CancellationException
 import androidx.core.graphics.toColorInt
@@ -718,6 +722,9 @@ private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun HeroCard(moduleActive: Boolean, hookedCount: Int) {
+    val scope = rememberCoroutineScope()
+    val interactionSource = remember { MutableInteractionSource() }
+
     val container = if (moduleActive) MaterialTheme.colorScheme.primaryContainer
     else MaterialTheme.colorScheme.errorContainer
     val onContainer = if (moduleActive) MaterialTheme.colorScheme.onPrimaryContainer
@@ -752,10 +759,18 @@ private fun HeroCard(moduleActive: Boolean, hookedCount: Int) {
             .clip(RoundedCornerShape(28.dp))
             .background(container)
             .combinedClickable(
+                interactionSource = interactionSource,
+                indication = LocalIndication.current,
                 onDoubleClick = {
                     val eligibleIndices = availableIcons.indices.filter { availableIcons[it] != iconToShow }
                     if (eligibleIndices.isNotEmpty()) {
                         iconIndex = eligibleIndices.random()
+                    }
+                    scope.launch {
+                        val press = PressInteraction.Press(Offset.Unspecified)
+                        interactionSource.emit(press)
+                        delay(120)
+                        interactionSource.emit(PressInteraction.Release(press))
                     }
                 },
                 onClick = {}
@@ -826,7 +841,7 @@ private fun StatTile(
         modifier
             .clip(RoundedCornerShape(28.dp))
             .background(MaterialTheme.colorScheme.surfaceContainerHigh)
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier)
+            .clickable { onClick?.invoke() }
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {
@@ -875,7 +890,7 @@ private fun StatusCard(
         colors = CardDefaults.cardColors(containerColor = statusColor.copy(alpha = 0.10f)),
         modifier = Modifier.fillMaxWidth().animateContentSize(
             animationSpec = spring(stiffness = Spring.StiffnessMediumLow))
-            .then(if (onClick != null) Modifier.clickable { onClick() } else Modifier),
+            .clickable { onClick?.invoke() },
     ) {
         Column(Modifier.padding(16.dp)) {
             Row(
