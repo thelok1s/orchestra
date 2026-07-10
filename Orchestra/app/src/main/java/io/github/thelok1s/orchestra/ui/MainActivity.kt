@@ -461,6 +461,18 @@ internal fun bondedSupported(context: Context): List<BondedDevice> {
     }
 }
 
+@Composable
+private fun rememberBondedSupported(refreshKey: Int, vararg keys: Any?): List<BondedDevice> {
+    val context = LocalContext.current
+    var supported by remember(refreshKey) { mutableStateOf<List<BondedDevice>>(emptyList()) }
+    LaunchedEffect(refreshKey, *keys) {
+        supported = withContext(Dispatchers.IO) {
+            bondedSupported(context)
+        }
+    }
+    return supported
+}
+
 private fun isConnected(device: BluetoothDevice): Boolean = try {
     (device.javaClass.getMethod("isConnected").invoke(device) as? Boolean) ?: false
 } catch (_: Throwable) { false }
@@ -552,7 +564,7 @@ private fun StatusScreen(refreshKey: Int) {
     val apiLevel = remember(refreshKey) { runCatching { XposedSelf.apiLevel() }.getOrDefault(-1) }
     val btState = rememberBluetoothState()
     val bt = btState == BtState.ON
-    val supported = remember(refreshKey, bt) { bondedSupported(context) }
+    val supported = rememberBondedSupported(refreshKey, bt)
     val hookedCount = remember(refreshKey) { DeviceStore.enabledMap().size }
     val (btVersion, btTechList) = remember(refreshKey) { btTech(context) }
 
@@ -861,7 +873,7 @@ private fun DevicesScreen(refreshKey: Int, onOpenDevice: (String) -> Unit) {
     val context = LocalContext.current
     val btState = rememberBluetoothState()
     var tick by remember { mutableIntStateOf(0) }
-    val supported = remember(refreshKey, tick, btState) { bondedSupported(context) }
+    val supported = rememberBondedSupported(refreshKey, tick, btState)
     val enabled = remember(refreshKey, tick) { DeviceStore.enabledMap() }
     val showStatuses = DeviceStore.flag(FLAG_STATUSES, true)
     val showUnverified = DeviceStore.flag(FLAG_UNVERIFIED, false)
@@ -1616,7 +1628,7 @@ private fun DebugScreen(refreshKey: Int, onBack: () -> Unit) {
     var tick by remember { mutableIntStateOf(0) }
     val moduleActive = remember(refreshKey, tick) { runCatching { XposedSelf.active() }.getOrDefault(false) }
     val apiLevel = remember(refreshKey, tick) { runCatching { XposedSelf.apiLevel() }.getOrDefault(-1) }
-    val supported = remember(refreshKey, tick) { bondedSupported(context) }
+    val supported = rememberBondedSupported(refreshKey, tick)
     val enabled = remember(refreshKey, tick) { DeviceStore.enabledMap() }
     val catalog = remember(refreshKey, tick) { DeviceStore.catalog() }
     val log = remember(tick) { Logbook.lines().asReversed() }
