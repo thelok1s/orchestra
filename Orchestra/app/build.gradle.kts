@@ -14,8 +14,8 @@ android {
         applicationId = "io.github.thelok1s.orchestra"
         minSdk = 31
         targetSdk = 37
-        versionCode = 20201
-        versionName = "2.2.1"
+        versionCode = 20202
+        versionName = "2.2.2"
 
         ndk { abiFilters += "arm64-v8a" }
     }
