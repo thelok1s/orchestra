@@ -83,10 +83,10 @@ import androidx.compose.material.icons.filled.Earbuds
 import androidx.compose.material.icons.filled.HeadsetMic
 import androidx.compose.material.icons.filled.Android
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
-import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Headphones
-import androidx.compose.material.icons.outlined.Tune
+import androidx.compose.material.icons.filled.SettingsApplications
+import androidx.compose.material.icons.outlined.SettingsApplications
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -175,10 +175,24 @@ private const val FLAG_INAPP = "show_inapp"
 private const val FLAG_MAC = "show_mac"
 private const val FLAG_ACT_AS_APPLE = "act_as_apple"
 
-private enum class Dest(val label: String, val icon: ImageVector, val iconOutlined: ImageVector) {
-    STATUS("Status", Icons.Filled.CheckCircle, Icons.Outlined.CheckCircle),
-    DEVICES("Devices", Icons.Filled.Headphones, Icons.Outlined.Headphones),
-    SETTINGS("Settings", Icons.Filled.Tune, Icons.Outlined.Tune),
+private enum class Dest(
+    val label: String,
+    val iconRes: Int = -1,
+    val iconVector: ImageVector? = null,
+    val iconOutlinedRes: Int = -1,
+    val iconOutlinedVector: ImageVector? = null
+) {
+    STATUS("Status", iconVector = Icons.Filled.CheckCircle, iconOutlinedVector = Icons.Outlined.CheckCircle),
+    DEVICES("Devices", iconRes = R.drawable.earbuds_2_24px, iconOutlinedRes = R.drawable.outline_earbuds_2_24),
+    SETTINGS("Settings", iconVector = Icons.Filled.SettingsApplications, iconOutlinedVector = Icons.Outlined.SettingsApplications),
+}
+
+@Composable
+private fun Dest.icon(selected: Boolean): ImageVector {
+    val vector = if (selected) iconVector else iconOutlinedVector
+    if (vector != null) return vector
+    val resId = if (selected) iconRes else iconOutlinedRes
+    return ImageVector.vectorResource(resId)
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
@@ -406,13 +420,13 @@ private fun FloatingNavBar(
                         ) {
                             // Outlined ↔ filled crossfade; alphas resolve at draw time.
                             Icon(
-                                d.iconOutlined,
+                                d.icon(selected = false),
                                 contentDescription = d.label,
                                 tint = tint,
                                 modifier = Modifier.graphicsLayer { alpha = 1f - progress },
                             )
                             Icon(
-                                d.icon,
+                                d.icon(selected = true),
                                 contentDescription = null,
                                 tint = tint,
                                 modifier = Modifier.graphicsLayer { alpha = progress },
@@ -711,7 +725,7 @@ private fun HeroCard(moduleActive: Boolean, hookedCount: Int) {
     val accent = if (moduleActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
     val onAccent = if (moduleActive) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onError
 
-    val earbuds2 = ImageVector.vectorResource(id = R.drawable.outline_earbuds_2_24)
+    val earbuds2 = ImageVector.vectorResource(R.drawable.earbuds_2_24px)
     val availableIcons = remember(earbuds2) {
         listOf(
             Icons.Filled.Speaker,
@@ -1147,7 +1161,7 @@ private fun battIcon(pct: Int, charging: Boolean): ImageVector = when {
 fun iconForType(type: String?): ImageVector = when (type) {
     "speaker" -> Icons.Filled.Speaker
     "earbuds" -> Icons.Filled.Earbuds
-    "earbuds_2" -> ImageVector.vectorResource(id = R.drawable.outline_earbuds_2_24)
+    "earbuds_2" -> ImageVector.vectorResource(R.drawable.earbuds_2_24px)
     "headset_mic" -> Icons.Filled.HeadsetMic
     else -> Icons.Filled.Headphones
 }
