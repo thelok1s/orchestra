@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
-  "revision": 1,
-  "revision_date": "2026-06-24",
+  "revision": 2,
+  "revision_date": "2026-07-10",
   "id": "soundcore-space-one-pro",
   "name": "Soundcore Space One Pro",
   "device_type": "headphones",
@@ -401,8 +401,12 @@
       "read": {
         "command": "0101",
         "response_command": "0101",
-        "state_byte_index": null,
-        "value_map": {}
+        "state_byte_index": 88,
+        "value_map": {
+          "00": "off",
+          "01": "on"
+        },
+        "_verified_note": "state_byte_index confirmed live on hardware 2026-07-10 (flip-diff on 0101)"
       },
       "inject": "auto",
       "conflicts_with": [
@@ -470,8 +474,12 @@
       "read": {
         "command": "0101",
         "response_command": "0101",
-        "state_byte_index": null,
-        "value_map": {}
+        "state_byte_index": 86,
+        "value_map": {
+          "00": "off",
+          "01": "on"
+        },
+        "_verified_note": "state_byte_index confirmed live on hardware 2026-07-10 (flip-diff on 0101)"
       },
       "inject": "auto",
       "ui": {
@@ -504,8 +512,12 @@
       "read": {
         "command": "0101",
         "response_command": "0101",
-        "state_byte_index": null,
-        "value_map": {}
+        "state_byte_index": 94,
+        "value_map": {
+          "00": "off",
+          "01": "on"
+        },
+        "_verified_note": "state_byte_index confirmed live on hardware 2026-07-10 (flip-diff on 0101)"
       },
       "inject": "auto",
       "ui": {
@@ -541,8 +553,12 @@
       "read": {
         "command": "0101",
         "response_command": "0101",
-        "state_byte_index": null,
-        "value_map": {}
+        "state_byte_index": 95,
+        "value_map": {
+          "00": "off",
+          "01": "on"
+        },
+        "_verified_note": "state_byte_index confirmed live on hardware 2026-07-10 (flip-diff on 0101)"
       },
       "inject": "auto",
       "ui": {
@@ -575,8 +591,12 @@
       "read": {
         "command": "0101",
         "response_command": "0101",
-        "state_byte_index": null,
-        "value_map": {}
+        "state_byte_index": 85,
+        "value_map": {
+          "00": "off",
+          "01": "on"
+        },
+        "_verified_note": "state_byte_index confirmed live on hardware 2026-07-10 (flip-diff on 0101)"
       },
       "inject": "auto",
       "ui": {

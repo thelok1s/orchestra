@@ -14,8 +14,8 @@ android {
         applicationId = "io.github.thelok1s.orchestra"
         minSdk = 31
         targetSdk = 37
-        versionCode = 20202
-        versionName = "2.2.2"
+        versionCode = 30000
+        versionName = "3.0.0"
 
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -33,8 +33,6 @@ android {
             keyAlias = "androiddebugkey"
             keyPassword = "android"
         }
-        // Release signing from environment (CI injects these from repo secrets; see
-        // .github/workflows/release.yml). Absent locally → release falls back to the debug key.
         create("release") {
             val ksPath = System.getenv("ORCHESTRA_KEYSTORE")
             if (ksPath != null && file(ksPath).exists()) {
@@ -49,8 +47,6 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Use the real release key when CI provides ORCHESTRA_KEYSTORE; otherwise debug-sign so
-            // local `assembleRelease` and unsigned dev builds keep working.
             signingConfig =
                 if (System.getenv("ORCHESTRA_KEYSTORE") != null) signingConfigs.getByName("release")
                 else signingConfigs.getByName("debug")
@@ -103,28 +99,18 @@ dependencies {
     // Enables the ModernModuleEntry path for frameworks that drop the legacy de.robv bridge.
     compileOnly("io.github.libxposed:api:102.0.0")
     // ShadowHook (BSD) — self-installing inline hook engine for the DID hook (see NativeBridge).
-    // Ships prebuilt libshadowhook.so + a CMake/prefab package; consumed from
-    // app/src/main/cpp/CMakeLists.txt via find_package(shadowhook REQUIRED CONFIG).
-    // 1.0.10, NOT 1.1.1: 1.1.1 inline-hooks the linker during init and always fails with
-    // errno 12 (INIT_LINKER) in the Bluetooth system process (bytedance/android-inline-hook#91).
-    implementation("com.bytedance.android:shadowhook:1.0.10")
+    implementation("com.bytedance.android:shadowhook:2.0.1")
 
     implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.activity:activity-compose:1.13.0")
-    // M3 Expressive (public MaterialExpressiveTheme/ExperimentalMaterial3ExpressiveApi) ships in
-    // material3 1.5.0-alpha; it requires Compose foundation/ui 1.12.0-alpha03.
     val compose = "1.12.0-beta02"
     implementation("androidx.compose.ui:ui:$compose")
     implementation("androidx.compose.ui:ui-graphics:$compose")
     implementation("androidx.compose.foundation:foundation:$compose")
-    implementation("androidx.compose.material3:material3:1.5.0-alpha20")
+    implementation("androidx.compose.material3:material3:1.5.0-alpha23")
     implementation("androidx.compose.material:material-icons-extended:1.7.8")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.9.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.11.0")
     testImplementation("junit:junit:4.13.2")
-    // Real org.json impl for unit tests: the android.jar used to compile main sources ships a
-    // body-stripped org.json that throws "not mocked" at test runtime (same mechanism as other
-    // android.* stubs). This real implementation shadows it on the unit-test runtime classpath so
-    // DeviceDef's JSONObject-based parsing is exercisable without Robolectric.
-    testImplementation("org.json:json:20240303")
+    testImplementation("org.json:json:20260522")
     implementation("org.lsposed.hiddenapibypass:hiddenapibypass:6.1")
 }
