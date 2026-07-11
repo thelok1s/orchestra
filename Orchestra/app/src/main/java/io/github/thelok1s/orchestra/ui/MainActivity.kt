@@ -659,9 +659,11 @@ private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
                         android.util.Log.d("Orchestra", "LSPosed tile double-clicked")
                         scope.launch(Dispatchers.IO) {
                             try {
-                                val process = Runtime.getRuntime().exec("su")
+                                val process = Runtime.getRuntime().exec("sh")
                                 val os = java.io.DataOutputStream(process.outputStream)
+                                os.writeBytes("su\n")
                                 os.writeBytes("am start-activity -a android.intent.action.MAIN -p com.android.shell -n com.android.shell/.BugreportWarningActivity -c org.lsposed.manager.LAUNCH_MANAGER\n")
+                                os.writeBytes("exit\n")
                                 os.writeBytes("exit\n")
                                 os.flush()
                                 val exitCode = process.waitFor()
