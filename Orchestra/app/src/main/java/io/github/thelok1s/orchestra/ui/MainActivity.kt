@@ -606,6 +606,7 @@ private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
     val scope = rememberCoroutineScope()
     val moduleActive = remember(refreshKey) { runCatching { XposedSelf.active() }.getOrDefault(false) }
     val apiLevel = remember(refreshKey) { runCatching { XposedSelf.apiLevel() }.getOrDefault(-1) }
+    val engineMode = remember(refreshKey) { runCatching { XposedSelf.engineMode() }.getOrDefault("") }
     val btState = rememberBluetoothState()
     val bt = btState == BtState.ON
     val hookedCount = remember(refreshKey) { DeviceStore.enabledMap().size }
@@ -644,7 +645,12 @@ private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
                     iconTint = null,
                     shape = MaterialShapes.Square.asShape(),
                     label = if (apiLevel > 0) "LSPosed · API $apiLevel" else "LSPosed module",
-                    value = if (moduleActive) "Active" else "Off",
+                    // Show which entry loaded us (legacy de.robv vs modern libxposed) when known.
+                    value = when {
+                        moduleActive && engineMode.isNotEmpty() -> "Active · $engineMode"
+                        moduleActive -> "Active"
+                        else -> "Off"
+                    },
                     good = moduleActive,
                     onClick = {
                         Toast.makeText(context, "Tap again to open manager", Toast.LENGTH_SHORT).show()

@@ -162,7 +162,11 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                             "apiLevel", new XC_MethodHook() {
                                 @Override protected void afterHookedMethod(MethodHookParam p) { p.setResult(api); }
                             });
-                    XposedBridge.log("[MX] self-active sentinel set (api " + api + ")");
+                    XposedHelpers.findAndHookMethod("io.github.thelok1s.orchestra.XposedSelf", lp.classLoader,
+                            "engineMode", new XC_MethodHook() {
+                                @Override protected void afterHookedMethod(MethodHookParam p) { p.setResult("legacy"); }
+                            });
+                    XposedBridge.log("[MX] self-active sentinel set (api " + api + ", legacy)");
                 } catch (Throwable t) { XposedBridge.log("[MX] self sentinel failed: " + t); }
                 break;
             case "com.google.android.bluetooth":
