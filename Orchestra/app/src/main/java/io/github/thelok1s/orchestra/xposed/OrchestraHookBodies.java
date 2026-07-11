@@ -494,7 +494,12 @@ public final class OrchestraHookBodies {
             engine.hookExact(self, "apiLevel", new HookHandler() {
                 @Override public void after(HookCtx ctx) { ctx.setResult(api); }
             });
-            engine.log("[MX] self-active sentinel set (api=" + api + ")");
+            // Reached only via ModernModuleEntry (the legacy entry has its own inline sentinel that
+            // reports "legacy"), so this path is always the modern engine.
+            engine.hookExact(self, "engineMode", new HookHandler() {
+                @Override public void after(HookCtx ctx) { ctx.setResult("modern"); }
+            });
+            engine.log("[MX] self-active sentinel set (api=" + api + ", modern)");
         } catch (Throwable t) { engine.log("[MX] self sentinel failed: " + t); }
     }
 
