@@ -720,14 +720,13 @@ private fun StatusScreen(
                 onClick = onNavigateToDevices
             )
         }
-        // Android tile — tap to expand radio capabilities.
         var androidExpanded by rememberSaveable { mutableStateOf(false) }
         Rise(3) {
             StatusCard(
                 icon = Icons.Filled.Android,
                 statusColor = StatusGood,
                 shape = MaterialShapes.Sunny.asShape(),
-                iconTint = Color(0xFF3DDC84), // Android green
+                iconTint = Color(0xFF3DDC84),
                 title = "Android",
                 value = "${Build.VERSION.RELEASE} · API ${Build.VERSION.SDK_INT}",
                 detail = "Orchestra ${BuildConfig.VERSION_NAME} (build ${BuildConfig.VERSION_CODE}) · tap for radio info",
