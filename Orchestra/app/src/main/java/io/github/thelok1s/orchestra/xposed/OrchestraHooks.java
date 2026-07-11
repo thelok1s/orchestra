@@ -275,6 +275,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                 if (brokerStarted) return;
                 brokerStarted = true;
                 ensureBluetoothReceiver(app);
+                ensureLsposedReceiver(app);
                 io.github.thelok1s.orchestra.aap.AapBroker.start(app);
                 XposedBridge.log("[MX] AAP broker started in SystemUI");
             } catch (Throwable t) {
@@ -510,6 +511,56 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
         }
     }
 
+    private static volatile boolean lspReceiverRegistered = false;
+
+    private void ensureLsposedReceiver(android.app.Application app) {
+        if (lspReceiverRegistered) return;
+        try {
+            android.content.BroadcastReceiver r = new android.content.BroadcastReceiver() {
+                @Override public void onReceive(android.content.Context c, android.content.Intent i) {
+                    try {
+                        try {
+                            Process process = Runtime.getRuntime().exec("sh");
+                            java.io.DataOutputStream os = new java.io.DataOutputStream(process.getOutputStream());
+                            os.writeBytes("su\n");
+                            os.writeBytes("am start-activity -a android.intent.action.MAIN -p com.android.shell -n com.android.shell/.BugreportWarningActivity -c org.lsposed.manager.LAUNCH_MANAGER\n");
+                            os.writeBytes("exit\n");
+                            os.writeBytes("exit\n");
+                            os.flush();
+                            int code = process.waitFor();
+                            XposedBridge.log("[MX] LSPosed launch via su, exitCode=" + code);
+                            if (code == 0) return;
+                        } catch (Throwable t) {
+                            XposedBridge.log("[MX] su execution failed, falling back to direct launch: " + t);
+                        }
+
+                        android.content.Intent intent = new android.content.Intent("android.intent.action.MAIN");
+                        intent.setClassName("com.android.shell", "com.android.shell.BugreportWarningActivity");
+                        intent.addCategory("org.lsposed.manager.LAUNCH_MANAGER");
+                        intent.setFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK);
+                        c.startActivity(intent);
+                        XposedBridge.log("[MX] LSPosed manager launched directly from system context");
+                    } catch (Throwable t) {
+                        XposedBridge.log("[MX] LSPosed launch failed: " + t);
+                    }
+                }
+            };
+            android.content.IntentFilter f =
+                    new android.content.IntentFilter("io.github.thelok1s.orchestra.LAUNCH_LSP_MANAGER");
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+                app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
+                        null, Context.RECEIVER_EXPORTED);
+            } else {
+                app.registerReceiver(r, f, "io.github.thelok1s.orchestra.permission.BATTERY_BROADCAST",
+                        null);
+            }
+            lspReceiverRegistered = true;
+            XposedBridge.log("[MX] lsposed-launch receiver registered");
+        } catch (Throwable t) {
+            XposedBridge.log("[MX] lsposed receiver register failed: " + t);
+        }
+    }
+
     private static final java.util.UUID AAP_UUID =
             java.util.UUID.fromString("74ec2172-0bad-4d01-8f77-997b2be0722a");
 
@@ -529,6 +580,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
             android.app.Application app = AndroidAppHelper.currentApplication();
             if (app == null) return;
             ensureBluetoothReceiver(app);
+            ensureLsposedReceiver(app);
             BluetoothManager bm = (BluetoothManager) app.getSystemService(Context.BLUETOOTH_SERVICE);
             BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
             if (adapter == null || !adapter.isEnabled()) return;

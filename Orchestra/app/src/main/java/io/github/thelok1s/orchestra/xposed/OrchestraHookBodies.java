@@ -221,6 +221,7 @@ public final class OrchestraHookBodies {
                 if (brokerStarted) return;
                 brokerStarted = true;
                 ensureBluetoothReceiver(app);
+                ensureLsposedReceiver(app);
                 io.github.thelok1s.orchestra.aap.AapBroker.start(app);
                 Log.i(TAG, "[MX] AAP broker started in SystemUI");
             } catch (Throwable t) { Log.e(TAG, "[MX] broker start failed: " + t); }
@@ -293,6 +294,7 @@ public final class OrchestraHookBodies {
             Application app = AndroidAppHelper.currentApplication();
             if (app == null) return;
             ensureBluetoothReceiver(app);
+            ensureLsposedReceiver(app);
             BluetoothAdapter adapter = adapterFrom(app);
             if (adapter == null || !adapter.isEnabled()) return;
             Set<BluetoothDevice> bonded = adapter.getBondedDevices();
@@ -428,6 +430,44 @@ public final class OrchestraHookBodies {
             btReceiverRegistered = true;
             Log.i(TAG, "[MX] bluetooth-enable receiver registered");
         } catch (Throwable t) { Log.e(TAG, "[MX] bluetooth receiver register failed: " + t); }
+    }
+
+    private static volatile boolean lspReceiverRegistered = false;
+
+    private static void ensureLsposedReceiver(Application app) {
+        if (lspReceiverRegistered) return;
+        try {
+            BroadcastReceiver r = new BroadcastReceiver() {
+                @Override public void onReceive(Context c, Intent i) {
+                    try {
+                        try {
+                            Process process = Runtime.getRuntime().exec("sh");
+                            java.io.DataOutputStream os = new java.io.DataOutputStream(process.getOutputStream());
+                            os.writeBytes("su\n");
+                            os.writeBytes("am start-activity -a android.intent.action.MAIN -p com.android.shell -n com.android.shell/.BugreportWarningActivity -c org.lsposed.manager.LAUNCH_MANAGER\n");
+                            os.writeBytes("exit\n");
+                            os.writeBytes("exit\n");
+                            os.flush();
+                            int code = process.waitFor();
+                            Log.i(TAG, "[MX] LSPosed launch via su, exitCode=" + code);
+                            if (code == 0) return;
+                        } catch (Throwable t) {
+                            Log.w(TAG, "[MX] su execution failed, falling back to direct launch: " + t);
+                        }
+
+                        Intent intent = new Intent("android.intent.action.MAIN");
+                        intent.setClassName("com.android.shell", "com.android.shell.BugreportWarningActivity");
+                        intent.addCategory("org.lsposed.manager.LAUNCH_MANAGER");
+                        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        c.startActivity(intent);
+                        Log.i(TAG, "[MX] LSPosed manager launched directly from system context");
+                    } catch (Throwable t) { Log.e(TAG, "[MX] LSPosed launch failed: " + t); }
+                }
+            };
+            registerGuarded(app, r, "io.github.thelok1s.orchestra.LAUNCH_LSP_MANAGER");
+            lspReceiverRegistered = true;
+            Log.i(TAG, "[MX] lsposed-launch receiver registered");
+        } catch (Throwable t) { Log.e(TAG, "[MX] lsposed receiver register failed: " + t); }
     }
 
     /** Register {@code r} for {@code action}, gated by Orchestra's signature permission (only the

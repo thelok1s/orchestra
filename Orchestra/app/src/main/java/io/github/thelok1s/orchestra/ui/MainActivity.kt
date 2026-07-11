@@ -611,6 +611,7 @@ private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
     val bt = btState == BtState.ON
     val hookedCount = remember(refreshKey) { DeviceStore.enabledMap().size }
     val (btVersion, btTechList) = remember(refreshKey) { btTech(context) }
+    var lastLspClickTime by remember { mutableStateOf(0L) }
 
     val circlePoly = remember { MaterialShapes.Circle }
     val pillPoly = remember { MaterialShapes.Pill }
@@ -653,24 +654,29 @@ private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
                     },
                     good = moduleActive,
                     onClick = {
-                        Toast.makeText(context, "Tap again to open manager", Toast.LENGTH_SHORT).show()
-                    },
-                    onDoubleClick = {
-                        android.util.Log.d("Orchestra", "LSPosed tile double-clicked")
-                        scope.launch(Dispatchers.IO) {
+                        val currentTime = System.currentTimeMillis()
+                        if (currentTime - lastLspClickTime < 2500L) {
+                            lastLspClickTime = 0L
                             try {
-                                val process = Runtime.getRuntime().exec("sh")
-                                val os = java.io.DataOutputStream(process.outputStream)
-                                os.writeBytes("su\n")
-                                os.writeBytes("am start-activity -a android.intent.action.MAIN -p com.android.shell -n com.android.shell/.BugreportWarningActivity -c org.lsposed.manager.LAUNCH_MANAGER\n")
-                                os.writeBytes("exit\n")
-                                os.writeBytes("exit\n")
-                                os.flush()
-                                val exitCode = process.waitFor()
-                                android.util.Log.d("Orchestra", "LSPosed launch command completed with exit code $exitCode")
+                                val intent = Intent("android.intent.action.MAIN").apply {
+                                    addCategory("org.lsposed.manager.LAUNCH_MANAGER")
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(intent)
+                                android.util.Log.d("Orchestra", "LSPosed manager launched directly via Intent")
                             } catch (e: Exception) {
-                                android.util.Log.e("Orchestra", "Failed to run LSPosed launch command", e)
+                                android.util.Log.d("Orchestra", "Direct launch failed, sending broadcast via system hook: ${e.message}")
+                                try {
+                                    val intent = Intent("io.github.thelok1s.orchestra.LAUNCH_LSP_MANAGER")
+                                    context.sendBroadcast(intent)
+                                    android.util.Log.d("Orchestra", "LSPosed manager launch broadcast sent")
+                                } catch (err: Exception) {
+                                    android.util.Log.e("Orchestra", "Failed to send launch broadcast", err)
+                                }
                             }
+                        } else {
+                            Toast.makeText(context, "Tap again to open manager", Toast.LENGTH_SHORT).show()
+                            lastLspClickTime = currentTime
                         }
                     }
                 )
