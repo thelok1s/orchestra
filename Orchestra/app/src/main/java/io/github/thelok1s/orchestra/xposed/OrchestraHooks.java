@@ -197,20 +197,20 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
         final String mp = modulePath;
         new Thread(() -> {
             try {
-                if (mp == null) { XposedBridge.log("[MX] didhook: no modulePath"); return; }
+                if (mp == null) { mx("[MX] didhook: no modulePath"); return; }
                 String libDir = new java.io.File(mp).getParent() + "/lib/arm64";
                 System.load(libDir + "/libshadowhook.so");
                 System.load(libDir + "/libl2c_fcr_hook.so");
-                XposedBridge.log("[MX] didhook: libs loaded from " + libDir);
+                mx("[MX] didhook: libs loaded from " + libDir);
 
                 long t0 = System.currentTimeMillis();
                 io.github.thelok1s.orchestra.NativeBridge.precomputeDidOffset();
-                XposedBridge.log("[MX] didhook: precompute done in " + (System.currentTimeMillis() - t0) + "ms");
+                mx("[MX] didhook: precompute done in " + (System.currentTimeMillis() - t0) + "ms");
 
                 boolean enable = readActAsApple();
                 if (!enable) {
                     io.github.thelok1s.orchestra.NativeBridge.setDidGate(false);
-                    XposedBridge.log("[MX] didhook: act_as_apple OFF (real DID)");
+                    mx("[MX] didhook: act_as_apple OFF (real DID)");
                     return;
                 }
 
@@ -219,9 +219,9 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                     armed = io.github.thelok1s.orchestra.NativeBridge.armDidHook(true);
                     if (!armed) { try { Thread.sleep(1); } catch (InterruptedException ie) { return; } }
                 }
-                XposedBridge.log("[MX] didhook: armed=" + armed + " at +" + (System.currentTimeMillis() - t0) + "ms");
+                mx("[MX] didhook: armed=" + armed + " at +" + (System.currentTimeMillis() - t0) + "ms");
             } catch (Throwable t) {
-                XposedBridge.log("[MX] didhook start failed: " + t);
+                mx("[MX] didhook start failed: " + t);
             }
         }, "orchestra-didhook").start();
     }
@@ -238,7 +238,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                 app = AndroidAppHelper.currentApplication();
                 if (app == null) { try { Thread.sleep(100); } catch (InterruptedException ignored) { return false; } }
             }
-            if (app == null) { XposedBridge.log("[MX] didhook: no Context for act_as_apple read"); return false; }
+            if (app == null) { mx("[MX] didhook: no Context for act_as_apple read"); return false; }
             android.net.Uri uri = android.net.Uri.parse(
                     "content://io.github.thelok1s.orchestra.state/flag/act_as_apple");
             try (android.database.Cursor cur =
@@ -248,7 +248,7 @@ public class OrchestraHooks implements IXposedHookLoadPackage, IXposedHookZygote
                 }
             }
         } catch (Throwable t) {
-            XposedBridge.log("[MX] didhook: readActAsApple failed: " + t);
+            mx("[MX] didhook: readActAsApple failed: " + t);
         }
         return false;
     }
