@@ -120,6 +120,7 @@
             android:name=".StateProvider"
             android:authorities="io.github.thelok1s.orchestra.state"
             android:exported="true"
+            android:directBootAware="true"
             android:readPermission="android.permission.BLUETOOTH_PRIVILEGED"
             android:writePermission="android.permission.BLUETOOTH_PRIVILEGED" />
     </application>

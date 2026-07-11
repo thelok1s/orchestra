@@ -25,6 +25,10 @@ import java.util.regex.Pattern;
  */
 public final class DeviceStore {
     private static final String PREFS = "maestro";
+    // UI/behavior flags live in Device-Protected Storage so they're readable BEFORE the user
+    // unlocks (credential-encrypted "maestro" prefs are not). The BT-process DID hook reads
+    // act_as_apple at cold boot — before the lock screen is dismissed — so that flag must be here.
+    private static final String FLAGS_DE = "flags_de";
     private static final String KEY_ENABLED = "enabled"; // JSON object { "<MAC>": "<device_id>" }
     // Per-device explicit capability enable OVERRIDES. JSON { "<MAC>": { "funcId": true|false } }.
     // When a funcId is absent the DEFAULT applies: verified controls inject by default, unverified
@@ -61,12 +65,32 @@ public final class DeviceStore {
     // show_statuses: show live device statuses (battery) on the card. default on.
     // show_unverified: reveal unverified controls (debug). default off.
     // show_mac: show the device MAC on the card (debug). default off.
+    /** Device-Protected Storage prefs for flags — available before the user unlocks the device. */
+    private static SharedPreferences flagPrefs() {
+        return ctx().createDeviceProtectedStorageContext()
+                .getSharedPreferences(FLAGS_DE, Context.MODE_PRIVATE);
+    }
+
     public static boolean flag(String key, boolean def) {
-        return prefs().getBoolean("flag_" + key, def);
+        String k = "flag_" + key;
+        SharedPreferences de = flagPrefs();
+        if (de.contains(k)) return de.getBoolean(k, def);
+        // Lazy one-time migration from the legacy credential-encrypted "maestro" prefs. Only works
+        // after unlock (the CE store is inaccessible before it); before unlock we return the default,
+        // which is why act_as_apple must have been written/migrated to DE in a prior unlocked session.
+        try {
+            SharedPreferences ce = prefs();
+            if (ce.contains(k)) {
+                boolean v = ce.getBoolean(k, def);
+                de.edit().putBoolean(k, v).apply();
+                return v;
+            }
+        } catch (Exception ignore) {}
+        return def;
     }
 
     public static void setFlag(String key, boolean value) {
-        prefs().edit().putBoolean("flag_" + key, value).apply();
+        flagPrefs().edit().putBoolean("flag_" + key, value).apply();
     }
 
     // ---- catalog (assets) ----
