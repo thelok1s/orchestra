@@ -37,7 +37,14 @@ public class StateProvider extends ContentProvider {
     private static final String[] COLS = {
             "left", "right", "case_level", "left_charging", "right_charging", "case_charging"};
 
-    @Override public boolean onCreate() { return true; }
+    @Override public boolean onCreate() {
+        // A boot-time cross-process query can hit this provider before App.onCreate runs (provider
+        // onCreate precedes it), leaving App.context() null and DeviceStore.flag() NPE-ing on
+        // createDeviceProtectedStorageContext(). Seed the process Context from ours (always set by
+        // the time query() can run) so the direct-boot act_as_apple read succeeds under any engine.
+        App.attach(getContext());
+        return true;
+    }
 
     @Override
     public Cursor query(Uri uri, String[] proj, String sel, String[] selArgs, String sort) {

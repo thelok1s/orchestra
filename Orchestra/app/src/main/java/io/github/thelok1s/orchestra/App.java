@@ -13,6 +13,26 @@ public class App extends Application {
 
     public static Context context() { return appContext; }
 
+    /**
+     * Publish a usable process Context as early as possible. {@link #attachBaseContext} runs before
+     * any installed ContentProvider's onCreate (and thus before the first cross-process query), so a
+     * boot-time reader like the direct-boot StateProvider never sees a null {@link #context()}. Also
+     * called from {@link StateProvider#onCreate()} as a belt-and-suspenders guard. Idempotent: never
+     * downgrades the canonical application context set in {@link #onCreate}.
+     */
+    static void attach(Context c) {
+        if (appContext == null && c != null) {
+            Context app = c.getApplicationContext();
+            appContext = app != null ? app : c;
+        }
+    }
+
+    @Override
+    protected void attachBaseContext(Context base) {
+        super.attachBaseContext(base);
+        attach(base);
+    }
+
     @Override
     public void onCreate() {
         super.onCreate();

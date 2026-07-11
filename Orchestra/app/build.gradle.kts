@@ -99,7 +99,12 @@ dependencies {
     // Enables the ModernModuleEntry path for frameworks that drop the legacy de.robv bridge.
     compileOnly("io.github.libxposed:api:102.0.0")
     // ShadowHook (BSD) — self-installing inline hook engine for the DID hook (see NativeBridge).
-    implementation("com.bytedance.android:shadowhook:2.0.1")
+    // Ships prebuilt libshadowhook.so + a CMake/prefab package; consumed from
+    // app/src/main/cpp/CMakeLists.txt via find_package(shadowhook REQUIRED CONFIG).
+    // Pinned to 1.0.10, NOT 1.1.1+/2.x: those inline-hook the linker during init and always fail
+    // with errno 12 (INIT_LINKER) in the Bluetooth system process (bytedance/android-inline-hook#91),
+    // so armDidHook() never installs and act_as_apple can't spoof the DI record.
+    implementation("com.bytedance.android:shadowhook:1.0.10")
 
     implementation("androidx.core:core-ktx:1.19.0")
     implementation("androidx.activity:activity-compose:1.13.0")
