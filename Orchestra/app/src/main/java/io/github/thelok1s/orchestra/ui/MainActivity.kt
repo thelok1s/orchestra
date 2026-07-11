@@ -645,13 +645,14 @@ private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
                     icon = if (moduleActive) Icons.Filled.Extension else Icons.Filled.Cancel,
                     iconTint = null,
                     shape = MaterialShapes.Square.asShape(),
-                    label = if (apiLevel > 0) "LSPosed · API $apiLevel" else "LSPosed module",
-                    // Show which entry loaded us (legacy de.robv vs modern libxposed) when known.
-                    value = when {
-                        moduleActive && engineMode.isNotEmpty() -> "Active · $engineMode"
-                        moduleActive -> "Active"
-                        else -> "Off"
+                    label = if (moduleActive) {
+                        val apiStr = if (apiLevel > 0) "API $apiLevel" else "Active"
+                        val mode = if (engineMode.isNotEmpty()) " (${engineMode.lowercase()})" else ""
+                        "$apiStr$mode"
+                    } else {
+                        "LSPosed module"
                     },
+                    value = if (moduleActive) "LSPosed active" else "LSPosed off",
                     good = moduleActive,
                     onClick = {
                         val currentTime = System.currentTimeMillis()
