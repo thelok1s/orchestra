@@ -656,14 +656,18 @@ private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
                         Toast.makeText(context, "Tap again to open manager", Toast.LENGTH_SHORT).show()
                     },
                     onDoubleClick = {
+                        android.util.Log.d("Orchestra", "LSPosed tile double-clicked")
                         scope.launch(Dispatchers.IO) {
                             try {
-                                Runtime.getRuntime().exec(arrayOf(
-                                    "su", "-c",
-                                    "am start-activity -a android.intent.action.MAIN -p com.android.shell -n com.android.shell/.BugreportWarningActivity -c org.lsposed.manager.LAUNCH_MANAGER"
-                                )).waitFor()
+                                val process = Runtime.getRuntime().exec("su")
+                                val os = java.io.DataOutputStream(process.outputStream)
+                                os.writeBytes("am start-activity -a android.intent.action.MAIN -p com.android.shell -n com.android.shell/.BugreportWarningActivity -c org.lsposed.manager.LAUNCH_MANAGER\n")
+                                os.writeBytes("exit\n")
+                                os.flush()
+                                val exitCode = process.waitFor()
+                                android.util.Log.d("Orchestra", "LSPosed launch command completed with exit code $exitCode")
                             } catch (e: Exception) {
-                                e.printStackTrace()
+                                android.util.Log.e("Orchestra", "Failed to run LSPosed launch command", e)
                             }
                         }
                     }
