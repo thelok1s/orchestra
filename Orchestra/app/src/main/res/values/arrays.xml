@@ -4,6 +4,7 @@
     <string-array name="xposed_scope">
         <item>com.android.systemui</item>
         <item>com.android.settings</item>
+        <item>com.google.android.bluetooth</item>
         <item>io.github.thelok1s.orchestra</item>
     </string-array>
 </resources>
