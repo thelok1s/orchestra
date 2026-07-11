@@ -262,7 +262,11 @@ fun OrchestraApp(refreshKey: Int) {
                         modifier = Modifier.padding(padding)
                     ) { d ->
                         when (d) {
-                            Dest.STATUS -> StatusScreen(refreshKey, supported ?: emptyList())
+                            Dest.STATUS -> StatusScreen(
+                                refreshKey = refreshKey,
+                                supported = supported ?: emptyList(),
+                                onNavigateToDevices = { dest = Dest.DEVICES }
+                            )
                             Dest.DEVICES -> DevicesScreen(
                                 refreshKey = refreshKey,
                                 tick = tick,
@@ -601,7 +605,11 @@ internal fun btTech(context: Context): Pair<String, List<Pair<String, Boolean>>>
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
+private fun StatusScreen(
+    refreshKey: Int,
+    supported: List<BondedDevice>,
+    onNavigateToDevices: () -> Unit
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val moduleActive = remember(refreshKey) { runCatching { XposedSelf.active() }.getOrDefault(false) }
@@ -708,7 +716,8 @@ private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
                 shape = MaterialShapes.Cookie4Sided.asShape(),
                 title = "Hooked devices",
                 value = hookedCount.toString(),
-                detail = "Devices you've switched on in Devices. Each gets native controls."
+                detail = "Devices you've switched on in Devices",
+                onClick = onNavigateToDevices
             )
         }
         // Android tile — tap to expand radio capabilities.
