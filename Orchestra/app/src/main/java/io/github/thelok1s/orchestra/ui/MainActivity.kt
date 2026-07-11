@@ -647,7 +647,7 @@ private fun StatusScreen(refreshKey: Int, supported: List<BondedDevice>) {
                     shape = MaterialShapes.Square.asShape(),
                     label = if (moduleActive) {
                         val apiStr = if (apiLevel > 0) "API $apiLevel" else "Active"
-                        val mode = if (engineMode.isNotEmpty()) " (${engineMode.lowercase()})" else ""
+                        val mode = if (engineMode.isNotEmpty()) " (${engineMode.lowercase()} mode)" else ""
                         "$apiStr$mode"
                     } else {
                         "LSPosed module"
