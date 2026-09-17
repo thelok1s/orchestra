@@ -118,6 +118,7 @@ public final class OrchestraHookBodies {
                 forceAncAvailable(engine);
                 hookToggleApply(engine);
                 startBroker();
+                startMetadataAsserter();
                 break;
             case "com.android.settings":
                 if (!"com.android.settings".equals(proc)) {
@@ -310,6 +311,74 @@ public final class OrchestraHookBodies {
                 return null;
             }
         }
+    }
+
+    private static volatile boolean asserterStarted = false;
+
+    /**
+     * Keep metadata key 25 pointing at our config provider, from a process that can actually write
+     * it. This is what makes injection survive; without it the controls silently disappear.
+     *
+     * <p>GMS Fast Pair writes the <b>same</b> tag
+     * ({@code DEVICE_SETTINGS_CONFIG_PACKAGE_NAME=com.google.android.gms}) and clobbers ours around
+     * connection time, which removes every injected control. Recovering from that needs a re-assert,
+     * and until now nothing could do it automatically:
+     * <ul>
+     *   <li>The app process <b>cannot</b> write key 25 - {@code setMetadata} needs
+     *       {@code BLUETOOTH_PRIVILEGED} and throws {@code SecurityException} there, so
+     *       {@code ConnectReceiver}'s ACL_CONNECTED "clobber guard" never actually worked.</li>
+     *   <li>Settings can write, but only runs the writer from {@code Activity.onResume}, so recovery
+     *       required the user to open Bluetooth settings by hand - hence controls appearing to reset
+     *       every time a device reconnected.</li>
+     * </ul>
+     *
+     * <p>SystemUI is privileged <i>and</i> always running, so host the durable asserter here and
+     * re-assert on the events that actually precede a clobber: a device connecting, a bond change,
+     * and the adapter turning on. Writes are idempotent ({@code assertConfigTags} returns early when
+     * the tags are already ours), so re-running is cheap. We re-assert twice per event because GMS
+     * writes its own tags around the same moment and the last write wins.
+     */
+    private static void startMetadataAsserter() {
+        if (asserterStarted) return;
+        new Thread(() -> {
+            try {
+                Application app = awaitApplication(50, 200);
+                if (app == null) { Log.w(TAG, "[MX] asserter: no SystemUI context, giving up"); return; }
+                if (asserterStarted) return;
+                asserterStarted = true;
+                BroadcastReceiver r = new BroadcastReceiver() {
+                    @Override public void onReceive(Context c, Intent i) {
+                        reassertSoon(i.getAction());
+                    }
+                };
+                IntentFilter f = new IntentFilter();
+                f.addAction(BluetoothDevice.ACTION_ACL_CONNECTED);
+                f.addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED);
+                f.addAction(BluetoothAdapter.ACTION_STATE_CHANGED);
+                // System broadcasts: must NOT demand our own permission here (registerGuarded does,
+                // which is right for our own broadcasts but would drop every system one).
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    app.registerReceiver(r, f, Context.RECEIVER_EXPORTED);
+                } else {
+                    app.registerReceiver(r, f);
+                }
+                Log.i(TAG, "[MX] metadata asserter armed in SystemUI");
+                assertTagsForBondedDevices();
+            } catch (Throwable t) { Log.e(TAG, "[MX] asserter start failed: " + t); }
+        }, "mx-meta-assert").start();
+    }
+
+    /** Re-assert shortly after a Bluetooth event, then again, so we win the race against GMS. */
+    private static void reassertSoon(String why) {
+        new Thread(() -> {
+            for (int delayMs : new int[]{600, 2500}) {
+                try { Thread.sleep(delayMs); } catch (InterruptedException e) { return; }
+                try {
+                    assertTagsForBondedDevices();
+                } catch (Throwable t) { Log.e(TAG, "[MX] reassert failed: " + t); }
+            }
+        }, "mx-meta-reassert").start();
+        Log.i(TAG, "[MX] metadata re-assert scheduled (" + why + ")");
     }
 
     private static void assertTagsForBondedDevices() {
@@ -558,7 +627,15 @@ public final class OrchestraHookBodies {
                 JSONArray devs = mans.getJSONObject(i).optJSONArray("devices");
                 if (devs == null) continue;
                 for (int j = 0; j < devs.length(); j++) {
-                    String rx = devs.getJSONObject(j).optString("name_regex", null);
+                    // name_regex lives under "match" in the index (schema v3+). Reading it off the
+                    // device object silently yielded ZERO patterns, so the gate fell back to
+                    // FALLBACK and only Soundcore/AirPods devices ever got key 25 written - every
+                    // Shokz / Samsung / Bose / BBK device was skipped. Keep the top-level read as a
+                    // fallback for any older index shape.
+                    JSONObject dev = devs.getJSONObject(j);
+                    JSONObject match = dev.optJSONObject("match");
+                    String rx = match != null ? match.optString("name_regex", null) : null;
+                    if (rx == null || rx.isEmpty()) rx = dev.optString("name_regex", null);
                     if (rx != null && !rx.isEmpty()) {
                         try { out.add(Pattern.compile(rx)); } catch (Throwable ignore) {}
                     }
