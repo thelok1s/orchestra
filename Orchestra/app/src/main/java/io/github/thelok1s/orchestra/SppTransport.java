@@ -87,12 +87,21 @@ final class SppTransport {
      */
     static <T> T withSession(BluetoothAdapter adapter, String mac, DeviceDef def,
                              T fail, SocketOp<T> op) {
+        return withSession(adapter, mac, def.transportUuid, def.secure, fail, op);
+    }
+
+    /**
+     * Same, but with the control UUID given explicitly instead of resolved from a manifest — for
+     * probing a device that has no manifest yet (see {@code DebugSendReceiver}).
+     */
+    static <T> T withSession(BluetoothAdapter adapter, String mac, String uuid, boolean secure,
+                             T fail, SocketOp<T> op) {
         String key = mac.toUpperCase();
         Session s = SESSIONS.computeIfAbsent(key, Session::new);
         synchronized (s.lock) {
             for (int attempt = 0; attempt < 2; attempt++) {
                 try {
-                    ensureOpen(adapter, mac, def, s);
+                    ensureOpen(adapter, mac, uuid, secure, s);
                     T result = op.run(s.in, s.out);
                     s.lastUsed = System.currentTimeMillis();
                     return result;
@@ -107,13 +116,13 @@ final class SppTransport {
     }
 
     /** Caller holds {@code s.lock}. Opens the RFCOMM socket to the device's control UUID if needed. */
-    private static void ensureOpen(BluetoothAdapter adapter, String mac, DeviceDef def, Session s)
-            throws Exception {
+    private static void ensureOpen(BluetoothAdapter adapter, String mac, String uuidStr,
+                                   boolean secure, Session s) throws Exception {
         if (s.socket != null && s.socket.isConnected()) return;
         closeSession(s);
         BluetoothDevice device = adapter.getRemoteDevice(mac.toUpperCase());
-        UUID uuid = UUID.fromString(def.transportUuid);
-        BluetoothSocket sock = def.secure
+        UUID uuid = UUID.fromString(uuidStr);
+        BluetoothSocket sock = secure
                 ? device.createRfcommSocketToServiceRecord(uuid)
                 : device.createInsecureRfcommSocketToServiceRecord(uuid);
         sock.connect();

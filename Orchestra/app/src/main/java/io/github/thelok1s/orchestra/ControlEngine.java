@@ -229,6 +229,33 @@ public interface ControlEngine {
         @Override public void unregisterListener(String mac, String key) { /* no-op */ }
     };
 
+    /** BBK (OnePlus / OPPO / realme) "opo_v1" SPP framing (see {@link OpoEngine}). */
+    ControlEngine OPO = new ControlEngine() {
+        public boolean applyMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, String optId) {
+            return OpoEngine.applyMode(a, mac, def, f, optId);
+        }
+        public String readMode(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return OpoEngine.readMode(a, mac, def, f);
+        }
+        public boolean applyToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, boolean on) {
+            return OpoEngine.applyToggle(a, mac, def, f, on);
+        }
+        public Boolean readToggle(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return OpoEngine.readToggle(a, mac, def, f);
+        }
+        @Override public String readInfo(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return null;
+        }
+        @Override public boolean applyLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f, int value) {
+            return OpoEngine.applyLevel(a, mac, def, f, value);
+        }
+        @Override public Integer readLevel(BluetoothAdapter a, String mac, DeviceDef def, DeviceDef.Func f) {
+            return OpoEngine.readLevel(a, mac, def, f);
+        }
+        @Override public void registerListener(String mac, String key, Runnable onChange) { /* no push channel */ }
+        @Override public void unregisterListener(String mac, String key) { /* no-op */ }
+    };
+
     /** @return the engine for a transport/framing key, or null if this app build can't drive it. */
     static ControlEngine forTransport(String transport) {
         if ("rfcomm".equals(transport)) return RFCOMM;
@@ -236,6 +263,7 @@ public interface ControlEngine {
         if ("shokz_v1".equals(transport)) return SHOKZ;
         if ("samsung_v1".equals(transport)) return SAMSUNG;
         if ("bose_v1".equals(transport)) return BOSE;
+        if ("opo_v1".equals(transport)) return OPO;
         return null;
     }
 

@@ -1,7 +1,7 @@
 {
   "schema_version": 3,
-  "revision": 2,
-  "revision_date": "2026-07-10",
+  "revision": 3,
+  "revision_date": "2026-09-17",
   "id": "soundcore-space-one-pro",
   "name": "Soundcore Space One Pro",
   "device_type": "headphones",
@@ -11,9 +11,9 @@
   "match": {
     "name_regex": "(?i)soundcore Space One Pro",
     "service_uuids_any": [
-      "0cf12d31-fac3-4553-bd80-d6832e7b3062",
-      "66666666-6666-6666-6666-666666666666"
-    ]
+      "0cf12d31-fac3-4553-bd80-d6832e7b3062"
+    ],
+    "_uuid_note": "66666666-6666-6666-6666-666666666666 removed 2026-09-17: it is a generic vendor UUID also advertised by BBK (OnePlus/OPPO/realme) buds, so it mis-matched a realme Buds Air8 Pro onto this manifest. The model-specific 0cf12d31-...3062 UUID is sufficient."
   },
   "channels": {
     "rfcomm-main": {

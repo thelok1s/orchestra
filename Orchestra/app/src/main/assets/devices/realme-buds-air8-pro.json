@@ -1,0 +1,86 @@
+{
+  "schema_version": 3,
+  "revision": 1,
+  "revision_date": "2026-09-17",
+  "id": "realme-buds-air8-pro",
+  "name": "realme Buds Air8 Pro",
+  "device_type": "tws",
+  "manufacturer": "realme",
+  "_capture_note": "OPOv1 (BBK: OnePlus / OPPO / realme). Verified live 2026-09-17 by btsnoop HCI capture of com.realme.link plus static RE of split_realmeHeadset.apk, then confirmed end-to-end by driving the hardware from Orchestra itself. Phone: Pixel 8 Pro (Android 17). Headphone: realme Buds Air8 Pro (MAC 28:04:c6:db:b6:9a, Manufacturer 688 = 0x02b0). Control channel: RFCOMM/SPP to the OPO UUID, DLCI 25. Frame: AA | LEN u16LE (=total-2) | FLAG | cmdId u16LE | transferId u8 | dataLen u16LE | payload; no checksum. cmdId = (opcode << 8) | feature, written little-endian; a reply is cmdId | 0x8000 with the transferId echoed. Full protocol notes in docs/opov1-protocol.md.",
+  "match": {
+    "name_regex": "(?i)realme\\s*Buds\\s*Air8\\s*Pro",
+    "service_uuids_any": [
+      "0000079a-d102-11e1-9b23-00025b00a5a5"
+    ],
+    "manufacturer_id": "0x02b0"
+  },
+  "channels": {
+    "rfcomm-opo": {
+      "transport": "rfcomm",
+      "uuid": "0000079a-d102-11e1-9b23-00025b00a5a5",
+      "secure": false,
+      "protocol": {
+        "framing": "opo_v1",
+        "_doc": "Commands carry the LOGICAL u16 command id (e.g. 0404 = opcode 0x04 SET, feature 0x04 noise control); the opo_v1 codec writes it little-endian. Opcodes seen: 0x01 GET, 0x02 NOTIFY (device-initiated), 0x04 SET, 0x05 REGISTER, with 0x81/0x84/0x85 the matching responses. No hello/register handshake is required before a SET on RFCOMM - verified by setting the mode cold from Orchestra and getting an 0x8404 ack plus a real mode change on the hardware."
+      }
+    }
+  },
+  "default_channel": "rfcomm-opo",
+  "functions": [
+    {
+      "id": "sound_mode",
+      "type": "multitoggle",
+      "title": "Noise control",
+      "title_i18n": {
+        "ru": "Управление шумом"
+      },
+      "capability": "sound_modes",
+      "options": [
+        {
+          "id": "anc",
+          "label": "Noise cancellation",
+          "icon": "anc",
+          "label_i18n": {
+            "ru": "Шумоподавление"
+          }
+        },
+        {
+          "id": "off",
+          "label": "Off",
+          "icon": "off",
+          "label_i18n": {
+            "ru": "Выключено"
+          }
+        },
+        {
+          "id": "transparency",
+          "label": "Transparency",
+          "icon": "transparency",
+          "label_i18n": {
+            "ru": "Прозрачность"
+          }
+        }
+      ],
+      "set": {
+        "command": "0404",
+        "payload_template": "0101{mode}",
+        "_doc": "Payload is NoiseReductionInfo{deviceAction, type, value} (3 bytes, see tl/protocol/commands/NoiseReductionInfo.java). deviceAction=01, type=01, value=mode. The device acks 0x8404 with payload 00 and then pushes 0x0204 '03 01 01 <mode>'. Mode values are NOT the 01/02/04 given in the public OnePlus write-up - those are wrong for this device.",
+        "option_values": {
+          "anc": "20",
+          "off": "01",
+          "transparency": "02"
+        }
+      },
+      "_read_note": "The current mode is PUSHed by the device via 0x0204 (topic 0x03), never polled - the vendor app never issues a GET for feature 0x04. GET 0x0104 returns a constant (00 00 00 01) and 0x0109 does not track the mode, so neither is a usable read. Push-based state is not wired up yet, so this function ships without a read block and relies on the optimistic UI. Do not add a read block until a listener is implemented.",
+      "inject": "auto",
+      "ui": {
+        "setting_id": 1001,
+        "surfaces": [
+          "device_details",
+          "volume_panel"
+        ]
+      },
+      "_verified": true
+    }
+  ]
+}
