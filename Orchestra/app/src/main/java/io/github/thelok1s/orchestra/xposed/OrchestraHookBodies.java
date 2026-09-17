@@ -192,7 +192,7 @@ public final class OrchestraHookBodies {
                                 Object cached = getField(model, "cachedDevice");
                                 BluetoothDevice dev = (BluetoothDevice) getField(cached, "mDevice");
                                 String mac = dev.getAddress();
-                                Context appCtx = AndroidAppHelper.currentApplication();
+                                Context appCtx = currentApplication();
                                 Intent i = new Intent("io.github.thelok1s.orchestra.APPLY_INDEX")
                                         .setClassName("io.github.thelok1s.orchestra",
                                                 "io.github.thelok1s.orchestra.VolumeApplyReceiver")
@@ -288,10 +288,34 @@ public final class OrchestraHookBodies {
         } catch (Throwable t) { engine.log("[MX] settings hook failed: " + t); }
     }
 
+    /**
+     * Current {@link Application} of the hooked process, without Xposed's {@code AndroidAppHelper}.
+     *
+     * <p>{@code android.app.AndroidAppHelper} looks like an AOSP class but is supplied by the Xposed
+     * framework. Under Vector's <b>modern</b> entry its implementation resolves to framework
+     * internals that are only injected for <b>legacy</b> modules, so calling it throws
+     * {@code NoClassDefFoundError: Lli/nTtIRnzqrkpOPcjL/SLHelper;} and every hook body that needs a
+     * Context dies - which silently disabled the Settings metadata key-25 writer, and with it all
+     * device-settings injection. {@code ActivityThread.currentApplication()} is plain AOSP and works
+     * under either entry, so prefer it and keep the Xposed helper only as a fallback.
+     */
+    private static Application currentApplication() {
+        try {
+            Class<?> at = Class.forName("android.app.ActivityThread");
+            return (Application) at.getMethod("currentApplication").invoke(null);
+        } catch (Throwable t) {
+            try {
+                return AndroidAppHelper.currentApplication();
+            } catch (Throwable ignored) {
+                return null;
+            }
+        }
+    }
+
     private static void assertTagsForBondedDevices() {
         ensureBatteryReceiver();
         try {
-            Application app = AndroidAppHelper.currentApplication();
+            Application app = currentApplication();
             if (app == null) return;
             ensureBluetoothReceiver(app);
             ensureLsposedReceiver(app);
@@ -350,7 +374,7 @@ public final class OrchestraHookBodies {
 
     private static void writeBattery(BluetoothDevice device) {
         try {
-            Application app = AndroidAppHelper.currentApplication();
+            Application app = currentApplication();
             if (app == null) return;
             Uri uri = Uri.parse("content://io.github.thelok1s.orchestra.state/battery/" + device.getAddress());
             Integer left = null, right = null, caseLvl = null;
@@ -389,7 +413,7 @@ public final class OrchestraHookBodies {
     private static void ensureBatteryReceiver() {
         if (batteryReceiverRegistered) return;
         try {
-            Application app = AndroidAppHelper.currentApplication();
+            Application app = currentApplication();
             if (app == null) return;
             BroadcastReceiver r = new BroadcastReceiver() {
                 @Override public void onReceive(Context c, Intent i) {
@@ -548,7 +572,7 @@ public final class OrchestraHookBodies {
     private static boolean isDeviceHooked(String mac) {
         if (mac == null) return false;
         try {
-            Application app = AndroidAppHelper.currentApplication();
+            Application app = currentApplication();
             if (app == null) return true; // fail-open
             Uri uri = Uri.parse("content://io.github.thelok1s.orchestra.state/enabled/" + mac);
             try (Cursor c = app.getContentResolver().query(uri, null, null, null, null)) {
@@ -604,11 +628,11 @@ public final class OrchestraHookBodies {
         return bm != null ? bm.getAdapter() : null;
     }
 
-    /** Poll {@link AndroidAppHelper#currentApplication()} (null very early) up to {@code tries}×{@code sleepMs}. */
+    /** Poll {@link #currentApplication()} (null very early) up to {@code tries}×{@code sleepMs}. */
     private static Application awaitApplication(int tries, int sleepMs) {
         Application app = null;
         for (int i = 0; i < tries && app == null; i++) {
-            app = AndroidAppHelper.currentApplication();
+            app = currentApplication();
             if (app == null) { try { Thread.sleep(sleepMs); } catch (InterruptedException ignored) { return null; } }
         }
         return app;
