@@ -499,7 +499,15 @@ internal fun bondedSupported(context: Context): List<BondedDevice> {
             val name = d.name ?: "(unknown)"
             val uuids = d.uuids?.map { it.uuid.toString().lowercase() }
             val modelName = meta(d, META_MODEL_NAME)
-            val id = DeviceStore.idForBonded(name, uuids, modelName) ?: return@mapNotNull null
+            // A hooked device's ENABLED id is authoritative: it is what DeviceDef.forAddress() -
+            // and therefore the provider and every control engine - resolves for this MAC. Matching
+            // by name/UUID can disagree with it (a generic vendor UUID in some other manifest's
+            // match rule is enough), and when it does the UI renders one manifest's controls while
+            // the device is actually driven by another. Checking enabled first also keeps a hooked
+            // device listed when the index no longer matches it at all.
+            val id = DeviceStore.enabledId(d.address)
+                ?: DeviceStore.idForBonded(name, uuids, modelName)
+                ?: return@mapNotNull null
             val hasLocal = ManifestRepository.sourceOf(id) != null
             BondedDevice(name, d.address, isConnected(d), readBattery(d), id, hasLocal)
         }.sortedBy { it.name }

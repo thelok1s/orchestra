@@ -1,6 +1,6 @@
 {
   "index_schema": 1,
-  "generated": "2026-07-11T00:24:54.231Z",
+  "generated": "2026-09-16T21:09:14.663Z",
   "repo": "orchestra-manifests",
   "manufacturers": [
     {
@@ -142,13 +142,13 @@
           "name": "Soundcore Space One Pro",
           "device_type": "headphones",
           "schema_version": 3,
-          "revision": 2,
+          "revision": 3,
           "match": {
             "name_regex": "(?i)soundcore Space One Pro",
             "service_uuids_any": [
-              "0cf12d31-fac3-4553-bd80-d6832e7b3062",
-              "66666666-6666-6666-6666-666666666666"
-            ]
+              "0cf12d31-fac3-4553-bd80-d6832e7b3062"
+            ],
+            "_uuid_note": "66666666-6666-6666-6666-666666666666 removed 2026-09-17: it is a generic vendor UUID also advertised by BBK (OnePlus/OPPO/realme) buds, so it mis-matched a realme Buds Air8 Pro onto this manifest. The model-specific 0cf12d31-...3062 UUID is sufficient."
           },
           "transports": [
             "rfcomm"
@@ -162,7 +162,7 @@
             "verified": 10
           },
           "url": "manifests/anker-soundcore/soundcore-space-one-pro.json",
-          "sha256": "52b8db3f58fd8af0c14ce1a5e30017e18a20fcfe79cf4a7a70c305c9201c13a4"
+          "sha256": "ab19e1e13cb11c3f60d38e27a40d6fc7d7389ac35fb66f8b7cd862ab27bb27cd"
         },
         {
           "id": "soundcore-space-q45",
@@ -363,6 +363,37 @@
           },
           "url": "manifests/apple/airpods.json",
           "sha256": "dd2830059dbd7e1832e979fbeb4020e008ad8836a93ad09a1e6ce2f8e6623818"
+        }
+      ]
+    },
+    {
+      "slug": "bbk",
+      "name": "realme",
+      "devices": [
+        {
+          "id": "realme-buds-air8-pro",
+          "name": "realme Buds Air8 Pro",
+          "device_type": "tws",
+          "schema_version": 3,
+          "revision": 1,
+          "match": {
+            "name_regex": "(?i)realme\\s*Buds\\s*Air8\\s*Pro",
+            "service_uuids_any": [
+              "0000079a-d102-11e1-9b23-00025b00a5a5"
+            ],
+            "manufacturer_id": "0x02b0"
+          },
+          "transports": [
+            "rfcomm"
+          ],
+          "platforms": [],
+          "counts": {
+            "capabilities": 1,
+            "injectable": 1,
+            "verified": 1
+          },
+          "url": "manifests/bbk/realme-buds-air8-pro.json",
+          "sha256": "9defe31a98688290b321e3d078e98af640841819725fe123a71ec989f8097cf2"
         }
       ]
     },

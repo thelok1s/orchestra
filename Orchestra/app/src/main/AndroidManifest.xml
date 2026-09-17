@@ -85,14 +85,6 @@
             </intent-filter>
         </service>
 
-        <receiver android:name=".ConnectReceiver" android:exported="true">
-            <intent-filter>
-                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
-                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="io.github.thelok1s.orchestra.APPLY" />
-            </intent-filter>
-        </receiver>
 
         <!-- Applies an ANC mode by toggle index (fired by the volume-panel hook). -->
         <receiver android:name=".VolumeApplyReceiver"
@@ -110,6 +102,7 @@
             <intent-filter>
                 <action android:name="io.github.thelok1s.orchestra.DEBUG_SEND" />
                 <action android:name="io.github.thelok1s.orchestra.AACP_TEST" />
+                <action android:name="io.github.thelok1s.orchestra.OPO_SEND" />
                 <action android:name="io.github.thelok1s.orchestra.AACP_MF" />
             </intent-filter>
         </receiver>

@@ -19,6 +19,9 @@ public class DebugSendReceiver extends BroadcastReceiver {
     static final String ACTION = "io.github.thelok1s.orchestra.DEBUG_SEND";
     static final String ACTION_AACP = "io.github.thelok1s.orchestra.AACP_TEST";
     static final String ACTION_AACP_MF = "io.github.thelok1s.orchestra.AACP_MF";
+    static final String ACTION_OPO = "io.github.thelok1s.orchestra.OPO_SEND";
+    /** BBK (OnePlus / OPPO / realme) OPO control service; default for {@link #ACTION_OPO}. */
+    private static final String OPO_UUID = "0000079a-d102-11e1-9b23-00025b00a5a5";
 
     @Override
     public void onReceive(Context context, Intent intent) {
@@ -26,6 +29,7 @@ public class DebugSendReceiver extends BroadcastReceiver {
         final String action = intent.getAction();
         if (ACTION_AACP.equals(action)) { handleAacpTest(context, intent); return; }
         if (ACTION_AACP_MF.equals(action)) { handleAacpManifest(context, intent); return; }
+        if (ACTION_OPO.equals(action)) { handleOpo(context, intent); return; }
         if (!ACTION.equals(action)) return;
         final String mac = intent.getStringExtra("mac");
         final String cmd = intent.getStringExtra("cmd");
@@ -140,6 +144,58 @@ public class DebugSendReceiver extends BroadcastReceiver {
                     AacpClientBridge.sendCommand(address, "anc", b);
                     Log.i(DeviceDef.TAG, "AACP_TEST set " + mode + " (byte " + b + ") dispatched to broker");
                 }
+            } finally {
+                pr.finish();
+            }
+        }).start();
+    }
+
+    /**
+     * Probe a raw OPOv1 (BBK) command against a bonded device, with no manifest required — the point
+     * is to discover commands before a manifest exists. Fire with:
+     * <pre>
+     *   adb shell am broadcast -a io.github.thelok1s.orchestra.OPO_SEND \
+     *       --es mac 28:04:C6:DB:B6:9A --es cmd 0104 [--es payload 010102] [--es uuid <uuid>]
+     * </pre>
+     * {@code cmd} is the logical u16 command id (e.g. {@code 0104} = GET feature 0x04); the codec
+     * writes it little-endian. Logs the TX frame and any reply to logcat tag "Orchestra".
+     */
+    private void handleOpo(Context context, Intent intent) {
+        final String mac = intent.getStringExtra("mac");
+        final String cmd = intent.getStringExtra("cmd");
+        if (mac == null || cmd == null) {
+            Log.w(DeviceDef.TAG, "OPO_SEND: need --es mac and --es cmd");
+            return;
+        }
+        final String payload = intent.getStringExtra("payload"); // may be null
+        final String uuid = intent.getStringExtra("uuid") != null
+                ? intent.getStringExtra("uuid") : OPO_UUID;
+        final String address = mac.toUpperCase();
+        final Context app = context.getApplicationContext();
+        final PendingResult pr = goAsync();
+        new Thread(() -> {
+            try {
+                BluetoothManager bm = (BluetoothManager) app.getSystemService(Context.BLUETOOTH_SERVICE);
+                BluetoothAdapter adapter = bm != null ? bm.getAdapter() : null;
+                if (adapter == null) { Log.w(DeviceDef.TAG, "OPO_SEND: no adapter"); return; }
+                final int cmdId = Integer.parseInt(cmd.replaceAll("[^0-9a-fA-F]", ""), 16) & 0xFFFF;
+                final int tid = OpoEngine.nextTransferId(address);
+                final byte[] frame = OpoEngine.buildFrame(cmd, payload, tid);
+                Log.i(DeviceDef.TAG, "OPO_SEND " + address + " cmd=" + cmd + " tid=" + tid
+                        + " frame=" + HexUtil.hex(frame));
+                SppTransport.withSession(adapter, address, uuid, false, null, (in, out) -> {
+                    SppTransport.Rx rx = SppTransport.sendAndAwait(in, out, frame, 2000,
+                            (acc, len) -> OpoEngine.findFrame(acc, len, cmdId, tid));
+                    if (rx == null) {
+                        Log.w(DeviceDef.TAG, "OPO_SEND: no matching reply for " + cmd);
+                    } else {
+                        Log.i(DeviceDef.TAG, "OPO_SEND reply payload="
+                                + HexUtil.hex(OpoEngine.payloadOf(rx.buf, rx.start)));
+                    }
+                    return null;
+                });
+            } catch (Exception e) {
+                Log.w(DeviceDef.TAG, "OPO_SEND failed: " + e);
             } finally {
                 pr.finish();
             }

@@ -41,3 +41,8 @@ docs/FRAMEWORK-PLAN.md
 docs/RELEASE-PREP.md
 docs/superpowers/
 INDEX.md
+
+# BBK/OPOv1 reverse-engineering artifacts (large APKs + jadx output)
+bbk_re/*.apk
+bbk_re/headset_jadx/
+bbk_re/*.log
