@@ -297,15 +297,6 @@ public final class DeviceDef {
         return loadById(DeviceStore.enabledId(address));
     }
 
-    /** Lists MAC→def for all enabled devices (used by ConnectReceiver to re-assert metadata). */
-    static Map<String, DeviceDef> enabled() {
-        Map<String, DeviceDef> out = new LinkedHashMap<>();
-        for (Map.Entry<String, String> e : DeviceStore.enabledMap().entrySet()) {
-            DeviceDef def = loadById(e.getValue());
-            if (def != null) out.put(e.getKey(), def);
-        }
-        return out;
-    }
 
     public static DeviceDef loadById(String deviceId) {
         if (deviceId == null || deviceId.isEmpty()) return null;

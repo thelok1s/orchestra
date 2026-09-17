@@ -326,7 +326,8 @@ public final class OrchestraHookBodies {
      * <ul>
      *   <li>The app process <b>cannot</b> write key 25 - {@code setMetadata} needs
      *       {@code BLUETOOTH_PRIVILEGED} and throws {@code SecurityException} there, so
-     *       {@code ConnectReceiver}'s ACL_CONNECTED "clobber guard" never actually worked.</li>
+     *       the old app-process {@code ConnectReceiver} "clobber guard" never actually worked, and
+     *       has been removed.</li>
      *   <li>Settings can write, but only runs the writer from {@code Activity.onResume}, so recovery
      *       required the user to open Bluetooth settings by hand - hence controls appearing to reset
      *       every time a device reconnected.</li>
